@@ -7,7 +7,6 @@ import logging
 import shlex
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
 
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
@@ -24,9 +23,6 @@ logger = logging.getLogger(__name__)
 _CANONICAL_TASK_ID_PREFIX = "task-"
 _STATUS_RUNNING = "running"
 _STATUS_ACTIVE = "active"
-_PERMISSION_TIER_OFF = "off"
-_PERMISSION_MODE_AUTO = "auto-exec"
-_PERMISSION_MODE_MANUAL = "manual"
 
 
 def _running_task_warning(running: list[dict[str, str]], project_id: str | None) -> str | None:
@@ -139,59 +135,6 @@ async def _live_dispatch_block_reason(
     return None
 
 
-def _permission_access_label(permission: Any) -> str:
-    """Return permission label used in dispatch-block message."""
-    mode = _PERMISSION_MODE_AUTO if permission.auto_exec_enabled else _PERMISSION_MODE_MANUAL
-    return f"{permission.permission_tier}/{mode}"
-
-
-def _permission_detail(permission: Any) -> str:
-    """Return reason detail for blocked execution permission."""
-    if permission.permission_tier == _PERMISSION_TIER_OFF:
-        return "project access is off"
-    if not permission.auto_exec_enabled:
-        return "project is observe-only for autonomous execution"
-    if not permission.in_time_window:
-        return "project is outside its execution window"
-    return f"execution permission check returned {permission.reason}"
-
-
-async def _dispatch_permission_block_reason(project_id: str | None) -> str | None:
-    """Return blocking reason when project access disallows autonomous dispatch."""
-    if not project_id:
-        return None
-
-    from app.db import async_session
-    from app.services.tools import _executor_io_tasks as task_helpers
-
-    async with async_session() as db:
-        permission = await task_helpers.check_execution_permission(db, project_id)
-
-    valid_payload = all(
-        (
-            isinstance(permission.allowed, bool),
-            isinstance(permission.permission_tier, str),
-            isinstance(permission.auto_exec_enabled, bool),
-            isinstance(permission.in_time_window, bool),
-        )
-    )
-    if not valid_payload:
-        logger.debug(
-            "Skipping dispatch permission gate for %s due to invalid permission payload: %r",
-            project_id,
-            permission,
-        )
-        return None
-    if permission.allowed:
-        return None
-
-    return (
-        f"Dispatch blocked: project {project_id} is {_permission_access_label(permission)}; "
-        f"{_permission_detail(permission)}. "
-        "Read/manual projects are observe-only during heartbeat unless access changes."
-    )
-
-
 async def _handle_dispatch(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
@@ -200,8 +143,6 @@ async def _handle_dispatch(
     """Dispatch task via autocode, prefixed with any running-task warning."""
     from app.services.tools import _executor_io_tasks as task_helpers
 
-    if permission_block := await _dispatch_permission_block_reason(project_id):
-        return permission_block
     cleanup_block, cleanup_status = await _cleanup_dispatch_block_reason(
         bash_fn,
         project_id,

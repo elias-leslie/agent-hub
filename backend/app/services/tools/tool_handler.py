@@ -1,8 +1,8 @@
 """Tool handler implementation for direct tool execution.
 
 Provides DirectToolHandler which routes tool calls to DirectToolExecutor
-methods and handles real runtime boundaries: project policy, cross-project
-checks, and checkout scope.
+methods and handles real runtime boundaries: a run's permitted tool set,
+checkout scope, and edit leases.
 """
 
 from __future__ import annotations
@@ -10,9 +10,6 @@ from __future__ import annotations
 import logging
 import time
 
-from app.services.tools._cross_project_hook import (
-    create_cross_project_permission_hook as _create_cross_project_permission_hook,
-)
 from app.services.tools.base import (
     PreToolUseHook,
     ToolCall,
@@ -178,36 +175,6 @@ def _compose_hooks(hooks: list[PreToolUseHook]) -> PreToolUseHook:
     return _composed
 
 
-def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
-    """Create a pre-hook that checks project permission tier.
-
-    Fail-closed: any exception during permission checking results in DENY.
-    """
-
-    async def _hook(tool_call: ToolCall) -> ToolDecision:
-        try:
-            from app.services.project_permission_service import check_tool_allowed
-
-            allowed, reason = await check_tool_allowed(
-                project_id, tool_call.name, tool_input=tool_call.input,
-            )
-            if not allowed:
-                logger.info(
-                    "Project permission DENY: %s for %s (%s)",
-                    tool_call.name, project_id, reason,
-                )
-                return ToolDecision.DENY
-            return ToolDecision.ALLOW
-        except Exception as e:
-            logger.error(
-                "Project permission hook error for %s/%s: %s — denying",
-                project_id, tool_call.name, e,
-            )
-            return ToolDecision.DENY
-
-    return _hook
-
-
 def _create_tool_set_hook(permitted_tools: frozenset[str]) -> PreToolUseHook:
     """Create a pre-hook that allows exactly the tools a caller handed the model (a workflow run's tool level)."""
 
@@ -227,18 +194,13 @@ def _collect_hooks(
 ) -> list[PreToolUseHook]:
     """Build the ordered list of pre-hooks for a new DirectToolHandler.
 
-    Order: tool permission → cross-project boundary → checkout boundary → lease check. First DENY wins during
-    execution. The tool permission is the project's chat tier, unless the caller names the permitted tools itself
-    (a workflow run sets its own tool level; the project's chat tier does not apply to it).
+    Order: permitted tool set → checkout boundary → lease check. First DENY wins during execution. Without
+    ``permitted_tools`` the model only sees the tools its agent registry provisions, so no tool hook is added.
     """
     hooks: list[PreToolUseHook] = []
 
     if permitted_tools is not None:
         hooks.append(_create_tool_set_hook(permitted_tools))
-    elif project_id:
-        hooks.append(_create_project_permission_hook(project_id))
-    if project_id:
-        hooks.append(_create_cross_project_permission_hook(project_id))
 
     if working_dir:
         from app.services.tools._checkout_boundary_hook import create_checkout_boundary_hook

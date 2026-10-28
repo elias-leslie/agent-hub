@@ -11,7 +11,6 @@ from httpx import ASGITransport, AsyncClient
 from app.db import get_db
 from app.main import app
 from app.models.project_permission import ProjectPermission
-from app.services.project_permission_service import ExecutionPermissionResult
 
 # ---------------------------------------------------------------------------
 # Test headers (bypass access control middleware)
@@ -30,10 +29,6 @@ TEST_HEADERS = {
 
 def _make_perm(
     project_id: str = "test-project",
-    tier: str = "read",
-    auto_exec: bool = False,
-    start_hour: int = 0,
-    end_hour: int = 24,
     root_path: str | None = None,
     daily_cost_budget_usd: float | None = None,
     monthly_cost_budget_usd: float | None = None,
@@ -41,10 +36,6 @@ def _make_perm(
 ) -> MagicMock:
     perm = MagicMock(spec=ProjectPermission)
     perm.project_id = project_id
-    perm.permission_tier = tier
-    perm.auto_exec_enabled = auto_exec
-    perm.execution_start_hour = start_hour
-    perm.execution_end_hour = end_hour
     perm.root_path = root_path
     perm.daily_cost_budget_usd = daily_cost_budget_usd
     perm.monthly_cost_budget_usd = monthly_cost_budget_usd
@@ -80,7 +71,7 @@ class TestListPermissions:
     @pytest.mark.asyncio
     async def test_list_returns_all_permissions(self, client):
         ac, _ = client
-        perms = [_make_perm("proj-a", "read"), _make_perm("proj-b", "full")]
+        perms = [_make_perm("proj-a"), _make_perm("proj-b")]
         with patch(
             "app.api.project_permissions.list_project_permissions",
             new_callable=AsyncMock,
@@ -91,7 +82,9 @@ class TestListPermissions:
             data = resp.json()
             assert len(data) == 2
             assert data[0]["project_id"] == "proj-a"
-            assert data[1]["permission_tier"] == "full"
+            assert data[1]["project_id"] == "proj-b"
+            assert "permission_tier" not in data[0]
+            assert "auto_exec_enabled" not in data[0]
 
     @pytest.mark.asyncio
     async def test_list_returns_empty_when_no_permissions(self, client):
@@ -136,7 +129,6 @@ class TestListProjectCatalog:
         perms = [
             _make_perm(
                 "agent-hub",
-                "full",
                 root_path="/srv/workspaces/projects/agent-hub",
             )
         ]
@@ -178,7 +170,7 @@ class TestCreatePermission:
     @pytest.mark.asyncio
     async def test_creates_permission(self, client):
         ac, _ = client
-        created = _make_perm("test2", "full", True, 0, 24, "/srv/workspaces/projects/test2")
+        created = _make_perm("test2", "/srv/workspaces/projects/test2")
         with patch(
             "app.api.project_permissions.create_project_permission",
             new_callable=AsyncMock,
@@ -188,24 +180,19 @@ class TestCreatePermission:
                 "/api/projects/permissions",
                 json={
                     "project_id": "test2",
+                    # Fields SummitFlow still sends until its change lands: ignored.
                     "permission_tier": "full",
                     "auto_exec_enabled": True,
+                    "execution_start_hour": 9,
+                    "execution_end_hour": 17,
                 },
             )
             assert resp.status_code == 201
             data = resp.json()
             assert data["project_id"] == "test2"
-            assert data["permission_tier"] == "full"
-            assert data["auto_exec_enabled"] is True
-
-    @pytest.mark.asyncio
-    async def test_rejects_invalid_tier(self, client):
-        ac, _ = client
-        resp = await ac.post(
-            "/api/projects/permissions",
-            json={"project_id": "test2", "permission_tier": "invalid"},
-        )
-        assert resp.status_code == 400
+            assert data["root_path"] == "/srv/workspaces/projects/test2"
+            assert "permission_tier" not in data
+            assert "auto_exec_enabled" not in data
 
     @pytest.mark.asyncio
     async def test_returns_409_for_duplicate_project(self, client):
@@ -231,7 +218,7 @@ class TestGetPermission:
     @pytest.mark.asyncio
     async def test_returns_permission_for_existing_project(self, client):
         ac, _ = client
-        perm = _make_perm("summitflow", "write", True, 9, 17, "/home/testuser/summitflow")
+        perm = _make_perm("summitflow", "/home/testuser/summitflow")
         with patch(
             "app.api.project_permissions.get_project_permission",
             new_callable=AsyncMock,
@@ -241,10 +228,7 @@ class TestGetPermission:
             assert resp.status_code == 200
             data = resp.json()
             assert data["project_id"] == "summitflow"
-            assert data["permission_tier"] == "full"
-            assert data["auto_exec_enabled"] is True
-            assert data["execution_start_hour"] == 9
-            assert data["execution_end_hour"] == 17
+            assert not {"permission_tier", "auto_exec_enabled", "execution_start_hour", "execution_end_hour"} & data.keys()
             assert data["root_path"] == "/home/testuser/summitflow"
 
     @pytest.mark.asyncio
@@ -268,7 +252,7 @@ class TestDeletePermission:
     @pytest.mark.asyncio
     async def test_deletes_permission(self, client):
         ac, _ = client
-        deleted = _make_perm("proj", "full")
+        deleted = _make_perm("proj")
         with patch(
             "app.api.project_permissions.delete_project_permission",
             new_callable=AsyncMock,
@@ -297,42 +281,44 @@ class TestDeletePermission:
 
 class TestUpdatePermission:
     @pytest.mark.asyncio
-    async def test_updates_tier(self, client):
+    async def test_updates_root_path(self, client):
         ac, _ = client
-        updated = _make_perm("proj", "full")
+        updated = _make_perm("proj", "/srv/proj")
         with patch(
             "app.api.project_permissions.update_project_permission",
             new_callable=AsyncMock,
             return_value=updated,
-        ):
+        ) as update:
             resp = await ac.patch(
                 "/api/projects/proj/permissions",
-                json={"permission_tier": "full"},
+                json={"root_path": "/srv/proj"},
             )
             assert resp.status_code == 200
-            assert resp.json()["permission_tier"] == "full"
+            assert resp.json()["root_path"] == "/srv/proj"
+            update.assert_awaited_once()
+            assert update.call_args.kwargs == {"root_path": "/srv/proj"}
 
     @pytest.mark.asyncio
-    async def test_rejects_invalid_tier(self, client):
+    async def test_ignores_legacy_tier_and_execution_fields(self, client):
+        """SummitFlow keeps sending tier and auto-exec fields until its change lands; they are dropped, not rejected."""
         ac, _ = client
-        resp = await ac.patch(
-            "/api/projects/proj/permissions",
-            json={"permission_tier": "invalid"},
-        )
-        assert resp.status_code == 400
-        body = resp.json()
-        # FastAPI may return detail as string or structured error
-        body_str = str(body)
-        assert "invalid" in body_str.lower() or "tier" in body_str.lower()
-
-    @pytest.mark.asyncio
-    async def test_rejects_same_start_and_end_hour(self, client):
-        ac, _ = client
-        resp = await ac.patch(
-            "/api/projects/proj/permissions",
-            json={"execution_start_hour": 10, "execution_end_hour": 10},
-        )
-        assert resp.status_code == 400
+        updated = _make_perm("proj")
+        with patch(
+            "app.api.project_permissions.update_project_permission",
+            new_callable=AsyncMock,
+            return_value=updated,
+        ) as update:
+            resp = await ac.patch(
+                "/api/projects/proj/permissions",
+                json={
+                    "permission_tier": "invalid",
+                    "auto_exec_enabled": True,
+                    "execution_start_hour": 10,
+                    "execution_end_hour": 10,
+                },
+            )
+            assert resp.status_code == 200
+            assert update.call_args.kwargs == {}
 
     @pytest.mark.asyncio
     async def test_returns_404_for_missing_project(self, client):
@@ -344,79 +330,22 @@ class TestUpdatePermission:
         ):
             resp = await ac.patch(
                 "/api/projects/nonexistent/permissions",
-                json={"permission_tier": "full"},
+                json={"root_path": "/srv/nonexistent"},
             )
             assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# GET /api/projects/{project_id}/execution-permission
+# GET /api/projects/{project_id}/execution-permission (removed)
 # ---------------------------------------------------------------------------
 
 
-class TestExecutionPermission:
+class TestExecutionPermissionRemoved:
     @pytest.mark.asyncio
-    async def test_returns_allowed_when_permitted(self, client):
+    async def test_endpoint_is_gone(self, client):
         ac, _ = client
-        result = ExecutionPermissionResult(
-            allowed=True,
-            permission_tier="full",
-            auto_exec_enabled=True,
-            in_time_window=True,
-            reason="allowed",
-        )
-        with patch(
-            "app.api.project_permissions.check_execution_permission",
-            new_callable=AsyncMock,
-            return_value=result,
-        ):
-            resp = await ac.get("/api/projects/proj/execution-permission")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["allowed"] is True
-            assert data["permission_tier"] == "full"
-            assert data["reason"] == "allowed"
-
-    @pytest.mark.asyncio
-    async def test_returns_denied_when_auto_exec_off(self, client):
-        ac, _ = client
-        result = ExecutionPermissionResult(
-            allowed=False,
-            permission_tier="full",
-            auto_exec_enabled=False,
-            in_time_window=True,
-            reason="auto_exec_disabled",
-        )
-        with patch(
-            "app.api.project_permissions.check_execution_permission",
-            new_callable=AsyncMock,
-            return_value=result,
-        ):
-            resp = await ac.get("/api/projects/proj/execution-permission")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["allowed"] is False
-            assert data["reason"] == "auto_exec_disabled"
-
-    @pytest.mark.asyncio
-    async def test_returns_denied_for_unknown_project(self, client):
-        ac, _ = client
-        result = ExecutionPermissionResult(
-            allowed=False,
-            permission_tier="unknown",
-            auto_exec_enabled=False,
-            in_time_window=False,
-            reason="project_not_found",
-        )
-        with patch(
-            "app.api.project_permissions.check_execution_permission",
-            new_callable=AsyncMock,
-            return_value=result,
-        ):
-            resp = await ac.get("/api/projects/unknown/execution-permission")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["allowed"] is False
+        resp = await ac.get("/api/projects/proj/execution-permission")
+        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +358,7 @@ class TestUpdatePermissionBudget:
     async def test_update_daily_budget(self, client):
         """Test updating daily cost budget via PATCH."""
         ac, _ = client
-        updated = _make_perm("proj", "full", daily_cost_budget_usd=25.0)
+        updated = _make_perm("proj", daily_cost_budget_usd=25.0)
         with (
             patch(
                 "app.api.project_permissions.update_project_permission",
@@ -454,7 +383,7 @@ class TestUpdatePermissionBudget:
     async def test_update_monthly_budget(self, client):
         """Test updating monthly cost budget via PATCH."""
         ac, _ = client
-        updated = _make_perm("proj", "full", monthly_cost_budget_usd=500.0)
+        updated = _make_perm("proj", monthly_cost_budget_usd=500.0)
         with (
             patch(
                 "app.api.project_permissions.update_project_permission",
@@ -478,7 +407,7 @@ class TestUpdatePermissionBudget:
     async def test_update_budget_alert_threshold(self, client):
         """Test updating budget alert threshold via PATCH."""
         ac, _ = client
-        updated = _make_perm("proj", "full", budget_alert_threshold=0.9)
+        updated = _make_perm("proj", budget_alert_threshold=0.9)
         with (
             patch(
                 "app.api.project_permissions.update_project_permission",
@@ -502,7 +431,7 @@ class TestUpdatePermissionBudget:
     async def test_update_non_budget_field_does_not_invalidate_cache(self, client):
         """Test that updating non-budget fields does not invalidate budget cache."""
         ac, _ = client
-        updated = _make_perm("proj", "full")
+        updated = _make_perm("proj")
         with (
             patch(
                 "app.api.project_permissions.update_project_permission",
@@ -516,7 +445,7 @@ class TestUpdatePermissionBudget:
         ):
             resp = await ac.patch(
                 "/api/projects/proj/permissions",
-                json={"permission_tier": "full"},
+                json={"root_path": "/srv/proj"},
             )
             assert resp.status_code == 200
             mock_invalidate.assert_not_called()
@@ -527,7 +456,6 @@ class TestUpdatePermissionBudget:
         ac, _ = client
         perm = _make_perm(
             "proj",
-            "full",
             daily_cost_budget_usd=10.0,
             monthly_cost_budget_usd=100.0,
             budget_alert_threshold=0.85,

@@ -24,7 +24,7 @@ def test_prepare_tools_auto_provisions_for_non_streaming_tool_loop() -> None:
         project_id="summitflow",
     )
 
-    tools = prepare_tools(request, visible_tool_names=frozenset({"bash", "read_file", "edit_file", "write_file"}))
+    tools = prepare_tools(request)
 
     assert tools is not None
     assert [tool["name"] for tool in tools[:4]] == ["bash", "read_file", "edit_file", "write_file"]

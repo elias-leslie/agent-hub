@@ -222,12 +222,7 @@ async def execute_completion(
     (result, model_used, fallback_used, loaded_uuids, session_id) tuple otherwise.
     """
     thinking = get_thinking_level(request, all_messages, resolved_agent)
-    visible_tool_names = None
-    if getattr(request, "execute_tools", False) and request.project_id:
-        from app.services.project_permission_service import get_visible_tools_for_project
-
-        visible_tool_names = await get_visible_tools_for_project(request.project_id, db)
-    tools = prepare_tools(request, visible_tool_names=visible_tool_names)
+    tools = prepare_tools(request)
     fmt = prepare_response_format(request)
     if _fallbacks_enabled(request, resolved_agent) and not is_agentic:
         result, model_used, fallback_used = await execute_with_fallback(

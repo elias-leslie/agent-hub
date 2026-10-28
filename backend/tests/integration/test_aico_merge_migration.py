@@ -41,8 +41,8 @@ def _migrate(conn) -> None:
         {"id": client_id, "allowed": json.dumps(["a-term"])},
     )
     conn.execute(
-        sa.text("INSERT INTO project_permissions (project_id, permission_tier, root_path)"
-                " VALUES ('a-term', 'read', '/srv/workspaces/projects/a-term')")
+        sa.text("INSERT INTO project_permissions (project_id, root_path)"
+                " VALUES ('a-term', '/srv/workspaces/projects/a-term')")
     )
     with Operations.context(MigrationContext.configure(conn)):
         migration.upgrade()

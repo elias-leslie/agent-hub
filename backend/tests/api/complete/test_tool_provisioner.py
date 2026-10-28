@@ -15,88 +15,16 @@ def test_provision_standard_tools_uses_minimal_shell_first_baseline() -> None:
     ]
 
 
-def test_persona_off_tier_fails_closed_without_project_visibility() -> None:
-    result = provision_standard_tools(
-        True,
-        None,
-        agent_slug="persona",
-        project_id="agent-hub",
-        defer_tool_loading=True,
-        visible_tool_names=frozenset(),
-    )
+def test_agent_with_its_own_registry_gets_only_those_tools() -> None:
+    result = provision_standard_tools(True, None, agent_slug="jobs-company", defer_tool_loading=True)
 
-    assert result.loaded_tools == []
-    assert result.catalog_tools == []
+    names = ["research_web", "search_web", "fetch_web_page"]
+    assert [tool["name"] for tool in result.loaded_tools] == names
+    assert [tool["name"] for tool in result.catalog_tools] == names
 
 
-def test_persona_read_tier_keeps_project_visible_runtime_tools_hot_loaded() -> None:
-    result = provision_standard_tools(
-        True,
-        None,
-        agent_slug="persona",
-        project_id="agent-hub",
-        defer_tool_loading=True,
-        visible_tool_names={
-            "read_file",
-            "query_sessions",
-            "inspect_session",
-            "review_agent_performance",
-            "tool_search",
-        },
-    )
-
-    loaded_names = [tool["name"] for tool in result.loaded_tools]
-
-    assert loaded_names == ["read_file"]
-    assert [tool["name"] for tool in result.catalog_tools] == ["read_file"]
-
-
-def test_persona_full_tier_keeps_project_visible_runtime_tools_hot_loaded() -> None:
-    result = provision_standard_tools(
-        True,
-        None,
-        agent_slug="persona",
-        project_id="agent-hub",
-        defer_tool_loading=True,
-        visible_tool_names={
-            "read_file",
-            "edit_file",
-            "write_file",
-            "query_sessions",
-            "inspect_session",
-            "review_agent_performance",
-        },
-    )
-
-    assert [tool["name"] for tool in result.loaded_tools] == [
-        "read_file",
-        "edit_file",
-        "write_file",
-    ]
-    assert [tool["name"] for tool in result.catalog_tools] == [
-        "read_file",
-        "edit_file",
-        "write_file",
-    ]
-
-
-def test_persona_full_tier_keeps_shell_first_tools_visible() -> None:
-    result = provision_standard_tools(
-        True,
-        None,
-        agent_slug="persona",
-        project_id="agent-hub",
-        visible_tool_names={
-            "bash",
-            "read_file",
-            "edit_file",
-            "write_file",
-            "search_scratch_context",
-            "dispatch_agent",
-            "manage_tasks",
-            "query_sessions",
-        },
-    )
+def test_agent_without_a_registry_gets_the_standard_tools() -> None:
+    result = provision_standard_tools(True, None, agent_slug="memory-curator")
 
     assert [tool["name"] for tool in result.loaded_tools] == [
         "bash",
@@ -104,25 +32,4 @@ def test_persona_full_tier_keeps_shell_first_tools_visible() -> None:
         "edit_file",
         "write_file",
         "search_scratch_context",
-    ]
-
-    assert [tool["name"] for tool in result.catalog_tools] == [
-        tool["name"] for tool in result.loaded_tools
-    ]
-
-
-def test_memory_curator_full_tier_has_no_review_launch_tool() -> None:
-    result = provision_standard_tools(
-        True,
-        None,
-        agent_slug="memory-curator",
-        project_id="agent-hub",
-        visible_tool_names={"bash", "read_file", "edit_file", "write_file", "review_memory_system"},
-    )
-
-    assert [tool["name"] for tool in result.loaded_tools] == [
-        "bash",
-        "read_file",
-        "edit_file",
-        "write_file",
     ]

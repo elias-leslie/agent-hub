@@ -1,7 +1,6 @@
 """Utility functions for Agent Routing Service."""
 
 import logging
-from dataclasses import dataclass
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,91 +89,4 @@ async def inject_agent_mandates(
 
     if agent.system_prompt:
         sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
-    if project_id:
-        perm_block = await _build_project_permissions_block(project_id, None)
-        if perm_block:
-            sections.append(perm_block)
     return MandateInjection(system_content="\n\n".join(sections), injected_uuids=[])
-
-
-_TIER_DESCRIPTIONS: dict[str, str] = {
-    "off": "You have NO access to this project. Do not attempt any tool calls.",
-    "read": "You have READ-ONLY access. You may use read_file only. Do NOT write files or execute commands.",
-    "full": "You have FULL trusted-project access including bash execution.",
-}
-_TIER_LABELS: dict[str, str] = {
-    "off": "off (all access blocked)",
-    "read": "read (read-only, writes blocked)",
-    "full": "full (trusted project access)",
-}
-
-
-@dataclass(frozen=True)
-class _PermissionSnapshot:
-    project_id: str
-    permission_tier: str
-
-
-async def _fetch_permissions(project_id: str, db: AsyncSession | None):
-    from app.services.project_permission_service import (
-        get_project_permission,
-        list_project_permissions,
-    )
-    if db:
-        return await get_project_permission(db, project_id), await list_project_permissions(db)
-    from app.db import async_session
-    async with async_session() as fresh_db:
-        perm = await get_project_permission(fresh_db, project_id)
-        all_perms = await list_project_permissions(fresh_db)
-        current = (
-            _PermissionSnapshot(perm.project_id, perm.permission_tier)
-            if perm is not None
-            else None
-        )
-        return current, [
-            _PermissionSnapshot(p.project_id, p.permission_tier)
-            for p in all_perms
-        ]
-
-
-def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:
-    from app.models.project_permission import normalize_permission_tier
-
-    other_perms = [p for p in all_perms if p.project_id != project_id]
-    if not other_perms:
-        return []
-    lines = ["", "Cross-project permissions (enforced on read_file/write_file, best-effort on bash):"]
-    for p in other_perms:
-        tier = normalize_permission_tier(p.permission_tier) or p.permission_tier
-        lines.append(f"- {p.project_id}: {_TIER_LABELS.get(tier, tier)}")
-    lines += ["", "Note: Use read_file/write_file for cross-project file access — these are permission-enforced. bash commands referencing restricted project paths will also be blocked."]
-    return lines
-
-
-async def _build_project_permissions_block(
-    project_id: str,
-    db: AsyncSession | None,
-) -> str | None:
-    try:
-        from app.models.project_permission import normalize_permission_tier
-        from app.services.project_permission_service import get_visible_tools_for_project
-
-        perm, all_perms = await _fetch_permissions(project_id, db)
-        if perm is None:
-            return None
-        tier = normalize_permission_tier(perm.permission_tier) or perm.permission_tier
-        visible_tool_names = await get_visible_tools_for_project(project_id, db)
-        tools_list = ", ".join(sorted(visible_tool_names)) or "none"
-        lines = [
-            "<project_permissions>",
-            f"Current project: {project_id}",
-            f"Permission tier: {tier}",
-            f"Allowed tools: {tools_list}",
-            _TIER_DESCRIPTIONS.get(tier, "Unknown permission tier."),
-            *_build_cross_project_lines(all_perms, project_id),
-            "</project_permissions>",
-        ]
-        return "\n".join(lines)
-    except Exception as e:
-        logger.debug("Failed to build project permissions block: %s", e)
-        return None

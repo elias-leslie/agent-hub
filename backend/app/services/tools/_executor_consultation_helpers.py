@@ -17,15 +17,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CONSULTATION_TOOL_BLOCKLIST = frozenset({
-    "bash",
-    "write_file",
-    "consult_agent",
-    "dispatch_agent",
-    "steer_consultation",
-    "cancel_consultation",
-    "manage_tasks",
-    "manage_backups",
+# Consultations are read-only: file reads and web lookups, nothing that writes, runs a shell or delegates.
+_CONSULTATION_TOOL_ALLOWLIST = frozenset({
+    "read_file",
+    "research_web",
+    "search_web",
+    "fetch_web_page",
 })
 
 
@@ -87,12 +84,6 @@ def _build_consultation_messages(system_content: str | None, prompt: str) -> lis
     return messages
 
 
-def _consultation_allowed_tool_names() -> frozenset[str]:
-    from app.services.project_permission_service import get_tools_for_tier
-
-    return get_tools_for_tier("read") - _CONSULTATION_TOOL_BLOCKLIST
-
-
 def _tool_spec_to_api_tool(tool: Tool) -> dict[str, Any]:
     api_tool: dict[str, Any] = {
         "name": tool.name,
@@ -120,8 +111,7 @@ def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
         SEARCH_WEB_TOOL,
         FETCH_WEB_PAGE_TOOL,
     ]
-    allowed_names = _consultation_allowed_tool_names()
-    return [_tool_spec_to_api_tool(tool) for tool in source_tools if tool.name in allowed_names]
+    return [_tool_spec_to_api_tool(tool) for tool in source_tools if tool.name in _CONSULTATION_TOOL_ALLOWLIST]
 
 
 async def _load_parent_session(db: Any, parent_session_id: str):

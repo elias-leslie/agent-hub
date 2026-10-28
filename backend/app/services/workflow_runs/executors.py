@@ -117,7 +117,7 @@ class FauxExecutor:
         progress = list(action.progress)
         if action.kind == "error":
             return StepResult("failed", [model], usage=usage, error="faux error", progress=progress)
-        if action.kind == "no_tools":  # what an executor says when the project's tier left the step without its tools
+        if action.kind == "no_tools":  # what an executor says when the tool level left the step without its tools
             error = "tools_unavailable: tool level 'read' allows only [read_file]; this step needs bash"
             return StepResult("failed", usage={}, error=error, tools=["read_file"])
         if action.kind == "refuse":

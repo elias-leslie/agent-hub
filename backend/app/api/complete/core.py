@@ -156,9 +156,9 @@ async def complete_internal(
     async session unless the caller explicitly declares that the messages
     already contain a verified canonical delivery.
 
-    Tool calls are checked against the project's permission tier, unless
-    ``permitted_tools`` names the tools the caller allows (a workflow run's
-    tool level); then that set is the permission.
+    The model is shown its agent's registry tools. ``permitted_tools`` names the
+    tools the caller allows (a workflow run's tool level); then calls outside
+    that set are denied.
     """
 
     if not is_workload_provider(provider):

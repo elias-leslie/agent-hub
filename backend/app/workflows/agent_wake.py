@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 TASK_NAME = "agent-wake"
 DEFAULT_PROJECT_ID = "summitflow"
 DEFAULT_EVENT_TYPE = "generic"
-PERMISSION_TIER_OFF = "off"
 TASK_TYPE_WAKE = "wake"
 LOGGED_BY_SYSTEM = "system"
 FEEDBACK_TYPE_FRICTION = "friction"
@@ -167,16 +166,6 @@ async def _find_existing_wake_session(
     return result.scalar_one_or_none()
 
 
-async def _check_permission_tier(project_id: str) -> bool:
-    """Return True if the project is allowed to run wake workflows."""
-    from app.db import async_session
-    from app.services.project_permission_service import get_project_permission
-
-    async with async_session() as perm_db:
-        perm = await get_project_permission(perm_db, project_id)
-        return not (perm and perm.permission_tier == PERMISSION_TIER_OFF)
-
-
 async def _run_complete_guarded(
     db: Any,
     input: WakeInput,
@@ -235,10 +224,6 @@ async def _run_complete_internal(db: Any, input: WakeInput, external_id: str | N
 async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
     """Run an agent completion in response to an external event."""
     from app.db import async_session
-
-    if not await _check_permission_tier(input.project_id):
-        ctx.log(f"Wake skipped for {input.project_id} (permission_tier=off)")
-        return WakeResult(status="skipped", event_type=input.event_type, error="project_permission_off").model_dump()
 
     external_id = _wake_external_id(ctx, task_id=input.task_id)
     step_dedup_id = f"wake-step:{ctx.step_run_id}" if getattr(ctx, "step_run_id", None) else None

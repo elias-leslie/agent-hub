@@ -1,190 +1,29 @@
-"""Project permission service — CRUD, tier logic, and Redis cache.
-
-Centralizes all automation permission decisions. Every tool execution and
-auto-dispatch check flows through this service.
-"""
+"""Project permission service: CRUD for the registered-project row (root, budgets) and client access sync."""
 
 from __future__ import annotations
 
 import inspect
 import json
 import logging
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, cast
 
-import redis.asyncio as aioredis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.constants.projects import invalidate_project_cache
 from app.core.project_roots import aresolve_project_root
 from app.middleware.access_control_auth import invalidate_client_cache
 from app.models.client import Client
-from app.models.project_permission import (
-    VALID_PERMISSION_TIERS,
-    ProjectPermission,
-    normalize_permission_tier,
-)
+from app.models.project_permission import ProjectPermission
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class _PermissionSnapshot:
-    project_id: str
-    permission_tier: str
-    auto_exec_enabled: bool
-    execution_start_hour: int
-    execution_end_hour: int
-
-# Redis cache configuration
-_CACHE_PREFIX = "agent-hub:project-perm:"
-_CACHE_TTL = 60  # seconds
-
-# Singleton Redis client
-_redis: aioredis.Redis | None = None
-
-# Reason strings for tool permission results
-_REASON_ALLOWED = "allowed"
-
-# Reason strings for execution permission results
-_EXEC_REASON_ALLOWED = "allowed"
-_EXEC_REASON_PROJECT_NOT_FOUND = "project_not_found"
-_EXEC_REASON_TIER_OFF = "permission_tier_off"
-_EXEC_REASON_INVALID_TIER = "invalid_permission_tier"
-_EXEC_REASON_AUTO_EXEC_DISABLED = "auto_exec_disabled"
-_EXEC_REASON_OUTSIDE_HOURS = "outside_execution_hours"
-
-# Unknown tier sentinel for ExecutionPermissionResult
-_TIER_UNKNOWN = "unknown"
 _SUMMITFLOW_SYNC_CLIENTS: frozenset[str] = frozenset({"summitflow", "summitflow-backend"})
 
 
-def _get_redis() -> aioredis.Redis:
-    """Get or create async Redis client for permission cache."""
-    global _redis
-    if _redis is None:
-        _redis = aioredis.from_url(
-            settings.agent_hub_redis_url, encoding="utf-8", decode_responses=True
-        )
-    return _redis
-
-
-# ---------------------------------------------------------------------------
-# Tier → tool mapping (cumulative)
-# ---------------------------------------------------------------------------
-
-_READ_TOOLS: frozenset[str] = frozenset({
-    "read_file",
-    "research_web",
-    "search_web",
-    "fetch_web_page",
-    # Mode-recommendation tools surfaced to Vantage's vantage-research agent.
-    # They don't perform I/O — they emit a structured recommendation that the
-    # consumer normalizes into a UI event. Read-tier so they aren't stripped.
-    "propose_thorough",
-    "propose_committee",
-    "propose_honing",
-    # Signal tool for Vantage's intake/scoping agent — pure pass-through.
-    "start_research",
-})
-
-_FULL_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
-    "bash",
-    "edit_file",
-    "search_scratch_context",
-    "write_file",
-})
-
-TIER_TOOLS: dict[str, frozenset[str]] = {
-    "off": frozenset(),
-    "read": _READ_TOOLS,
-    "full": _FULL_TOOLS,
-}
-
-
-def get_tools_for_tier(tier: str) -> frozenset[str]:
-    """Return the set of allowed tool names for a permission tier.
-
-    Args:
-        tier: One of "off", "read", "full"; legacy "write"/"yolo" map to "full".
-
-    Returns:
-        Frozen set of allowed tool names. Empty set for "off".
-    """
-    canonical_tier = normalize_permission_tier(tier)
-    return TIER_TOOLS.get(canonical_tier or "", frozenset())
-
-
-def get_visible_tools_for_tier(tier: str) -> frozenset[str]:
-    """Return tools that should be exposed up front for a project tier.
-
-    This is the model-visible project tool surface for the tier.
-    """
-    canonical_tier = normalize_permission_tier(tier)
-    return get_tools_for_tier(canonical_tier or "")
-
-
-async def get_visible_tools_for_project(
-    project_id: str,
-    db: AsyncSession | None = None,
-) -> frozenset[str]:
-    """Return the visible tool set for a project, failing closed on missing tier."""
-    tier = await _resolve_project_tier(project_id, db)
-    if tier is None:
-        return frozenset()
-    return get_visible_tools_for_tier(str(tier))
-
-
-# ---------------------------------------------------------------------------
-# Redis cache helpers
-# ---------------------------------------------------------------------------
-
-def _cache_key(project_id: str) -> str:
-    return f"{_CACHE_PREFIX}{project_id}"
-
-
-async def _get_cached_tier(project_id: str) -> str | None:
-    """Read cached permission tier from Redis. Returns None on miss."""
-    try:
-        r = _get_redis()
-        data = await r.get(_cache_key(project_id))
-        if data:
-            return normalize_permission_tier(json.loads(data).get("tier"))
-    except Exception as e:
-        logger.debug("Permission cache read error: %s", e)
-    return None
-
-
-async def _set_cache(project_id: str, tier: str, auto_exec: bool) -> None:
-    """Write permission data to Redis cache."""
-    try:
-        r = _get_redis()
-        await r.setex(
-            _cache_key(project_id),
-            _CACHE_TTL,
-            json.dumps({"tier": normalize_permission_tier(tier) or tier, "auto_exec": auto_exec}),
-        )
-    except Exception as e:
-        logger.debug("Permission cache write error: %s", e)
-
-
-async def _invalidate_cache(project_id: str) -> None:
-    """Remove permission from Redis cache (called on update)."""
-    try:
-        r = _get_redis()
-        await r.delete(_cache_key(project_id))
-    except Exception as e:
-        logger.debug("Permission cache invalidate error: %s", e)
-
-
-async def _flush_caches(
-    project_id: str, changed_client_ids: list[str], *, project: bool = False
-) -> None:
-    """Invalidate Redis and middleware caches after a permission write."""
-    await _invalidate_cache(project_id)
+async def _flush_caches(changed_client_ids: list[str], *, project: bool = False) -> None:
+    """Invalidate middleware caches after a project write."""
     for client_id in changed_client_ids:
         invalidate_client_cache(client_id)
     if project:
@@ -294,10 +133,9 @@ async def reconcile_registered_project_access(
 ) -> list[str]:
     """Repair SummitFlow-owned client access against permissions and the project registry.
 
-    Every project in the SummitFlow registry is allowed unless its permission
-    row is ``off``; projects that never got a permission row would otherwise be
-    missing from the hand-grown list and their session ingestion would 403.
-    With a known registry the list is exactly that set; without one (registry
+    Every registered project is allowed, including projects that never got a
+    permission row (they would otherwise be missing from the hand-grown list and
+    their session ingestion would 403). With a known registry the list is exactly that set; without one (registry
     unavailable) the current list is only adjusted, never trimmed.
     """
     permission_result = await db.execute(
@@ -305,18 +143,14 @@ async def reconcile_registered_project_access(
     )
     permissions = list(permission_result.scalars().all())
     managed_project_ids = [perm.project_id for perm in permissions]
-    enabled_project_ids = [
-        perm.project_id
-        for perm in permissions
-        if normalize_permission_tier(str(perm.permission_tier)) != "off"
-    ]
+    enabled_project_ids = list(managed_project_ids)
     for project_id in sorted(set(registered_project_ids or ()) - set(managed_project_ids)):
         managed_project_ids.append(project_id)
         enabled_project_ids.append(project_id)
     registry_known = bool(registered_project_ids)
     if registry_known:
-        # SummitFlow only calls for registered projects: grant exactly those (unless
-        # off) and drop everything else the list picked up over time.
+        # SummitFlow only calls for registered projects: grant exactly those
+        # and drop everything else the list picked up over time.
         registered = set(registered_project_ids or ())
         managed_project_ids = [project_id for project_id in managed_project_ids if project_id in registered]
         enabled_project_ids = [project_id for project_id in enabled_project_ids if project_id in registered]
@@ -378,38 +212,19 @@ async def reconcile_access_if_registry_changed() -> list[str]:
     return changed
 
 
-def _coerce_tier(tier: str) -> str:
-    """Return canonical permission tier or raise ValueError."""
-    canonical_tier = normalize_permission_tier(tier)
-    if canonical_tier is None:
-        raise ValueError(
-            f"Invalid tier: {tier}. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}"
-        )
-    return canonical_tier
-
-
 async def create_project_permission(
     db: AsyncSession,
     project_id: str,
     *,
-    permission_tier: str = "read",
-    auto_exec_enabled: bool = False,
-    execution_start_hour: int = 0,
-    execution_end_hour: int = 24,
     root_path: str | None = None,
     daily_cost_budget_usd: float | None = None,
     monthly_cost_budget_usd: float | None = None,
     budget_alert_threshold: float = 0.8,
 ) -> ProjectPermission:
-    """Create a new project permission row.
-
-    Raises ValueError when project_id already exists or the tier is invalid.
-    """
+    """Create a new project row. Raises ValueError when project_id already exists."""
     existing = await get_project_permission(db, project_id)
     if existing is not None:
         raise ValueError(f"Project permission already exists for '{project_id}'")
-
-    permission_tier = _coerce_tier(permission_tier)
 
     resolved_root_path = root_path
     if resolved_root_path is None:
@@ -418,10 +233,6 @@ async def create_project_permission(
 
     perm = ProjectPermission(
         project_id=project_id,
-        permission_tier=permission_tier,
-        auto_exec_enabled=auto_exec_enabled,
-        execution_start_hour=execution_start_hour,
-        execution_end_hour=execution_end_hour,
         root_path=resolved_root_path,
         daily_cost_budget_usd=daily_cost_budget_usd,
         monthly_cost_budget_usd=monthly_cost_budget_usd,
@@ -429,11 +240,11 @@ async def create_project_permission(
     )
     db.add(perm)
     changed_client_ids = await _sync_registered_project_access(
-        db, project_id, enabled=permission_tier != "off"
+        db, project_id, enabled=True
     )
     await db.commit()
     await db.refresh(perm)
-    await _flush_caches(project_id, changed_client_ids, project=True)
+    await _flush_caches(changed_client_ids, project=True)
     return perm
 
 
@@ -450,31 +261,19 @@ async def delete_project_permission(
     )
     await db.delete(perm)
     await db.commit()
-    await _flush_caches(project_id, changed_client_ids, project=True)
+    await _flush_caches(changed_client_ids, project=True)
     return perm
 
 
 def _apply_optional_fields(
     perm: ProjectPermission,
     *,
-    permission_tier: str | None,
-    auto_exec_enabled: bool | None,
-    execution_start_hour: int | None,
-    execution_end_hour: int | None,
     root_path: Any,
     daily_cost_budget_usd: Any,
     monthly_cost_budget_usd: Any,
     budget_alert_threshold: float | None,
 ) -> None:
-    """Mutate perm in-place for any non-sentinel kwargs; validate tier when provided."""
-    if permission_tier is not None:
-        perm.permission_tier = _coerce_tier(permission_tier)
-    if auto_exec_enabled is not None:
-        perm.auto_exec_enabled = auto_exec_enabled
-    if execution_start_hour is not None:
-        perm.execution_start_hour = execution_start_hour
-    if execution_end_hour is not None:
-        perm.execution_end_hour = execution_end_hour
+    """Mutate perm in-place for any non-sentinel kwargs."""
     if root_path is not ...:
         perm.root_path = root_path
     if daily_cost_budget_usd is not ...:
@@ -489,10 +288,6 @@ async def update_project_permission(
     db: AsyncSession,
     project_id: str,
     *,
-    permission_tier: str | None = None,
-    auto_exec_enabled: bool | None = None,
-    execution_start_hour: int | None = None,
-    execution_end_hour: int | None = None,
     root_path: str | None = ...,  # type: ignore[assignment]
     daily_cost_budget_usd: float | None = ...,  # type: ignore[assignment]
     monthly_cost_budget_usd: float | None = ...,  # type: ignore[assignment]
@@ -508,180 +303,15 @@ async def update_project_permission(
 
     _apply_optional_fields(
         perm,
-        permission_tier=permission_tier,
-        auto_exec_enabled=auto_exec_enabled,
-        execution_start_hour=execution_start_hour,
-        execution_end_hour=execution_end_hour,
         root_path=root_path,
         daily_cost_budget_usd=daily_cost_budget_usd,
         monthly_cost_budget_usd=monthly_cost_budget_usd,
         budget_alert_threshold=budget_alert_threshold,
     )
     changed_client_ids = await _sync_registered_project_access(
-        db, project_id, enabled=perm.permission_tier != "off"
+        db, project_id, enabled=True
     )
     await db.commit()
     await db.refresh(perm)
-    await _flush_caches(project_id, changed_client_ids)
+    await _flush_caches(changed_client_ids)
     return perm
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers for tool permission checks
-# ---------------------------------------------------------------------------
-
-async def _load_perm_from_db(
-    project_id: str, db: AsyncSession | None
-) -> ProjectPermission | _PermissionSnapshot | None:
-    """Load a permission row from DB, creating a session if none provided."""
-    if db is not None:
-        return await get_project_permission(db, project_id)
-    from app.db import async_session  # lazy import to avoid cycles
-    async with async_session() as fresh_db:
-        perm = await get_project_permission(fresh_db, project_id)
-        if perm is None:
-            return None
-        return _PermissionSnapshot(
-            project_id=perm.project_id,
-            permission_tier=normalize_permission_tier(perm.permission_tier) or perm.permission_tier,
-            auto_exec_enabled=perm.auto_exec_enabled,
-            execution_start_hour=perm.execution_start_hour,
-            execution_end_hour=perm.execution_end_hour,
-        )
-
-
-async def _resolve_project_tier(
-    project_id: str, db: AsyncSession | None,
-) -> str | None:
-    """Return the cached or persisted permission tier for a project."""
-    tier = normalize_permission_tier(await _get_cached_tier(project_id))
-    if tier is not None:
-        return tier
-    perm = await _load_perm_from_db(project_id, db)
-    if not perm:
-        return None
-    raw_tier = getattr(perm, "permission_tier", None)
-    if inspect.isawaitable(raw_tier):
-        raw_tier = await raw_tier
-    if not isinstance(raw_tier, str):
-        return None
-    return normalize_permission_tier(raw_tier)
-
-
-# ---------------------------------------------------------------------------
-# Tool permission checks (hot path)
-# ---------------------------------------------------------------------------
-
-async def check_tool_allowed(
-    project_id: str,
-    tool_name: str,
-    *,
-    tool_input: dict[str, Any] | None = None,
-    db: AsyncSession | None = None,
-) -> tuple[bool, str]:
-    """Check whether a tool call is allowed for a project.
-
-    Uses Redis cache for fast lookups. Falls back to DB on cache miss.
-    All error paths fail-closed (deny access) for security.
-
-    Returns:
-        (allowed, reason) tuple.  Never raises.
-    """
-    try:
-        # Regular tool: cache → DB → check
-        cached_tier = await _get_cached_tier(project_id)
-        tier = normalize_permission_tier(cached_tier)
-        if cached_tier is not None and tier is None:
-            logger.warning(
-                "Unrecognized cached tier '%s' for project %s — denying tool '%s'",
-                cached_tier, project_id, tool_name,
-            )
-            return False, f"unrecognized permission tier '{cached_tier}'"
-        if tier is None:
-            perm = await _load_perm_from_db(project_id, db)
-            if perm is None:
-                logger.warning(
-                    "No permission record for project %s — denying tool '%s'",
-                    project_id, tool_name,
-                )
-                return False, f"no permission record for project '{project_id}'"
-            tier = normalize_permission_tier(perm.permission_tier)
-            if tier is not None:
-                await _set_cache(project_id, tier, perm.auto_exec_enabled)
-
-        if tier not in TIER_TOOLS:
-            logger.warning(
-                "Unrecognized tier '%s' for project %s — denying tool '%s'",
-                tier, project_id, tool_name,
-            )
-            return False, f"unrecognized permission tier '{tier}'"
-
-        if tool_name in get_tools_for_tier(tier):
-            return True, _REASON_ALLOWED
-        return False, f"tool '{tool_name}' not permitted at tier '{tier}'"
-
-    except Exception as e:
-        logger.error(
-            "Error checking tool permission for project %s, tool %s: %s",
-            project_id, tool_name, e,
-        )
-        return False, f"permission check error: {e}"
-
-
-# ---------------------------------------------------------------------------
-# Execution permission (for SummitFlow API call)
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ExecutionPermissionResult:
-    """Result of an execution permission check."""
-
-    allowed: bool
-    permission_tier: str
-    auto_exec_enabled: bool
-    in_time_window: bool
-    reason: str
-
-
-def _is_in_time_window(start: int, end: int, current_hour: int) -> bool:
-    """Return True if current_hour falls within [start, end) with wrap-around support."""
-    if start == end:
-        return False  # zero-length window — never allowed
-    if start < end:
-        return start <= current_hour < end
-    # Wrap-around (e.g., 22 to 6)
-    return current_hour >= start or current_hour < end
-
-
-async def check_execution_permission(
-    db: AsyncSession, project_id: str
-) -> ExecutionPermissionResult:
-    """Check if automated execution is allowed for a project right now.
-
-    Checks tier != "off", auto_exec_enabled, and time window.
-    """
-    # Helper alias for brevity
-    R = ExecutionPermissionResult
-
-    perm = await get_project_permission(db, project_id)
-    if perm is None:
-        return R(False, _TIER_UNKNOWN, False, False, _EXEC_REASON_PROJECT_NOT_FOUND)
-
-    tier = normalize_permission_tier(perm.permission_tier) or _TIER_UNKNOWN
-    auto_exec = perm.auto_exec_enabled
-
-    if tier == "off":
-        return R(False, tier, auto_exec, False, _EXEC_REASON_TIER_OFF)
-    if tier == _TIER_UNKNOWN:
-        return R(False, tier, auto_exec, False, _EXEC_REASON_INVALID_TIER)
-
-    if not auto_exec:
-        return R(False, tier, auto_exec, True, _EXEC_REASON_AUTO_EXEC_DISABLED)
-
-    in_window = _is_in_time_window(
-        perm.execution_start_hour, perm.execution_end_hour, datetime.now().hour
-    )
-    if not in_window:
-        return R(False, tier, auto_exec, False, _EXEC_REASON_OUTSIDE_HOURS)
-
-    return R(True, tier, auto_exec, True, _EXEC_REASON_ALLOWED)

@@ -198,34 +198,11 @@ class TestInjectAgentMandates:
         assert result.injected_uuids == []
 
     @pytest.mark.asyncio
-    async def test_project_permissions_block_lists_visible_tools(
-        self,
-        mock_agent: AgentDTO,
-    ) -> None:
-        perm = SimpleNamespace(project_id="agent-hub", permission_tier="read")
+    async def test_project_id_adds_no_permission_block(self, mock_agent: AgentDTO) -> None:
+        result = await inject_agent_mandates(mock_agent, project_id="agent-hub")
 
-        with (
-            patch(
-                "app.services.agent_routing_utils._fetch_permissions",
-                new=AsyncMock(return_value=(perm, [perm])),
-            ),
-            patch(
-                "app.services.project_permission_service.get_visible_tools_for_project",
-                new=AsyncMock(
-                    return_value=frozenset(
-                        {
-                            "read_file",
-                        }
-                    )
-                ),
-            ),
-        ):
-            result = await inject_agent_mandates(mock_agent, project_id="agent-hub")
-
-        assert (
-            "Allowed tools: read_file"
-            in result.system_content
-        )
+        assert "project_permissions" not in result.system_content
+        assert "Allowed tools" not in result.system_content
 
     @pytest.mark.asyncio
     async def test_inject_agent_mandates_excludes_autocode_role_for_non_autocode_runtime(self):

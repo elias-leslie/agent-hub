@@ -50,26 +50,15 @@ def test_build_deferred_toolset_adds_virtual_catalog_tools() -> None:
     ]
 
 
-def test_visible_tool_names_filter_before_catalog_loading() -> None:
-    """The project-visible tool set is applied before deferred cataloging."""
+def test_agent_registry_tools_are_cataloged_when_loading_is_deferred() -> None:
+    """An agent's own registry decides the tool surface before deferred cataloging."""
     from app.api.complete.tool_provisioner import provision_standard_tools
 
-    provisioned = provision_standard_tools(
-        True,
-        None,
-        agent_slug="coder",
-        project_id="agent-hub",
-        defer_tool_loading=True,
-        visible_tool_names={
-            "read_file",
-            "query_sessions",
-            "inspect_session",
-            "schedule_job",
-        },
-    )
+    provisioned = provision_standard_tools(True, None, agent_slug="jobs-company", defer_tool_loading=True)
 
-    assert [tool["name"] for tool in provisioned.loaded_tools] == ["read_file"]
-    assert [tool["name"] for tool in provisioned.catalog_tools] == ["read_file"]
+    names = ["research_web", "search_web", "fetch_web_page"]
+    assert [tool["name"] for tool in provisioned.loaded_tools] == names
+    assert [tool["name"] for tool in provisioned.catalog_tools] == names
 
 
 @pytest.mark.asyncio

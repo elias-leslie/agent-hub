@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-from app.services.project_permission_service import _READ_TOOLS
 from app.services.tools._propose_tools import (
     execute_propose_committee,
     execute_propose_honing,
@@ -126,12 +125,6 @@ def test_registry_includes_all_three_propose_tools() -> None:
     assert "propose_honing" in names
 
 
-def test_read_tier_includes_propose_tools() -> None:
-    # Without this the tier filter would strip them when project permission is `read`.
-    for name in ("propose_thorough", "propose_committee", "propose_honing"):
-        assert name in _READ_TOOLS
-
-
 def test_dispatcher_knows_all_three_propose_tools() -> None:
     for name in ("propose_thorough", "propose_committee", "propose_honing"):
         assert name in DirectToolExecutor.DISPATCHABLE_TOOLS
@@ -140,4 +133,3 @@ def test_dispatcher_knows_all_three_propose_tools() -> None:
 def test_company_research_has_only_public_web_tools() -> None:
     names = {tool.name for tool in _AGENT_TOOL_REGISTRY["jobs-company"]}
     assert names == {"research_web", "search_web", "fetch_web_page"}
-    assert names <= _READ_TOOLS

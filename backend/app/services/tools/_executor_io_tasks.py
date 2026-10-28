@@ -6,7 +6,6 @@ lives in focused plan, dispatch, and cleanup modules.
 
 from __future__ import annotations
 
-from app.services.project_permission_service import check_execution_permission  # noqa: F401
 from app.services.tools._executor_io_cleanup import (
     _cleanup_dispatch_block_reason,
     _handle_cleanup_all_safe,

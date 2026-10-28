@@ -12,10 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.constants.projects import get_known_roots
 from app.db import async_session, get_db
 from app.models.memory_unified import Memory
-from app.models.project_permission import VALID_PERMISSION_TIERS, normalize_permission_tier
 from app.services.project_permission_service import (
-    ExecutionPermissionResult,
-    check_execution_permission,
     create_project_permission,
     delete_project_permission,
     get_project_permission,
@@ -35,10 +32,6 @@ class ProjectPermissionResponse(BaseModel):
     """Response schema for a single project permission."""
 
     project_id: str
-    permission_tier: str
-    auto_exec_enabled: bool
-    execution_start_hour: int
-    execution_end_hour: int
     root_path: str | None
     daily_cost_budget_usd: float | None
     monthly_cost_budget_usd: float | None
@@ -50,10 +43,6 @@ class ProjectPermissionResponse(BaseModel):
 class ProjectPermissionUpdate(BaseModel):
     """Request schema for updating a project permission."""
 
-    permission_tier: str | None = Field(default=None, description="off, read, full")
-    auto_exec_enabled: bool | None = None
-    execution_start_hour: int | None = Field(default=None, ge=0, le=23)
-    execution_end_hour: int | None = Field(default=None, ge=1, le=24)
     root_path: str | None = None
     daily_cost_budget_usd: float | None = Field(default=None, ge=0, description="Daily cost budget in USD, null=unlimited")
     monthly_cost_budget_usd: float | None = Field(default=None, ge=0, description="Monthly cost budget in USD, null=unlimited")
@@ -64,24 +53,10 @@ class ProjectPermissionCreate(BaseModel):
     """Request schema for creating a project permission."""
 
     project_id: str = Field(min_length=1)
-    permission_tier: str = Field(default="read", description="off, read, full")
-    auto_exec_enabled: bool = False
-    execution_start_hour: int = Field(default=0, ge=0, le=23)
-    execution_end_hour: int = Field(default=24, ge=1, le=24)
     root_path: str | None = None
     daily_cost_budget_usd: float | None = Field(default=None, ge=0, description="Daily cost budget in USD, null=unlimited")
     monthly_cost_budget_usd: float | None = Field(default=None, ge=0, description="Monthly cost budget in USD, null=unlimited")
     budget_alert_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Alert threshold 0.0-1.0")
-
-
-class ExecutionPermissionResponse(BaseModel):
-    """Lightweight yes/no response for SummitFlow pickup_guards."""
-
-    allowed: bool
-    permission_tier: str
-    auto_exec_enabled: bool
-    in_time_window: bool
-    reason: str
 
 
 class ProjectCatalogItem(BaseModel):
@@ -104,10 +79,6 @@ class ProjectCatalogItem(BaseModel):
 def _to_response(perm: Any) -> ProjectPermissionResponse:
     return ProjectPermissionResponse(
         project_id=perm.project_id,
-        permission_tier=normalize_permission_tier(perm.permission_tier) or perm.permission_tier,
-        auto_exec_enabled=perm.auto_exec_enabled,
-        execution_start_hour=perm.execution_start_hour,
-        execution_end_hour=perm.execution_end_hour,
         root_path=perm.root_path,
         daily_cost_budget_usd=perm.daily_cost_budget_usd,
         monthly_cost_budget_usd=perm.monthly_cost_budget_usd,
@@ -218,27 +189,10 @@ async def create_permission(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProjectPermissionResponse:
     """Create a new project permission row."""
-    permission_tier = normalize_permission_tier(payload.permission_tier)
-    if permission_tier is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid tier '{payload.permission_tier}'. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}",
-        )
-
-    if payload.execution_start_hour == payload.execution_end_hour:
-        raise HTTPException(
-            status_code=400,
-            detail="start_hour and end_hour cannot be the same",
-        )
-
     try:
         perm = await create_project_permission(
             db,
             payload.project_id,
-            permission_tier=permission_tier,
-            auto_exec_enabled=payload.auto_exec_enabled,
-            execution_start_hour=payload.execution_start_hour,
-            execution_end_hour=payload.execution_end_hour,
             root_path=payload.root_path,
             daily_cost_budget_usd=payload.daily_cost_budget_usd,
             monthly_cost_budget_usd=payload.monthly_cost_budget_usd,
@@ -269,40 +223,9 @@ async def update_permission(
     update: ProjectPermissionUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProjectPermissionResponse:
-    """Update permission for a project (tier, auto_exec, hours, root_path)."""
-    # Validate tier
-    permission_tier = (
-        normalize_permission_tier(update.permission_tier)
-        if update.permission_tier is not None
-        else None
-    )
-    if update.permission_tier is not None and permission_tier is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid tier '{update.permission_tier}'. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}",
-        )
-
-    # Validate hour range
-    if (
-        update.execution_start_hour is not None
-        and update.execution_end_hour is not None
-        and update.execution_start_hour == update.execution_end_hour
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="start_hour and end_hour cannot be the same",
-        )
-
+    """Update permission for a project (root path and cost budgets)."""
     # Build kwargs, only passing fields that were set
     kwargs: dict[str, Any] = {}
-    if permission_tier is not None:
-        kwargs["permission_tier"] = permission_tier
-    if update.auto_exec_enabled is not None:
-        kwargs["auto_exec_enabled"] = update.auto_exec_enabled
-    if update.execution_start_hour is not None:
-        kwargs["execution_start_hour"] = update.execution_start_hour
-    if update.execution_end_hour is not None:
-        kwargs["execution_end_hour"] = update.execution_end_hour
     if update.root_path is not None:
         kwargs["root_path"] = update.root_path
     if update.daily_cost_budget_usd is not None:
@@ -336,28 +259,6 @@ async def delete_permission(
     if deleted is None:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
     return Response(status_code=204)
-
-
-@router.get(
-    "/{project_id}/execution-permission",
-    response_model=ExecutionPermissionResponse,
-)
-async def get_execution_permission(
-    project_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ExecutionPermissionResponse:
-    """Lightweight check: can automated execution proceed for this project?
-
-    Used by SummitFlow's pickup_guards for fail-closed permission checks.
-    """
-    result: ExecutionPermissionResult = await check_execution_permission(db, project_id)
-    return ExecutionPermissionResponse(
-        allowed=result.allowed,
-        permission_tier=result.permission_tier,
-        auto_exec_enabled=result.auto_exec_enabled,
-        in_time_window=result.in_time_window,
-        reason=result.reason,
-    )
 
 
 @router.get("/budgets", response_model=list[dict])

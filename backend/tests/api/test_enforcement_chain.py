@@ -1,7 +1,7 @@
-"""Integration tests for the permission + budget enforcement chain.
+"""Integration tests for the client access + budget enforcement chain.
 
-Tests the two enforcement layers working together in the completion pipeline:
-1. Project permissions -- tier-based tool filtering (off/read/full)
+Tests the enforcement layers working together in the completion pipeline:
+1. Client identification and project access
 2. Cost budgets -- per-project daily/monthly USD limits via Redis
 
 All infrastructure (DB, Redis, LLM) is mocked. These tests validate that the
@@ -160,7 +160,7 @@ class TestEnforcementChain:
 
     @pytest.mark.asyncio
     async def test_enforcement_full_allow_chain_proceeds(self, async_client):
-        """Client identified + rate limit OK + budget OK + tier allows tool -> request proceeds.
+        """Client identified + rate limit OK + budget OK -> request proceeds.
 
         Verifies that when all enforcement layers pass, the request reaches
         the LLM adapter and returns a successful response.
@@ -295,76 +295,6 @@ class TestEnforcementChain:
 
             assert exc_info.value.status_code == 429
             assert "daily budget exceeded" in exc_info.value.detail
-
-    # ------------------------------------------------------------------
-    # 4. Tier blocks tool
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_enforcement_tier_blocks_tool_denied(self):
-        """Client identified + rate OK + budget OK but tier doesn't allow tool -> tool rejected.
-
-        The tier "read" only allows read-only tools. Attempting a write tool
-        like "bash" should be denied by check_tool_allowed.
-        """
-        from app.models.project_permission import ProjectPermission
-        from app.services.project_permission_service import check_tool_allowed
-
-        # Mock DB to return a "read" tier permission
-        mock_perm = MagicMock(spec=ProjectPermission)
-        mock_perm.project_id = TEST_PROJECT_ID
-        mock_perm.permission_tier = "read"
-        mock_perm.auto_exec_enabled = False
-
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_perm
-
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=mock_result)
-        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_db.__aexit__ = AsyncMock(return_value=None)
-
-        # Also patch Redis cache to return None (force DB lookup)
-        with (
-            patch(
-                "app.services.project_permission_service._get_cached_tier",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.services.project_permission_service._set_cache",
-                new_callable=AsyncMock,
-            ),
-        ):
-            # "bash" is a full-tier tool, should be denied at "read" tier
-            allowed, reason = await check_tool_allowed(
-                TEST_PROJECT_ID, "bash", db=mock_db
-            )
-            assert allowed is False
-            assert "not permitted" in reason
-            assert "read" in reason
-
-            # "read_file" is a read tool, should be allowed at "read" tier
-            allowed, reason = await check_tool_allowed(
-                TEST_PROJECT_ID, "read_file", db=mock_db
-            )
-            assert allowed is True
-            assert reason == "allowed"
-
-    @pytest.mark.asyncio
-    async def test_enforcement_tier_off_blocks_all_tools(self):
-        """Tier "off" blocks every tool, including read tools."""
-        from app.services.project_permission_service import check_tool_allowed
-
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="off",
-        ):
-            allowed, reason = await check_tool_allowed(TEST_PROJECT_ID, "read_file")
-            assert allowed is False
-            assert "not permitted" in reason
-            assert "off" in reason
 
     # ------------------------------------------------------------------
     # 5. Client not found blocks everything
@@ -511,58 +441,6 @@ class TestEnforcementChain:
         mock_redis.incrbyfloat.assert_not_called()
 
 
-class TestEnforcementChainTierToolMatrix:
-    """Tests for the tier-to-tool permission matrix across all tiers."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "tier,tool_name,expected_allowed",
-        [
-            # "off" tier blocks everything
-            ("off", "read_file", False),
-            ("off", "write_file", False),
-            ("off", "bash", False),
-            # "read" tier allows read tools, blocks write/full tools
-            ("read", "read_file", True),
-            ("read", "search_scratch_context", False),
-            ("read", "consult_agent", False),
-            ("read", "write_file", False),
-            ("read", "bash", False),
-            # "full" tier allows core project tools
-            ("full", "read_file", True),
-            ("full", "write_file", True),
-            ("full", "bash", True),
-            ("full", "search_scratch_context", True),
-            ("full", "batch_execute", False),
-            ("full", "consult_agent", False),
-            # Legacy labels normalize to full.
-            ("write", "bash", True),
-            ("yolo", "bash", True),
-        ],
-    )
-    async def test_enforcement_tier_tool_matrix(
-        self, tier: str, tool_name: str, expected_allowed: bool
-    ):
-        """Verify that each tier correctly allows/denies specific tools."""
-        from app.services.project_permission_service import check_tool_allowed
-
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value=tier,
-        ):
-            allowed, reason = await check_tool_allowed(TEST_PROJECT_ID, tool_name)
-
-        assert allowed is expected_allowed, (
-            f"tier={tier}, tool={tool_name}: expected allowed={expected_allowed}, "
-            f"got allowed={allowed}, reason={reason}"
-        )
-        if expected_allowed:
-            assert reason == "allowed"
-        else:
-            assert "not permitted" in reason
-
-
 class TestEnforcementChainEdgeCases:
     """Edge case tests for enforcement chain interactions."""
 
@@ -583,24 +461,6 @@ class TestEnforcementChainEdgeCases:
         assert result.allowed is False
         assert result.reason is not None
         assert "budget check error" in result.reason
-
-    @pytest.mark.asyncio
-    async def test_enforcement_permission_check_error_fails_closed(self):
-        """Error during permission check should fail-CLOSED (deny tool).
-
-        Permission checking is a security gate.
-        """
-        from app.services.project_permission_service import check_tool_allowed
-
-        with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            side_effect=Exception("Unexpected cache error"),
-        ):
-            allowed, reason = await check_tool_allowed(TEST_PROJECT_ID, "read_file")
-
-        assert allowed is False
-        assert "permission check error" in reason
 
     @pytest.mark.asyncio
     async def test_enforcement_no_budget_limits_allows_request(self):

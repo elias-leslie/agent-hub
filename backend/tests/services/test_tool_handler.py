@@ -1,8 +1,6 @@
-"""Tests for tool_handler — fail-closed permission hook behavior."""
+"""Tests for tool_handler: fail-closed hook behavior and where the tool permission comes from."""
 
 from __future__ import annotations
-
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -10,7 +8,6 @@ from app.services.tools.base import ToolCall, ToolDecision
 from app.services.tools.tool_handler import (
     DirectToolHandler,
     _compose_hooks,
-    _create_project_permission_hook,
 )
 
 # ---------------------------------------------------------------------------
@@ -20,92 +17,6 @@ from app.services.tools.tool_handler import (
 def _make_tool_call(name: str = "read_file") -> ToolCall:
     """Create a minimal ToolCall for testing."""
     return ToolCall(id="test-id", name=name, input={})
-
-
-# ---------------------------------------------------------------------------
-# _create_project_permission_hook fail-closed tests
-# ---------------------------------------------------------------------------
-
-
-class TestProjectPermissionHookFailClosed:
-    """Verify the permission hook denies on any exception (fail-closed)."""
-
-    @pytest.mark.asyncio
-    async def test_hook_denies_when_check_tool_allowed_raises(self):
-        """If check_tool_allowed raises, the hook should return DENY."""
-        hook = _create_project_permission_hook("test-project")
-        tool_call = _make_tool_call("bash")
-
-        with patch(
-            "app.services.project_permission_service.check_tool_allowed",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("DB connection failed"),
-        ):
-            decision = await hook(tool_call)
-            assert decision == ToolDecision.DENY
-
-    @pytest.mark.asyncio
-    async def test_hook_denies_when_import_fails(self):
-        """If the import inside the hook fails, should return DENY."""
-        hook = _create_project_permission_hook("test-project")
-        tool_call = _make_tool_call("read_file")
-
-        with patch(
-            "app.services.project_permission_service.check_tool_allowed",
-            side_effect=ImportError("module not found"),
-        ):
-            decision = await hook(tool_call)
-            assert decision == ToolDecision.DENY
-
-    @pytest.mark.asyncio
-    async def test_hook_allows_when_check_returns_allowed(self):
-        """Normal path: check_tool_allowed returns (True, 'allowed')."""
-        hook = _create_project_permission_hook("test-project")
-        tool_call = _make_tool_call("read_file")
-
-        with patch(
-            "app.services.project_permission_service.check_tool_allowed",
-            new_callable=AsyncMock,
-            return_value=(True, "allowed"),
-        ):
-            decision = await hook(tool_call)
-            assert decision == ToolDecision.ALLOW
-
-    @pytest.mark.asyncio
-    async def test_hook_denies_when_check_returns_denied(self):
-        """Normal path: check_tool_allowed returns (False, reason)."""
-        hook = _create_project_permission_hook("test-project")
-        tool_call = _make_tool_call("bash")
-
-        with patch(
-            "app.services.project_permission_service.check_tool_allowed",
-            new_callable=AsyncMock,
-            return_value=(False, "tool 'bash' not permitted at tier 'read'"),
-        ):
-            decision = await hook(tool_call)
-            assert decision == ToolDecision.DENY
-
-    @pytest.mark.asyncio
-    async def test_hook_forwards_tool_input_to_permission_check(self):
-        """Action-aware permission checks must receive the raw tool payload."""
-        hook = _create_project_permission_hook("test-project")
-        tool_call = ToolCall(
-            id="test-id",
-            name="manage_tasks",
-            input={"action": "dispatch", "task_id": "task-123"},
-        )
-
-        with patch(
-            "app.services.project_permission_service.check_tool_allowed",
-            new_callable=AsyncMock,
-            return_value=(False, "direct helper tool disabled; use bash with st"),
-        ) as mock_check:
-            decision = await hook(tool_call)
-
-        assert decision == ToolDecision.DENY
-        mock_check.assert_awaited_once_with(
-            "test-project", "manage_tasks", tool_input=tool_call.input,
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -211,45 +122,33 @@ class TestDirectToolHandlerPermissionFailClosed:
 
 
 # ---------------------------------------------------------------------------
-# Who decides which calls run: the project's chat tier, or a workflow run's tool set
+# Who decides which calls run: only a workflow run's tool set (chat has no tool hook)
 # ---------------------------------------------------------------------------
 
 
 class TestToolPermissionSource:
-    @pytest.mark.asyncio
-    async def test_chat_keeps_the_project_permission_tier(self):
-        """Without a permitted tool set (Agent Hub chat), a read-tier project still denies bash and allows read_file."""
+    def test_chat_has_no_tool_hook(self):
+        """Without a permitted tool set (Agent Hub chat) the model's tools come from its agent registry;
+        only the lease check applies."""
         from app.services.tools.tool_handler import _collect_hooks
 
-        hooks = _collect_hooks(None, "chat-project")
-        assert len(hooks) == 3  # project permission, cross-project boundary, lease check
+        assert len(_collect_hooks(None, "chat-project")) == 1  # lease check
 
-        with patch(
-            "app.services.project_permission_service._get_cached_tier", new_callable=AsyncMock, return_value="read"
-        ):
-            assert await hooks[0](_make_tool_call("bash")) == ToolDecision.DENY
-            assert await hooks[0](_make_tool_call("write_file")) == ToolDecision.DENY
-            assert await hooks[0](_make_tool_call("read_file")) == ToolDecision.ALLOW
-
-    def test_chat_tool_surface_is_still_narrowed_by_the_tier(self):
+    def test_chat_tool_surface_comes_from_the_agent_registry(self):
         from app.api.complete.tool_provisioner import provision_standard_tools
-        from app.services.project_permission_service import get_visible_tools_for_tier
+        from app.services.tools.tool_definitions import get_agent_tool_specs
 
-        provisioned = provision_standard_tools(
-            True, None, agent_slug="coder", project_id="chat-project", visible_tool_names=get_visible_tools_for_tier("read")
-        )
-        assert {t["name"] for t in provisioned.loaded_tools} == {"read_file"}
+        provisioned = provision_standard_tools(True, None, agent_slug="vantage-research")
+        expected = {t.name for t in get_agent_tool_specs("vantage-research") or []}
+        assert {t["name"] for t in provisioned.loaded_tools} == expected
+        assert "bash" not in expected
 
     @pytest.mark.asyncio
-    async def test_a_permitted_tool_set_replaces_the_tier_check(self):
-        """A workflow run names its tools: the project's tier is not asked, and anything outside the set is denied."""
+    async def test_a_permitted_tool_set_allows_only_its_tools(self):
+        """A workflow run names its tools: anything outside the set is denied."""
         from app.services.tools.tool_handler import _collect_hooks
 
         hooks = _collect_hooks(None, "chat-project", frozenset({"bash", "edit_file"}))
-        assert len(hooks) == 3  # tool set, cross-project boundary, lease check
-        with patch(
-            "app.services.project_permission_service.check_tool_allowed", new_callable=AsyncMock
-        ) as tier:
-            assert await hooks[0](_make_tool_call("bash")) == ToolDecision.ALLOW
-            assert await hooks[0](_make_tool_call("write_file")) == ToolDecision.DENY
-            tier.assert_not_awaited()
+        assert len(hooks) == 2  # tool set, lease check
+        assert await hooks[0](_make_tool_call("bash")) == ToolDecision.ALLOW
+        assert await hooks[0](_make_tool_call("write_file")) == ToolDecision.DENY

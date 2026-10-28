@@ -11,8 +11,8 @@ canonical context still comes first in the system prompt, and tool permission an
 is the agent's whole provisioned tool set and no extra prompt.
 
 The tool set comes from the packet's tool level, which the run sets (``read``, ``lean`` or ``full``; a step may only
-narrow it): the agent's tools narrowed to the level's list. The project's Agent Hub chat permission tier does not apply
-here, neither to which tools the model is shown nor to which calls run; the attempt's tool names are the permission. The
+narrow it): the agent's tools narrowed to the level's list. The attempt's tool names are the permission, both for which
+tools the model is shown and for which calls run. The
 tools the attempt got are recorded on the result. A step that needs a shell and a write tool (acceptance commands, or a
 level that lists them) and does not have them ends at once with ``tools_unavailable`` and no model call; the engine
 treats it like an unavailable model (next chain entry, else the owner).
@@ -115,11 +115,11 @@ async def load_agent(slug: str) -> Any:
 
 
 async def provision_tools(agent_slug: str, project_id: str) -> list[dict[str, Any]] | None:
-    """The agent's runtime tools from the canonical allow-list. The project's chat tier does not narrow them here."""
+    """The agent's runtime tools from the canonical allow-list."""
 
     from app.api.complete.tool_provisioner import provision_standard_tools
 
-    provisioned = provision_standard_tools(True, None, agent_slug=agent_slug, project_id=None)
+    provisioned = provision_standard_tools(True, None, agent_slug=agent_slug)
     return provisioned.loaded_tools or None
 
 

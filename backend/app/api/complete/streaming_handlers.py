@@ -307,17 +307,10 @@ async def handle_streaming_request(
             "streaming completion requires a hash-verified Agent Hub canonical context envelope"
         )
     thinking_level = get_thinking_level(request, messages, resolved_agent)
-    visible_tool_names = None
-    if db and request.project_id:
-        from app.services.project_permission_service import get_visible_tools_for_project
-
-        visible_tool_names = await get_visible_tools_for_project(request.project_id, db)
     provisioned_tools = provision_standard_tools(
         request.execute_tools,
         None,
         agent_slug=agent_used,
-        project_id=request.project_id,
-        visible_tool_names=visible_tool_names,
     )
     tools = provisioned_tools.loaded_tools or None
     fallback_models: list[str] = []

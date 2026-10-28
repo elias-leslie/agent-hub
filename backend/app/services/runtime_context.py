@@ -65,7 +65,7 @@ from app.services.owned_prompt_service import (
     GLOBAL_GUARDRAIL_PROMPT_TYPE,
     GLOBAL_MANDATE_PROMPT_TYPE,
 )
-from app.services.project_permission_service import get_visible_tools_for_project
+from app.services.tools.tool_definitions import get_agent_tool_specs
 
 RuntimeSourceType = Literal["prompt", "memory"]
 RuntimeOverrideMode = Literal["include", "exclude", "order"]
@@ -1219,8 +1219,10 @@ async def _compute_auxiliary_blocks(
         return project_index_block, "", diagnostics
 
     if consumer_surface in {"agent_hub", "runtime_context_preview"}:
-        visible = await get_visible_tools_for_project(project_id) if project_id else frozenset()
-        bash_available = "bash" in visible if project_id else None
+        # An agent with its own tool registry has bash only if that list names it;
+        # any other Agent Hub caller gets the standard tools, which include bash.
+        agent_specs = get_agent_tool_specs(agent_slug) if agent_slug else None
+        bash_available = "bash" in {tool.name for tool in agent_specs} if agent_specs else None
     else:
         # External TUI/MCP capabilities describe the actual caller. Internal
         # agent permissions neither enable nor disable that caller's shell.

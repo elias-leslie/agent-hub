@@ -113,3 +113,65 @@ def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
         repo_root,
     )
     return overlay
+
+
+# Project ownership of a path (which registered project's root contains it)
+
+def path_within_root(resolved_path: str, root: str) -> bool:
+    """Return True when *resolved_path* is inside *root*."""
+    try:
+        Path(resolved_path).relative_to(Path(root))
+        return True
+    except ValueError:
+        return False
+
+
+def find_target_project(resolved_path: str, known_roots: dict[str, str]) -> str | None:
+    """Return the project ID whose root contains *resolved_path*, or None."""
+    roots_by_specificity = sorted(
+        ((proj_id, root) for proj_id, root in known_roots.items() if root),
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+    for proj_id, root in roots_by_specificity:
+        if path_within_root(resolved_path, root):
+            return proj_id
+    return None
+
+
+def resolve_checkout_owner_root(path: Path) -> Path | None:
+    """Return canonical repo root when *path* is inside a linked git checkout."""
+    repo_root = detect_repo_root(path if path.is_dir() else path.parent)
+    if repo_root is None:
+        return None
+
+    git_path = repo_root / ".git"
+    if not git_path.is_file():
+        return repo_root
+
+    try:
+        first_line = git_path.read_text().splitlines()[0].strip()
+    except (OSError, IndexError):
+        return repo_root
+
+    prefix = "gitdir:"
+    if not first_line.startswith(prefix):
+        return repo_root
+
+    gitdir = Path(first_line[len(prefix):].strip())
+    if not gitdir.is_absolute():
+        gitdir = (repo_root / gitdir).resolve()
+
+    if gitdir.parent.name == "checkouts" and gitdir.parent.parent.name == ".git":
+        return gitdir.parent.parent.parent.resolve()
+    return repo_root
+
+
+def infer_target_project(path: Path, known_roots: dict[str, str]) -> str | None:
+    """Infer the owning project for a resolved path."""
+    if owner_root := resolve_checkout_owner_root(path):
+        target_project = find_target_project(str(owner_root), known_roots)
+        if target_project:
+            return target_project
+    resolved_path = str(path.resolve(strict=False))
+    return find_target_project(resolved_path, known_roots)
