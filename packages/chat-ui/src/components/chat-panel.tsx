@@ -154,6 +154,14 @@ function ChatPanelBody({
   );
 
   const phaseLabel = isBusy ? describePhase(turnPhase) : null;
+  // The pill names the turn's phase while it streams: thinking, calling a tool, or responding.
+  const phaseName = (isBusy && status === "streaming" ? turnPhase ?? "" : "").split(":", 1)[0];
+  const pillState: ActivityState =
+    phaseName === "thinking"
+      ? "thinking"
+      : phaseName === "running_tool"
+        ? "calling_tool"
+        : (status as ActivityState);
 
   const handleContinueLatest = useCallback(() => {
     if (!lastAssistantMessage) return;
@@ -207,9 +215,9 @@ function ChatPanelBody({
 
             <div className="flex shrink-0 items-center gap-2">
             {/* Activity indicator */}
-            <ActivityIndicator state={status as ActivityState} />
+            <ActivityIndicator state={pillState} />
             {phaseLabel ? (
-              <span data-testid="turn-phase" className="text-xs text-muted-foreground" aria-live="polite">
+              <span data-testid="turn-phase" className="sr-only" aria-live="polite">
                 {phaseLabel}
               </span>
             ) : null}
@@ -278,7 +286,7 @@ function ChatPanelBody({
 
         {/* Error banner */}
         {error && (
-          <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2">
+          <div role="alert" className="border-b border-destructive/30 bg-destructive/10 px-4 py-2">
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
@@ -291,6 +299,7 @@ function ChatPanelBody({
           onRegenerateMessage={regenerateMessage}
           onContinueMessage={continueMessage}
           onContinueAs={(model, prompt) => sendMessage(prompt, [model])}
+          emptyLabel={error ? "No messages loaded" : undefined}
         />
 
         {/* Input */}

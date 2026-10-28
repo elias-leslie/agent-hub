@@ -45,6 +45,7 @@ function ThreadSection({
   selectedProject,
   selectedTask,
   selectedAgent,
+  selectedModel,
   onNewSession,
   onResumeSession,
 }: {
@@ -52,6 +53,7 @@ function ThreadSection({
   selectedProject: ProjectConfig | null
   selectedTask: TaskSearchItem | null
   selectedAgent: Agent | null
+  selectedModel: string
   onNewSession: () => void
   onResumeSession: () => void
 }) {
@@ -71,7 +73,11 @@ function ThreadSection({
           task {selectedTask ? selectedTask.id : 'none'}
         </div>
         <div className="truncate">
-          model {selectedAgent?.primary_model_id ?? 'loading'}
+          model{' '}
+          {selectedModel ||
+            (selectedAgent
+              ? `${selectedAgent.primary_model_id ?? 'default'} (agent routing)`
+              : 'loading')}
         </div>
       </div>
       <div className="mt-3 flex gap-2">
@@ -297,6 +303,7 @@ function ThinkingSection({
 export function ChatSidebar({
   activeSessionId,
   selectedAgent,
+  selectedModel,
   selectedProject,
   selectedTask,
   projectSearch,
@@ -317,6 +324,7 @@ export function ChatSidebar({
 }: {
   activeSessionId: string | null
   selectedAgent: Agent | null
+  selectedModel: string
   selectedProject: ProjectConfig | null
   selectedTask: TaskSearchItem | null
   projectSearch: string
@@ -343,6 +351,7 @@ export function ChatSidebar({
           selectedProject={selectedProject}
           selectedTask={selectedTask}
           selectedAgent={selectedAgent}
+          selectedModel={selectedModel}
           onNewSession={onNewSession}
           onResumeSession={onResumeSession}
         />

@@ -1,10 +1,11 @@
 'use client'
 
 import { Loader2 } from 'lucide-react'
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ChatPanel } from '@/components/chat'
 import { useModelsWithSync } from '@/hooks/use-models-catalog'
+import { agentHubClient } from '@/lib/agent-hub-client'
 import { searchTasks, type TaskSearchItem } from '@/lib/api/tasks'
 import { cn } from '@/lib/utils'
 import type { Agent } from '@/types/agent'
@@ -147,6 +148,24 @@ function ChatContent() {
     }
   }, [selectedProject, taskQuery])
 
+  // A session opened by link or reload is continued by the agent it was started with.
+  const agentCheckedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!activeSessionId || agents.length === 0) return
+    if (agentCheckedFor.current === activeSessionId) return
+    agentCheckedFor.current = activeSessionId
+    agentHubClient.sessions
+      .get(activeSessionId, { includeMessages: false })
+      .then((session) => {
+        const agent = agents.find((a) => a.slug === session.agent_slug)
+        if (agent && agent.slug !== selectedAgent?.slug) {
+          setSelectedAgent(agent)
+          setSelectedModel('')
+        }
+      })
+      .catch(() => undefined)
+  }, [activeSessionId, agents, selectedAgent?.slug, setSelectedAgent])
+
   const chatKey = chatContextKey
   const displayError =
     sessionError || agentsError || projectsError || tasksError
@@ -218,6 +237,7 @@ function ChatContent() {
           <ChatSidebar
             activeSessionId={activeSessionId}
             selectedAgent={selectedAgent}
+            selectedModel={selectedModel}
             selectedProject={selectedProject}
             selectedTask={selectedTask}
             projectSearch={projectSearch}

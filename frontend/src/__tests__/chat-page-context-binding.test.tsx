@@ -40,7 +40,10 @@ vi.mock('@/components/chat', () => ({
 
 vi.mock('@/lib/agent-hub-client', () => ({
   agentHubClient: {
-    sessions: { list: vi.fn().mockResolvedValue({ sessions: [], total: 0 }) },
+    sessions: {
+      list: vi.fn().mockResolvedValue({ sessions: [], total: 0 }),
+      get: vi.fn().mockResolvedValue({}),
+    },
     models: { catalog: vi.fn().mockResolvedValue({ models: [] }) },
   },
 }))

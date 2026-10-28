@@ -12,6 +12,8 @@ interface MessageListProps {
   onRegenerateMessage?: (messageId: string) => void;
   onContinueMessage?: (messageId: string) => void;
   onContinueAs?: (model: string, prompt: string) => void;
+  /** Shown when there are no messages; a host that failed to load them says so here instead of "Start a conversation". */
+  emptyLabel?: string;
 }
 
 export function MessageList(props: MessageListProps) {
@@ -37,6 +39,7 @@ function MessageListInner({
   onRegenerateMessage,
   onContinueMessage,
   onContinueAs,
+  emptyLabel = "Start a conversation",
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +50,7 @@ function MessageListInner({
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <p>Start a conversation</p>
+        <p>{emptyLabel}</p>
       </div>
     );
   }

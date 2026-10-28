@@ -159,12 +159,6 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
           <SendButton onClick={handleSend} canSend={canSend} />
         )}
       </div>
-
-      {status === "error" && (
-        <p className="mt-2 text-sm text-destructive">
-          Connection error. Please try again.
-        </p>
-      )}
     </div>
   );
 }
