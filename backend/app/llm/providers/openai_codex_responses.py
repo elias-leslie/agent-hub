@@ -365,6 +365,7 @@ def _usage(event: dict[str, Any], model: Model[Any]) -> Usage:
         input=max(0, total_input - cached_input),
         output=int(raw.get("output_tokens") or 0),
         cache_read=cached_input,
+        reasoning=int(_as_dict(raw.get("output_tokens_details")).get("reasoning_tokens") or 0),
     )
     usage.total_tokens = total_input + usage.output
     usage.cost.input = usage.input * model.cost.input / 1_000_000

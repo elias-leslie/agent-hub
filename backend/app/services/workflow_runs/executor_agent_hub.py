@@ -9,20 +9,28 @@ The step ``level`` (``executor_defaults.json`` ``agent_hub.levels``) sets how mu
 mirrors Pi's lean start: a short working-rules prompt with the worktree as cwd, and only the core tools. The agent's
 canonical context still comes first in the system prompt, and tool permission and safety checks are unchanged. ``full``
 is the agent's whole provisioned tool set and no extra prompt.
+
+The loop runs with no database open. Afterwards the executor writes the attempt's transcript onto its child session
+(``agent_hub_transcript``): the session's events, with the served model and token usage (reasoning tokens when the
+provider reports them) per turn, plus cost rows. The run view's per-attempt ``session_id`` is the way to read it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from app.api.complete.runtime_usage import served_model
 from app.llm.types import AssistantMessage, TextContent, ToolCall
 from app.llm.utils.outcomes import ProviderOutcome, outcome_of
 
+from .agent_hub_transcript import Transcript, persist_transcript
 from .executor_common import Progress, Usage, build_handoff, clip, load_defaults
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
@@ -31,6 +39,27 @@ from .packet import HandoffPacket
 Complete = Callable[..., Awaitable[Any]]
 LoadAgent = Callable[[str], Awaitable[Any]]
 ProvisionTools = Callable[[str, str], Awaitable[list[dict[str, Any]] | None]]
+RecordTranscript = Callable[[Transcript], Awaitable[None]]
+
+logger = logging.getLogger(__name__)
+
+
+class LoopLog:
+    """Collects what the tool loop reports while it runs: tool results by call id and interrupted-turn retries."""
+
+    def __init__(self) -> None:
+        self.tool_results: dict[str, Any] = {}
+        self.retries: list[tuple[int, str]] = []
+        self.turns = 0
+
+    def __call__(self, event: Any) -> None:
+        kind = getattr(event, "type", None)
+        if kind in ("tool_run_complete", "tool_run_error"):
+            self.tool_results[event.tool_call.id] = event.result
+        elif kind == "turn_retry":
+            self.retries.append((self.turns, event.reason))
+        elif kind in ("done", "error"):
+            self.turns += 1
 
 
 async def load_agent(slug: str) -> Any:
@@ -89,11 +118,21 @@ class AgentHubExecutor:
         complete: Complete | None = None,
         agent_loader: LoadAgent = load_agent,
         tool_provisioner: ProvisionTools = provision_tools,
+        transcript_writer: RecordTranscript = persist_transcript,
     ) -> None:
         self.defaults = dict(defaults or load_defaults())
         self._complete = complete
         self._load_agent = agent_loader
         self._provision = tool_provisioner
+        self._write_transcript = transcript_writer
+
+    async def _record(self, transcript: Transcript) -> None:
+        """The transcript is evidence, not the step's outcome: a failed write is logged and the step carries on."""
+
+        try:
+            await self._write_transcript(transcript)
+        except Exception:
+            logger.exception("agent_hub step transcript for %s was not saved", transcript.session_id)
 
     async def run(
         self, packet: HandoffPacket, model: str, worktree: Path, run_dir: Path, on_event: OnEvent
@@ -128,6 +167,8 @@ class AgentHubExecutor:
         if prompt:  # the agent's own prompt layer: the canonical context goes ahead of it
             messages.insert(0, {"role": "system", "content": prompt})
         await on_event({"type": "agent_hub_started", "model": model, "at": time.time()})
+        loop_log = LoopLog()
+        transcript = Transcript(attempt.session_id, attempt.agent_slug, model, input_messages=tuple(messages))
         try:
             result = await asyncio.wait_for(
                 complete(
@@ -146,14 +187,23 @@ class AgentHubExecutor:
                     tools=tools,
                     execute_tools=True,
                     working_dir=str(worktree),
+                    on_loop_event=loop_log,
                 ),
                 self.defaults["max_seconds"],
             )
         except TimeoutError:
-            return StepResult("failed", error=f"timeout: no completion within {self.defaults['max_seconds']}s")
+            error = f"timeout: no completion within {self.defaults['max_seconds']}s"
+            await self._record(replace(transcript, error=error))
+            return StepResult("failed", error=error)
         except Exception as exc:  # provider, credential and context failures end the attempt, not the engine
-            return StepResult("failed", error=clip(f"agent_hub_error: {exc!r}", 1000))
+            error = clip(f"agent_hub_error: {exc!r}", 1000)
+            await self._record(replace(transcript, error=error))
+            return StepResult("failed", error=error)
         await on_event({"type": "agent_hub_finished", "at": time.time()})
+        turns = list(result.usage_messages or [result.message])
+        await self._record(
+            replace(transcript, turns=turns, tool_results=loop_log.tool_results, retries=tuple(loop_log.retries))
+        )
         return await self._result(packet, model, worktree, result)
 
     async def _result(
@@ -171,10 +221,11 @@ class AgentHubExecutor:
             )
             messages = messages[: hook.after_turn]
             injected = True
-        served = list(dict.fromkeys(m.response_model or model for m in messages))
+        # The catalog identity of what answered each turn; a provider-reported different model is kept as reported.
+        served = list(dict.fromkeys(served_model(m, model) for m in messages))
         usage = Usage()
         for item in (m.usage for m in messages):
-            usage.add(item.input, item.cache_read, item.cache_write, item.output, 0)
+            usage.add(item.input, item.cache_read, item.cache_write, item.output, item.reasoning)
         used = {**usage.as_dict(), "cost_usd": sum(m.usage.cost.total for m in messages)}
         failed = injected or message.stop_reason in ("error", "aborted")
         # A refused turn never becomes progress for the next model.

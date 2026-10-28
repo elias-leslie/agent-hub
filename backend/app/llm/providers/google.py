@@ -244,6 +244,7 @@ def _update_usage(usage_metadata: Any, model: Model[Any]) -> Usage:
         cache_read=cached_tokens,
         cache_write=0,
         total_tokens=total_tokens,
+        reasoning=thought_tokens,
     )
     _calculate_cost(model, usage)
     return usage

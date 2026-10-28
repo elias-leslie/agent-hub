@@ -263,6 +263,8 @@ class Usage:
     cache_write: int = 0
     total_tokens: int = 0
     cost: UsageCost = field(default_factory=UsageCost)
+    # Reasoning tokens the provider reported; already counted inside ``output`` (0 when it does not report them).
+    reasoning: int = 0
 
 
 StopReason = Literal["stop", "length", "toolUse", "error", "aborted"]

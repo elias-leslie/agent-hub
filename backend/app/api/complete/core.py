@@ -144,6 +144,7 @@ async def complete_internal(
     requested_model: str | None = None,
     requested_provider: str | None = None,
     canonical_context_preinjected: bool = False,
+    on_loop_event: Callable[[Any], None] | None = None,
 ) -> CompletionInternalResult:
     """Run a completion via the unified ``app.llm`` pipeline.
 
@@ -224,6 +225,7 @@ async def complete_internal(
         max_turns=max_turns,
         compress_tool_results_enabled=execute_tools and compression_enabled_for(agent_slug),
         compression_stats_sink=compression_stats,
+        on_loop_event=on_loop_event,
     )
     message = result.message
     _normalize_tagged_thinking(message)

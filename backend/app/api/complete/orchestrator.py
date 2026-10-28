@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -205,6 +205,7 @@ async def run_completion(
     max_turns: int = 32,
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
+    on_loop_event: Callable[[Any], None] | None = None,
 ) -> OrchestratorResult:
     """Drive the new pipeline to completion (non-streaming).
 
@@ -230,6 +231,8 @@ async def run_completion(
             compression_stats_sink=compression_stats_sink,
         ):
             event_type = getattr(event, "type", None)
+            if on_loop_event is not None:
+                on_loop_event(event)
             if event_type == "tool_run_start":
                 tool_calls_count += 1
             elif event_type == "done":

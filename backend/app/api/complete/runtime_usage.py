@@ -25,7 +25,7 @@ def aggregate_message_usage(
     """Copy the final answer with request totals; context messages stay per call."""
     usage = Usage()
     for message in messages:
-        for field in ("input", "output", "cache_read", "cache_write", "total_tokens"):
+        for field in ("input", "output", "cache_read", "cache_write", "total_tokens", "reasoning"):
             setattr(usage, field, getattr(usage, field) + getattr(message.usage, field))
         for field in UsageCost.__dataclass_fields__:
             setattr(usage.cost, field, getattr(usage.cost, field) + getattr(message.usage.cost, field))

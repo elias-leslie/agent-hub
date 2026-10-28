@@ -126,3 +126,22 @@ async def test_content_filter_is_a_typed_refusal_and_keeps_the_served_model(
     assert result.stop_reason == "error"
     assert outcome is not None
     assert (outcome.kind, outcome.category, outcome.served_model) == ("refused", "content_filter", model.id)
+
+
+def test_chunk_usage_keeps_the_reasoning_tokens_the_provider_reports() -> None:
+    model = resolve_llm_model("opencode-go/deepseek-v4.1-flash", "opencode-go")
+    raw = {
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+        "prompt_tokens_details": {"cached_tokens": 40},
+        "completion_tokens_details": {"reasoning_tokens": 30},
+    }
+    usage = openai_completions._parse_chunk_usage(_Obj(raw), model)
+    assert (usage.input, usage.output, usage.cache_read, usage.reasoning) == (60, 50, 40, 30)
+    plain = openai_completions._parse_chunk_usage(_Obj({"prompt_tokens": 1, "completion_tokens": 2}), model)
+    assert plain.reasoning == 0
+
+
+class _Obj:
+    def __init__(self, values: dict) -> None:
+        self.__dict__.update(values)

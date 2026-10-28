@@ -11,8 +11,17 @@ from typing import Any
 import pytest
 
 from app.api.complete.types import CompletionInternalResult
-from app.llm.types import AssistantMessage, TextContent, ToolCall, Usage
+from app.llm.types import (
+    AssistantMessage,
+    TextContent,
+    ThinkingContent,
+    ToolCall,
+    ToolResultMessage,
+    Usage,
+)
 from app.llm.utils.outcomes import ProviderOutcome, record_outcome
+from app.services.workflow_runs import agent_hub_transcript
+from app.services.workflow_runs.agent_hub_transcript import Transcript, record_transcript
 from app.services.workflow_runs.executor_agent_hub import AgentHubExecutor
 from app.services.workflow_runs.executors import get_executor
 from app.services.workflow_runs.packet import AttemptRef, GitState, build_packet
@@ -63,12 +72,41 @@ def packet(test_hooks: dict[str, Any] | None = None, level: str | None = None):
 PROVISIONED = [{"name": "write_file"}]
 
 
-async def run(worktree: Path, tmp_path: Path, messages: list[AssistantMessage], provisioned=None, **kwargs: Any):
-    calls: list[dict[str, Any]] = []
+class Calls(list):
+    """The completion calls made, plus the transcripts the executor handed to its writer."""
+
+    transcripts: list[Any]
+
+
+@dataclass
+class Event:
+    type: str
+    tool_call: Any = None
+    result: Any = None
+    reason: str = ""
+
+
+def tool_result(call: ToolCall, text: str, *, error: bool = False) -> ToolResultMessage:
+    return ToolResultMessage(
+        tool_call_id=call.id, tool_name=call.name, content=[TextContent(text=text)], is_error=error, timestamp=0
+    )
+
+
+async def run(
+    worktree: Path, tmp_path: Path, messages: list[AssistantMessage], provisioned=None, loop_events=(), writer=None,
+    **kwargs: Any,
+):
+    calls = Calls()
+    transcripts = calls.transcripts = []
 
     async def complete(**kw: Any) -> CompletionInternalResult:
         calls.append(kw)
+        for event in loop_events:  # what the tool loop would report, replayed in order
+            kw["on_loop_event"](event)
         return internal(messages)
+
+    async def write(transcript: Transcript) -> None:
+        transcripts.append(transcript)
 
     async def agent(_slug: str) -> Agent:
         return Agent()
@@ -76,7 +114,9 @@ async def run(worktree: Path, tmp_path: Path, messages: list[AssistantMessage], 
     async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
         return PROVISIONED if provisioned is None else provisioned
 
-    executor = AgentHubExecutor(complete=complete, agent_loader=agent, tool_provisioner=tools)
+    executor = AgentHubExecutor(
+        complete=complete, agent_loader=agent, tool_provisioner=tools, transcript_writer=writer or write
+    )
 
     async def on_event(_event: Any) -> None:
         return None
@@ -195,3 +235,125 @@ async def test_lean_never_adds_a_tool_and_never_leaves_the_step_without_any(work
 async def test_unknown_level_fails_before_any_model_call(worktree, tmp_path) -> None:
     result, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], level="huge")
     assert result.status == "failed" and "unknown level" in result.error and calls == []
+
+
+async def test_transcript_carries_the_turns_tool_results_retries_and_input(worktree, tmp_path) -> None:
+    call = ToolCall(id="t1", name="write_file", arguments={"path": "hello.txt"})
+    turns = [assistant([call], "toolUse"), assistant([TextContent(text=f"Done.\n{HANDOFF}")])]
+    events = [
+        Event("done"),
+        Event("tool_run_complete", tool_call=call, result=tool_result(call, "wrote 3 bytes")),
+        Event("turn_retry", reason="stream stalled"),
+        Event("done"),
+    ]
+    result, calls = await run(worktree, tmp_path, turns, loop_events=events)
+    (transcript,) = calls.transcripts
+    assert result.status == "completed" and result.native_session_id == "attempt-1"
+    assert (transcript.session_id, transcript.agent_slug, transcript.requested_model) == ("attempt-1", "coder", MODEL)
+    assert [m["role"] for m in transcript.input_messages] == ["system", "user"]
+    assert list(transcript.turns) == turns and transcript.error is None
+    assert transcript.tool_results["t1"].content[0].text == "wrote 3 bytes"
+    assert list(transcript.retries) == [(1, "stream stalled")]
+
+
+async def test_reasoning_tokens_the_provider_reports_reach_the_attempt_usage(worktree, tmp_path) -> None:
+    first, second = assistant([TextContent(text="a")], "toolUse"), assistant([TextContent(text=HANDOFF)])
+    first.usage.reasoning, second.usage.reasoning = 7, 5
+    result, _ = await run(worktree, tmp_path, [first, second])
+    assert result.usage["reasoning_tokens"] == 12 and result.usage["output_tokens"] == 10
+
+
+async def test_served_model_per_turn_is_the_catalog_identity_unless_the_provider_switched(worktree, tmp_path) -> None:
+    same = assistant([TextContent(text="a")], "toolUse")
+    same.response_model = "claude-opus-5-5"
+    switched = assistant([TextContent(text=HANDOFF)], model=MODEL)
+    switched.response_model = "claude-opus-4-8"
+    record_outcome(switched, ProviderOutcome("substituted", MODEL, served_model="claude-opus-4-8"))
+    result, calls = await run(worktree, tmp_path, [same, switched])
+    assert result.served_models == [MODEL, "claude-opus-4-8"] and result.outcome.kind == "substituted"
+    assert calls.transcripts[0].requested_model == MODEL
+
+
+async def test_interrupted_outcome_reaches_the_attempt_result(worktree, tmp_path) -> None:
+    stalled = assistant([], "error", error_message="stream stalled")
+    record_outcome(stalled, ProviderOutcome("interrupted", MODEL))
+    result, _ = await run(worktree, tmp_path, [stalled])
+    assert result.status == "failed" and result.outcome.kind == "interrupted"
+
+
+async def test_failures_before_a_completion_still_leave_the_input_and_the_error(worktree, tmp_path) -> None:
+    async def boom(**_kw: Any) -> Any:
+        raise RuntimeError("no credentials")
+
+    transcripts: list[Transcript] = []
+
+    async def write(transcript: Transcript) -> None:
+        transcripts.append(transcript)
+
+    async def agent(_slug: str) -> Agent:
+        return Agent()
+
+    async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
+        return PROVISIONED
+
+    async def on_event(_event: Any) -> None:
+        return None
+
+    executor = AgentHubExecutor(complete=boom, agent_loader=agent, tool_provisioner=tools, transcript_writer=write)
+    result = await executor.run(packet(), MODEL, worktree, tmp_path, on_event)
+    assert result.status == "failed" and "no credentials" in (result.error or "")
+    assert transcripts[0].turns == () and "no credentials" in (transcripts[0].error or "")
+    assert transcripts[0].input_messages[-1]["role"] == "user"
+
+
+async def test_a_transcript_that_cannot_be_written_does_not_fail_the_step(worktree, tmp_path) -> None:
+    async def broken(_transcript: Transcript) -> None:
+        raise RuntimeError("db down")
+
+    result, _ = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], writer=broken)
+    assert result.status == "completed"
+
+
+class FakeDb:
+    """Stands in for the session: the event and cost writers are patched, so only the ordering is exercised."""
+
+
+async def test_record_transcript_writes_ordered_events_with_usage_once_per_turn(monkeypatch) -> None:
+    events: list[dict[str, Any]] = []
+    costs: list[tuple[Any, ...]] = []
+
+    async def store_event(_db, session_id, event_type, **kw):
+        events.append({"session_id": session_id, "type": event_type, **kw})
+
+    async def log_usage(_db, session_id, model, input_tokens, output_tokens, cost, **kw):
+        costs.append((session_id, model, input_tokens, output_tokens, kw["cache_read_tokens"]))
+
+    async def lock(_db, _session_id):
+        return None
+
+    monkeypatch.setattr(agent_hub_transcript, "store_event", store_event)
+    monkeypatch.setattr(agent_hub_transcript, "log_token_usage", log_usage)
+    monkeypatch.setattr(agent_hub_transcript, "lock_session_event_ingestion", lock)
+    call = ToolCall(id="t1", name="bash", arguments={"command": "ls"})
+    first = assistant([ThinkingContent(thinking="plan it"), call], "toolUse")
+    first.usage.reasoning = 3
+    refused = assistant([], "error", error_message="refused")
+    record_outcome(refused, ProviderOutcome("refused", MODEL, category="cyber"))
+    transcript = Transcript(
+        "attempt-1", "coder", MODEL,
+        input_messages=[{"role": "system", "content": "rules"}, {"role": "user", "content": "goal"}],
+        turns=[first, refused], tool_results={"t1": tool_result(call, "a.txt\n")}, retries=[(1, "stalled")],
+        error="timeout",
+    )
+    await record_transcript(FakeDb(), transcript)
+    kinds = [e["type"] for e in events]
+    assert kinds == [
+        "system_message", "user_message", "thinking", "tool_use", "tool_result", "error", "error", "error",
+    ]
+    thinking, tool_use, tool_res = events[2], events[3], events[4]
+    assert thinking["usage"]["reasoning_tokens"] == 3 and thinking["usage"]["served_model"] == MODEL
+    assert thinking["tokens"] == 3 and tool_use["usage"] is None  # usage rides on the first event of the turn
+    assert tool_use["call_id"] == tool_res["call_id"] == "t1" and tool_res["tool_output"]["is_error"] is False
+    assert events[5]["content"].startswith("turn_retry: stalled")
+    assert events[6]["usage"]["provider_outcome"]["kind"] == "refused" and events[7]["content"] == "timeout"
+    assert [c[:4] for c in costs] == [("attempt-1", MODEL, 10, 5)] * 2
