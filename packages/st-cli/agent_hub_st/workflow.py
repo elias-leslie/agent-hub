@@ -117,7 +117,8 @@ def build_create_payload(
     if request_id:
         payload["request_id"] = request_id
     if max_concurrent_steps is not None:
-        payload["max_concurrent_steps"] = max_concurrent_steps
+        # RunDefinition accepts the setting only inside its policy; any policy in the file is kept.
+        payload["policy"] = {**(payload.get("policy") or {}), "max_concurrent_steps": max_concurrent_steps}
     return payload
 
 

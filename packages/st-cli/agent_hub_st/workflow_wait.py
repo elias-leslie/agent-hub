@@ -57,8 +57,13 @@ def parse_until(value: str) -> tuple[str, str | None]:
 
 
 def needs_decision(view: dict[str, Any]) -> bool:
+    """Whether any pause reason needs the owner: the top-level one and every entry of the ``waiting`` map."""
     pause = view.get("pause") or {}
-    return view.get("state") == "needs_owner" and pause.get("reason") not in SELF_RESUMING_PAUSES
+    if view.get("state") != "needs_owner":
+        return False
+    reasons = [pause.get("reason")]
+    reasons += [(entry or {}).get("reason") for entry in (pause.get("waiting") or {}).values()]
+    return any(reason not in SELF_RESUMING_PAUSES for reason in reasons)
 
 
 def snapshot(view: dict[str, Any]) -> dict[str, Any]:

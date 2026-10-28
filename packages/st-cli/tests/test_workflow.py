@@ -55,10 +55,20 @@ def frontend(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_create_payload_fills_launcher_from_aico_env_and_keeps_file_values() -> None:
     payload = workflow.build_create_payload({"goal": "g", "steps": []}, request_id="r1", max_concurrent_steps=2, env=ENV)
     assert payload == {"goal": "g", "steps": [], "launched_by": "aico-widget-1", "coordinator": "claude-code",
-                       "request_id": "r1", "max_concurrent_steps": 2}
+                       "request_id": "r1", "policy": {"max_concurrent_steps": 2}}
     explicit = workflow.build_create_payload({"launched_by": "mine", "coordinator": "x"}, env=ENV)
     assert (explicit["launched_by"], explicit["coordinator"]) == ("mine", "x")
     assert workflow.build_create_payload({"goal": "g"}, env={}) == {"goal": "g"}
+
+
+def test_create_payload_merges_the_concurrency_flag_into_the_files_policy() -> None:
+    payload = workflow.build_create_payload(
+        {"goal": "g", "policy": {"max_attempts": 4, "max_concurrent_steps": 1}}, max_concurrent_steps=3, env={}
+    )
+    assert payload == {"goal": "g", "policy": {"max_attempts": 4, "max_concurrent_steps": 3}}
+    assert "max_concurrent_steps" not in payload  # RunDefinition forbids it at the top level
+    untouched = workflow.build_create_payload({"goal": "g", "policy": {"max_attempts": 4}}, env={})
+    assert untouched == {"goal": "g", "policy": {"max_attempts": 4}}
 
 
 def test_create_command_posts_definition_and_prints_run_and_page_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -332,6 +342,16 @@ def test_wait_keeps_waiting_through_a_pause_that_clears_itself() -> None:
     script = Script([view(), waiting, waiting, view("completed")])
     assert script.run("needs_owner") == workflow_wait.EXIT_DONE
     assert "run: running → needs_owner (usage_limit_wait step_key=a)" in "\n".join(script.out)
+
+
+def test_wait_returns_for_the_owner_when_any_waiting_entry_needs_them() -> None:
+    mixed = view("needs_owner", pause={"reason": "usage_limit_wait", "step_key": "a", "waiting": {
+        "a": {"reason": "usage_limit_wait"}, "b": {"reason": "owner_only_category"}}})
+    assert workflow_wait.needs_decision(mixed)
+    assert Script([view(), mixed]).run("needs_owner") == workflow_wait.EXIT_NEEDS_OWNER
+    resets = view("needs_owner", pause={"reason": "usage_limit_wait", "step_key": "a", "waiting": {
+        "a": {"reason": "usage_limit_wait"}, "b": {"reason": "usage_limit_wait"}}})
+    assert not workflow_wait.needs_decision(resets)
 
 
 def test_wait_step_condition_codes() -> None:
