@@ -110,19 +110,47 @@ class ToolLoopResult:
 
 
 ParallelSafe = Callable[[ToolCall], bool]
+# The file a mutating call writes, or None when the call is not a plain single-file write.
+FileTarget = Callable[[ToolCall], str | None]
 
 
-def _batches(calls: list[ToolCall], is_parallel_safe: ParallelSafe | None) -> list[list[ToolCall]]:
-    """Group consecutive parallel-safe calls; every other call is its own serial batch."""
+def _batches(
+    calls: list[ToolCall],
+    is_parallel_safe: ParallelSafe | None,
+    file_target: FileTarget | None = None,
+    max_file_batch: int = 1,
+) -> list[list[ToolCall]]:
+    """Group consecutive calls that may run together; every other call is its own serial batch.
+
+    Parallel-safe (read-only) calls share a batch. Single-file writes share one too, but only while every call in it
+    targets a different file, so the outcome matches running them in order; a write to a file already in the batch,
+    a read, or any other call starts a new batch.
+    """
     batches: list[list[ToolCall]] = []
-    previous_safe = False
+    kind: str | None = None
+    targets: set[str] = set()
     for call in calls:
-        safe = bool(is_parallel_safe and is_parallel_safe(call))
-        if safe and previous_safe:
+        target = None
+        if is_parallel_safe and is_parallel_safe(call):
+            current = "read"
+        elif file_target is not None and (target := file_target(call)) is not None:
+            current = "write"
+        else:
+            current = None
+        joins = (
+            batches
+            and current is not None
+            and current == kind
+            and (current == "read" or (target not in targets and len(batches[-1]) < max_file_batch))
+        )
+        if joins:
             batches[-1].append(call)
         else:
             batches.append([call])
-        previous_safe = safe
+            targets = set()
+        if target is not None:
+            targets.add(target)
+        kind = current
     return batches
 
 
@@ -191,6 +219,8 @@ async def run(
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
     is_parallel_safe: ParallelSafe | None = None,
+    file_target: FileTarget | None = None,
+    max_file_batch: int | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Run the multi-turn tool loop.
 
@@ -272,13 +302,15 @@ async def run(
             continue
 
         parallel_safe = is_parallel_safe or getattr(run_tool, "is_parallel_safe", None)
-        for batch in _batches(tool_calls, parallel_safe):
+        writes = file_target or getattr(run_tool, "file_target", None)
+        width = max_file_batch or getattr(run_tool, "max_file_batch", 1)
+        for batch in _batches(tool_calls, parallel_safe, writes, width):
             tool_calls_count += len(batch)
             for tool_call in batch:
                 yield ToolRunStart(tool_call=tool_call)
 
-            # A batch is one mutating call, or a run of consecutive parallel-safe calls
-            # (read-only tools) that execute concurrently. Results land in call order.
+            # A batch is one mutating call, a run of consecutive parallel-safe calls (read-only tools), or a run
+            # of writes to different files; those execute concurrently. Results land in call order.
             outcomes = await asyncio.gather(*(_run_one(run_tool, call) for call in batch))
             for tool_call, (result, error_msg) in zip(batch, outcomes, strict=True):
                 if error_msg is None:
@@ -313,6 +345,7 @@ async def run(
 
 
 __all__ = [
+    "FileTarget",
     "ParallelSafe",
     "ToolLoopEvent",
     "ToolLoopResult",

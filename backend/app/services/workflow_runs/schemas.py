@@ -33,8 +33,8 @@ class StepDefinition(BaseModel):
     allowed_models: list[str] | None = Field(None, min_length=1)
     # Executor kind; default is chosen from the provider of each attempt's model (policy.executor_for_provider).
     executor: str | None = None
-    # Harness tool/prompt level (executor_defaults.json claude_code.levels): "lean" (core tools only, the default)
-    # or "full" (the harness's whole built-in set, e.g. for research steps that need subagents or web tools).
+    # Harness tool/prompt level (executor_defaults.json claude_code.levels, agent_hub.levels): "lean" (core tools only,
+    # the default) or "full" (the harness's whole tool set, e.g. for research steps that need subagents or web tools).
     level: str | None = None
     acceptance: list[str] = Field(default_factory=list)
     # Hard cap on attempts for the step; default is one attempt per chain model.
@@ -52,7 +52,8 @@ class StepDefinition(BaseModel):
     @field_validator("level")
     @classmethod
     def _known_level(cls, value: str | None) -> str | None:
-        levels = load_defaults()["claude_code"]["levels"]
+        defaults = load_defaults()
+        levels = set(defaults["claude_code"]["levels"]) | set(defaults["agent_hub"]["levels"])
         if value is not None and value not in levels:
             raise ValueError(f"level must be one of {sorted(levels)}")
         return value

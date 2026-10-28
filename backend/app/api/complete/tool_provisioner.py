@@ -5,11 +5,16 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from app.llm.tool_loop import ToolRunner
 from app.llm.types import TextContent, ToolCall, ToolResultMessage
-from app.services.tools._tool_constants import PARALLEL_SAFE_TOOLS
+from app.services.tools._tool_constants import (
+    MAX_PARALLEL_FILE_WRITES,
+    PARALLEL_FILE_WRITE_TOOLS,
+    PARALLEL_SAFE_TOOLS,
+)
 from app.services.tools.base import ToolCall as ServiceToolCall
 from app.services.tools.base import ToolCaller
 from app.services.tools.catalog import build_deferred_toolset, build_tool_catalog
@@ -57,7 +62,18 @@ def build_direct_tool_runner(
             timestamp=int(time.time() * 1000),
         )
 
+    base = Path(working_dir) if working_dir else Path.cwd()
+
+    def file_target(call: ToolCall) -> str | None:
+        """The resolved file a plain write_file/edit_file call changes (the key for overlapping different files)."""
+        path = (call.arguments or {}).get("path")
+        if call.name not in PARALLEL_FILE_WRITE_TOOLS or not isinstance(path, str) or not path:
+            return None
+        return str((base / path).resolve())
+
     run_tool.is_parallel_safe = lambda call: call.name in PARALLEL_SAFE_TOOLS  # type: ignore[attr-defined]
+    run_tool.file_target = file_target  # type: ignore[attr-defined]
+    run_tool.max_file_batch = MAX_PARALLEL_FILE_WRITES  # type: ignore[attr-defined]
     return run_tool
 
 

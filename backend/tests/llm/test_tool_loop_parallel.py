@@ -123,3 +123,83 @@ def test_direct_runner_marks_only_read_only_tools_parallel_safe() -> None:
     assert safe(faux_tool_call("search_scratch_context", {}, id="2"))
     for name in ("bash", "write_file", "edit_file", "batch_execute", "consult_agent", "dispatch_agent", "manage_tasks"):
         assert not safe(faux_tool_call(name, {}, id="3"))
+
+
+def _write_call(name: str, path: str, id: str) -> ToolCall:
+    return faux_tool_call(name, {"path": path}, id=id)
+
+
+@pytest.mark.asyncio
+async def test_writes_to_different_files_overlap_and_a_repeat_or_other_call_splits_the_batch() -> None:
+    log: list[str] = []
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        log.append(f"start-{call.id}")
+        await asyncio.sleep(0.01)
+        log.append(f"end-{call.id}")
+        return _result(call, "ok")
+
+    calls = [
+        _write_call("write_file", "a.py", "w1"),
+        _write_call("edit_file", "b.py", "w2"),
+        _write_call("write_file", "a.py", "w3"),  # same file as w1: waits for the batch before it
+        faux_tool_call("bash", {"command": "true"}, id="sh"),
+        _write_call("write_file", "c.py", "w4"),
+    ]
+    await _drive(calls, run_tool, file_target=lambda c: c.arguments.get("path"), max_file_batch=4)
+
+    assert log[:2] == ["start-w1", "start-w2"]  # different files share a batch
+    assert log.index("start-w3") > log.index("end-w1") and log.index("start-w3") > log.index("end-w2")
+    assert log.index("start-sh") > log.index("end-w3") and log.index("start-w4") > log.index("end-sh")
+
+
+@pytest.mark.asyncio
+async def test_file_writes_stay_serial_without_a_target_and_respect_the_batch_width() -> None:
+    running = 0
+    peak = 0
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.01)
+        running -= 1
+        return _result(call, "ok")
+
+    calls = [_write_call("write_file", f"f{i}.py", f"w{i}") for i in range(5)]
+    await _drive(calls, run_tool)
+    assert peak == 1
+
+    peak = 0
+    await _drive(calls, run_tool, file_target=lambda c: c.arguments["path"], max_file_batch=2)
+    assert peak == 2
+
+
+@pytest.mark.asyncio
+async def test_a_read_never_shares_a_batch_with_a_write() -> None:
+    log: list[str] = []
+
+    async def run_tool(call: ToolCall) -> ToolResultMessage:
+        log.append(f"start-{call.id}")
+        await asyncio.sleep(0.01)
+        log.append(f"end-{call.id}")
+        return _result(call, "ok")
+
+    calls = [_write_call("write_file", "a.py", "w"), faux_tool_call("read_file", {"path": "a.py"}, id="r")]
+    await _drive(
+        calls, run_tool, is_parallel_safe=lambda c: c.name == "read_file",
+        file_target=lambda c: c.arguments["path"] if c.name == "write_file" else None, max_file_batch=4,
+    )
+    assert log == ["start-w", "end-w", "start-r", "end-r"]
+
+
+def test_direct_runner_keys_single_file_writes_by_resolved_path(tmp_path) -> None:
+    runner = build_direct_tool_runner(working_dir=str(tmp_path), project_id=None, session_id=None, agent_slug=None)
+    target = runner.file_target  # type: ignore[attr-defined]
+
+    assert target(_write_call("write_file", "a.py", "1")) == target(_write_call("edit_file", str(tmp_path / "a.py"), "2"))
+    assert target(_write_call("write_file", "a.py", "1")) != target(_write_call("write_file", "sub/a.py", "3"))
+    assert target(_write_call("write_file", "x/../a.py", "4")) == target(_write_call("write_file", "a.py", "5"))
+    for call in (faux_tool_call("bash", {"command": "true"}, id="6"), faux_tool_call("write_file", {}, id="7")):
+        assert target(call) is None
+    assert runner.max_file_batch > 1  # type: ignore[attr-defined]

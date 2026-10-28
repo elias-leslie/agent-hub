@@ -52,15 +52,18 @@ def worktree(tmp_path: Path) -> Path:
     return path
 
 
-def packet(test_hooks: dict[str, Any] | None = None):
+def packet(test_hooks: dict[str, Any] | None = None, level: str | None = None):
     base = build_packet(
         run_goal="goal", step_key="implement", instructions="create hello.txt", acceptance=[],
         git=GitState(), prior_steps=[], run_dir="/run", context_window=100_000, budget_fraction=0.25,
     )
-    return replace(base, test_hooks=test_hooks, attempt=AttemptRef("attempt-1", "run-1", "proj", "coder"))
+    return replace(base, test_hooks=test_hooks, level=level, attempt=AttemptRef("attempt-1", "run-1", "proj", "coder"))
 
 
-async def run(worktree: Path, tmp_path: Path, messages: list[AssistantMessage], **kwargs: Any):
+PROVISIONED = [{"name": "write_file"}]
+
+
+async def run(worktree: Path, tmp_path: Path, messages: list[AssistantMessage], provisioned=None, **kwargs: Any):
     calls: list[dict[str, Any]] = []
 
     async def complete(**kw: Any) -> CompletionInternalResult:
@@ -71,7 +74,7 @@ async def run(worktree: Path, tmp_path: Path, messages: list[AssistantMessage], 
         return Agent()
 
     async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
-        return [{"name": "write_file"}]
+        return PROVISIONED if provisioned is None else provisioned
 
     executor = AgentHubExecutor(complete=complete, agent_loader=agent, tool_provisioner=tools)
 
@@ -95,7 +98,7 @@ async def test_runs_the_tool_loop_on_the_worktree_with_the_attempt_session(workt
     assert kw["execute_tools"] is True and kw["working_dir"] == str(worktree)
     assert kw["session_id"] == "attempt-1" and kw["parent_session_id"] == "run-1"
     assert kw["agent_slug"] == "coder" and kw["project_id"] == "proj" and kw["temperature"] == 0.3
-    assert kw["db"] is None and kw["messages"][0]["content"].startswith("# Run goal")
+    assert kw["db"] is None and kw["messages"][-1]["content"].startswith("# Run goal")
     assert result.status == "completed" and result.outcome is None
     assert result.handoff and result.handoff["files"] == ["hello.txt"]
     assert result.served_models == [MODEL] and result.native_session_id == "attempt-1"
@@ -156,3 +159,39 @@ async def test_packet_without_an_attempt_cannot_run(worktree, tmp_path) -> None:
 
     result = await AgentHubExecutor().run(replace(packet(), attempt=None), MODEL, worktree, tmp_path, on_event)
     assert result.status == "failed" and "attempt" in (result.error or "")
+
+
+PROVISIONED_ALL = [{"name": n} for n in ("bash", "read_file", "edit_file", "write_file", "search_scratch_context", "manage_tasks", "consult_agent")]
+
+
+async def test_lean_is_the_default_level_with_core_tools_and_a_cwd_prompt(worktree, tmp_path) -> None:
+    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=PROVISIONED_ALL)
+    kw = calls[0]
+    assert [t["name"] for t in kw["tools"]] == ["bash", "read_file", "edit_file", "write_file", "search_scratch_context"]
+    system, user = kw["messages"]
+    assert system["role"] == "system" and user["role"] == "user" and user["content"].startswith("# Run goal")
+    assert f"<cwd>\n{worktree}\n</cwd>" in system["content"]
+    assert "- bash: " in system["content"] and "manage_tasks" not in system["content"] and "{" not in system["content"]
+
+
+async def test_full_level_keeps_the_agents_whole_tool_set_and_adds_no_prompt(worktree, tmp_path) -> None:
+    _, calls = await run(
+        worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=PROVISIONED_ALL, level="full"
+    )
+    assert calls[0]["tools"] == PROVISIONED_ALL
+    assert [m["role"] for m in calls[0]["messages"]] == ["user"]
+
+
+async def test_lean_never_adds_a_tool_and_never_leaves_the_step_without_any(worktree, tmp_path) -> None:
+    only = [{"name": "bash"}, {"name": "manage_tasks"}]
+    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=only)
+    assert [t["name"] for t in calls[0]["tools"]] == ["bash"]
+    assert "- read_file" not in calls[0]["messages"][0]["content"]
+    other = [{"name": "manage_tasks"}]
+    _, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], provisioned=other)
+    assert calls[0]["tools"] == other and [m["role"] for m in calls[0]["messages"]] == ["user"]
+
+
+async def test_unknown_level_fails_before_any_model_call(worktree, tmp_path) -> None:
+    result, calls = await run(worktree, tmp_path, [assistant([TextContent(text=HANDOFF)])], level="huge")
+    assert result.status == "failed" and "unknown level" in result.error and calls == []

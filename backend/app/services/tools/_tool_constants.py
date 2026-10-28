@@ -14,6 +14,12 @@ PARALLEL_SAFE_TOOLS: frozenset[str] = frozenset(
     {"read_file", "search_scratch_context", "search_web", "fetch_web_page"}
 )
 
+# Single-file writes the tool loop may run concurrently when the model emits several in one turn, as long as
+# each targets a different file (each pays a sensitive-content scan, so they overlap). `MAX_PARALLEL_FILE_WRITES`
+# bounds how many scans run at once.
+PARALLEL_FILE_WRITE_TOOLS: frozenset[str] = frozenset({"write_file", "edit_file"})
+MAX_PARALLEL_FILE_WRITES: int = 4
+
 # Schema type literals
 SCHEMA_TYPE_OBJECT = "object"
 SCHEMA_TYPE_STRING = "string"

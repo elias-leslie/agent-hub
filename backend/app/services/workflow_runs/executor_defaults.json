@@ -29,5 +29,41 @@
       "lean": ["--tools", "Read,Edit,Write,Bash", "--disable-slash-commands", "--strict-mcp-config", "--exclude-dynamic-system-prompt-sections"],
       "full": []
     }
+  },
+  "agent_hub": {
+    "default_level": "lean",
+    "levels": {
+      "lean": {
+        "tools": {
+          "bash": "Execute bash commands (ls, grep, find, etc.)",
+          "read_file": "Read file contents",
+          "edit_file": "Make precise file edits with exact text replacement",
+          "write_file": "Create or overwrite files",
+          "search_scratch_context": "Search command output that was too large to return inline"
+        },
+        "prompt": [
+          "You are an expert coding assistant operating inside Agent Hub, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.",
+          "",
+          "<tools>",
+          "{tools}",
+          "</tools>",
+          "",
+          "<rules>",
+          "- Use bash for file operations like ls, rg, find",
+          "- Use read_file to examine files instead of cat or sed.",
+          "- Use edit_file for precise changes; each old_text must match exactly once.",
+          "- Use write_file only for new files or complete rewrites.",
+          "- Combine independent steps into one call: several commands in one bash call, several independent tool calls in one turn.",
+          "- Be concise in your responses",
+          "- Show file paths clearly when working with files",
+          "</rules>",
+          "",
+          "<cwd>",
+          "{cwd}",
+          "</cwd>"
+        ]
+      },
+      "full": {"tools": null, "prompt": null}
+    }
   }
 }

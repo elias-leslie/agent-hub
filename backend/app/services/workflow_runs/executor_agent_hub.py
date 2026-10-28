@@ -4,6 +4,11 @@ It goes through the same completion path as every Agent Hub agentic request (``c
 ``execute_tools=True``), so routing, canonical context, tool allow-lists and typed provider outcomes behave as they do
 elsewhere. The attempt's child session id is the completion ``session_id``, which keys the provider's prompt cache.
 The executor is selected only by name (``executor: "agent_hub"``): no provider maps to it by default.
+
+The step ``level`` (``executor_defaults.json`` ``agent_hub.levels``) sets how much the loop carries. ``lean`` (the default)
+mirrors Pi's lean start: a short working-rules prompt with the worktree as cwd, and only the core tools. The agent's
+canonical context still comes first in the system prompt, and tool permission and safety checks are unchanged. ``full``
+is the agent's whole provisioned tool set and no extra prompt.
 """
 
 from __future__ import annotations
@@ -51,6 +56,27 @@ async def provision_tools(agent_slug: str, project_id: str) -> list[dict[str, An
     return provisioned.loaded_tools or None
 
 
+def lean_surface(
+    level: Mapping[str, Any], tools: list[dict[str, Any]] | None, worktree: Path
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """(tools, system prompt) for a level: the agent's tools narrowed to the level's list, plus its working-rules prompt.
+
+    A level with no tool list keeps everything. If the agent's allow-list shares none of the level's tools the full
+    list stays, so a step never starts without tools; the level never adds a tool the agent does not already have.
+    """
+
+    allowed = level.get("tools")
+    template = level.get("prompt")
+    if not allowed:
+        return tools, None
+    kept = [tool for tool in tools or [] if tool.get("name") in allowed]
+    if not kept:
+        return tools, None
+    listing = "\n".join(f"- {tool['name']}: {allowed[tool['name']]}" for tool in kept)
+    prompt = "\n".join(template).replace("{tools}", listing).replace("{cwd}", str(worktree)) if template else None
+    return kept, prompt
+
+
 def text_of(message: AssistantMessage) -> str:
     return "\n".join(b.text for b in message.content if isinstance(b, TextContent) and b.text)
 
@@ -93,12 +119,19 @@ class AgentHubExecutor:
 
             if is_cache_stale():  # the tool handler only accepts working dirs under the known project roots
                 await refresh_project_cache()
-        tools = await self._provision(attempt.agent_slug, attempt.project_id)
+        settings = self.defaults["agent_hub"]
+        level = settings["levels"].get(packet.level or settings["default_level"])
+        if level is None:
+            return StepResult("failed", error=f"agent_hub_unsupported: unknown level {packet.level!r}")
+        tools, prompt = lean_surface(level, await self._provision(attempt.agent_slug, attempt.project_id), worktree)
+        messages: list[dict[str, Any]] = [{"role": "user", "content": packet.render()}]
+        if prompt:  # the agent's own prompt layer: the canonical context goes ahead of it
+            messages.insert(0, {"role": "system", "content": prompt})
         await on_event({"type": "agent_hub_started", "model": model, "at": time.time()})
         try:
             result = await asyncio.wait_for(
                 complete(
-                    messages=[{"role": "user", "content": packet.render()}],
+                    messages=messages,
                     model=model,
                     provider=provider,
                     temperature=agent.temperature,
