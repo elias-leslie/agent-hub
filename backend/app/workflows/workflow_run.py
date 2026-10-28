@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from hatchet_sdk import Context
 from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
+from app.services.workflow_runs.policy import load_policy
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,20 @@ class AdvanceInput(BaseModel):
     run_id: str
 
 
-@hatchet.task(name=ADVANCE_TASK_NAME, retries=0, input_validator=AdvanceInput)
+# Hatchet has no "no deadline", and the library default would cancel a live attempt after 7 days: the deadline comes
+# from the run policy data (policy_defaults.json) and is far beyond any attempt.
+_POLICY = load_policy()
+ADVANCE_EXECUTION_TIMEOUT = timedelta(hours=_POLICY.advance_task_execution_timeout_hours)
+ADVANCE_SCHEDULE_TIMEOUT = timedelta(hours=_POLICY.advance_task_schedule_timeout_hours)
+
+
+@hatchet.task(
+    name=ADVANCE_TASK_NAME,
+    retries=0,
+    input_validator=AdvanceInput,
+    execution_timeout=ADVANCE_EXECUTION_TIMEOUT,
+    schedule_timeout=ADVANCE_SCHEDULE_TIMEOUT,
+)
 async def workflow_run_advance_task(input: AdvanceInput, ctx: Context) -> dict[str, Any]:
     """Execute the next eligible step of one run, commit, and enqueue the next advance."""
     from app.services.workflow_runs.engine import advance_run

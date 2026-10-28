@@ -356,3 +356,21 @@ def test_steps_run_one_at_a_time_unless_the_run_raises_the_cap() -> None:
     # A policy stored before the cap existed still loads, at one.
     stored = {k: v for k, v in load_policy().as_dict().items() if k != "max_concurrent_steps"}
     assert load_policy(stored).max_concurrent_steps == 1
+
+
+def test_advance_task_deadline_is_policy_data_shown_with_the_run_policy_and_not_overridable_per_run() -> None:
+    from datetime import timedelta
+
+    from app.hatchet_app import DEFAULT_TASK_EXECUTION_TIMEOUT
+    from app.workflows.workflow_run import workflow_run_advance_task
+
+    policy = load_policy()
+    assert policy.as_dict()["advance_task_execution_timeout_hours"] == policy.advance_task_execution_timeout_hours
+    registered = workflow_run_advance_task._task  # the task as Hatchet will register it
+    assert registered.execution_timeout == timedelta(hours=policy.advance_task_execution_timeout_hours)
+    assert registered.schedule_timeout == timedelta(hours=policy.advance_task_schedule_timeout_hours)
+    assert isinstance(registered.execution_timeout, timedelta)
+    assert registered.execution_timeout > DEFAULT_TASK_EXECUTION_TIMEOUT * 1000  # not the library's 7 days
+    # The deadline is the worker's: a run's stored copy of it (or an override) never changes what is registered.
+    stored = load_policy({"advance_task_execution_timeout_hours": 1})
+    assert stored.advance_task_execution_timeout_hours == policy.advance_task_execution_timeout_hours

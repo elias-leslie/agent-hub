@@ -20,6 +20,8 @@ DEFAULTS_FILE = Path(__file__).with_name("policy_defaults.json")
 
 # Keys runs stored (or callers sent) before they were removed or renamed; dropped on load so old runs still open.
 RETIRED_KEYS = frozenset({"acceptance_timeout_seconds", "max_usage_limit_resumes"})
+# Keys of the worker, not of a run: stored with every run's policy for display, but the data file always decides.
+WORKER_KEYS = frozenset({"advance_task_execution_timeout_hours", "advance_task_schedule_timeout_hours"})
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,13 @@ class RunPolicy:
     # after this many seconds.
     process_stop_grace_seconds: float
     usage_limit_cooldown_seconds: int
+    # Hatchet cancels a task at its execution deadline and cannot be given none (the engine accepts at most ~292 years),
+    # so the advance task that runs a whole attempt gets a deadline far beyond any attempt: ~100 years. These are read
+    # once when the worker registers the task (workflow_run.py), so they are the worker's, not a run's: a run's own
+    # override is ignored. They are shown here so the run's policy names every time bound on it. A run killed by
+    # one would have no heartbeat after it; recovery charges it as a stale step.
+    advance_task_execution_timeout_hours: int
+    advance_task_schedule_timeout_hours: int
     packet_budget_fraction: float
     default_context_window: int
     # Executor kind for a model by provider, when a step does not name one.
@@ -68,7 +77,7 @@ def load_policy(
     """Defaults from the data file, with a run's own ``policy`` overrides merged over them."""
 
     data: dict[str, Any] = json.loads(path.read_text())
-    overrides = {k: v for k, v in (overrides or {}).items() if k not in RETIRED_KEYS}
+    overrides = {k: v for k, v in (overrides or {}).items() if k not in RETIRED_KEYS | WORKER_KEYS}
     unknown = set(overrides) - set(data)
     if unknown:
         raise ValueError(f"unknown policy keys: {sorted(unknown)}")

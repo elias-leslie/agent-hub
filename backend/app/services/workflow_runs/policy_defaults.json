@@ -11,6 +11,8 @@
   "acceptance_drain_seconds": 2,
   "process_stop_grace_seconds": 10,
   "usage_limit_cooldown_seconds": 3600,
+  "advance_task_execution_timeout_hours": 876000,
+  "advance_task_schedule_timeout_hours": 876000,
   "packet_budget_fraction": 0.25,
   "default_context_window": 128000,
   "executor_for_provider": {"claude": "claude_code", "codex": "codex", "pi": "pi"},
