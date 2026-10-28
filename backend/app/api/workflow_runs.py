@@ -3,7 +3,7 @@
 POST /workflow-runs               create a run from a JSON definition (idempotent on request_id) and start it
 GET  /workflow-runs               recent runs, newest first (paginated)
 GET  /workflow-runs/{id}          run, steps, attempts (requested vs served model, outcome, usage, handoff)
-POST /workflow-runs/{id}/resume   resolve a run paused for the owner (retry, skip or fail the waiting step)
+POST /workflow-runs/{id}/resume   resolve a run paused for the owner (retry, skip or fail the waiting or failed step)
 POST /workflow-runs/{id}/cancel   stop the whole run (optional reason; who asked and when are kept)
 POST /workflow-runs/{id}/steps/{key}/cancel   stop one step; the run carries on with its other steps
 PATCH  /workflow-runs/{id}              change the run's cap on steps running at once (max_concurrent_steps)

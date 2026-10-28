@@ -131,7 +131,8 @@ class Readiness:
 
     state: str  # ready | waiting | blocked
     waiting_on: tuple[str, ...] = ()
-    blocked_by: tuple[tuple[str, str], ...] = ()  # (dependency key, its status)
+    blocked_by: tuple[tuple[str, str], ...] = ()  # (dependency key, its status); "blocked" for a step that is itself blocked
+    because: tuple[tuple[str, str], ...] = ()  # the dead steps (key, status) at the root of the block, however far back
 
     @property
     def reason(self) -> str | None:
@@ -139,7 +140,10 @@ class Readiness:
             return None
         parts = []
         if self.blocked_by:
-            parts.append("blocked by " + ", ".join(f"{k} ({s})" for k, s in self.blocked_by))
+            text = "blocked by " + ", ".join(f"{k} ({s})" for k, s in self.blocked_by)
+            if any(s == "blocked" for _k, s in self.blocked_by):
+                text += ", because " + ", ".join(f"{k} ({s})" for k, s in self.because)
+            parts.append(text)
         if self.waiting_on:
             parts.append("waiting for " + ", ".join(self.waiting_on))
         return "; ".join(parts)
@@ -149,6 +153,7 @@ class Readiness:
             "state": self.state,
             "waiting_on": list(self.waiting_on),
             "blocked_by": [{"key": k, "status": s} for k, s in self.blocked_by],
+            "because": [{"key": k, "status": s} for k, s in self.because],
             "reason": self.reason,
         }
 
@@ -162,6 +167,28 @@ class Schedule:
     @property
     def blocked(self) -> dict[str, Readiness]:
         return {k: r for k, r in self.readiness.items() if r.state == "blocked"}
+
+
+def _spread_blocks(readiness: dict[str, Readiness]) -> None:
+    """A pending step that waits on a blocked pending step is blocked too, with the dead steps at the root as its cause."""
+
+    changed = True
+    while changed:
+        changed = False
+        for key, r in list(readiness.items()):
+            via = [d for d in r.waiting_on if d in readiness and readiness[d].state == "blocked"]
+            if not via:
+                continue
+            roots = list(r.because)
+            for dep in via:
+                roots.extend(x for x in readiness[dep].because if x not in roots)
+            readiness[key] = Readiness(
+                "blocked",
+                tuple(d for d in r.waiting_on if d not in via),
+                (*r.blocked_by, *((d, "blocked") for d in via)),
+                tuple(roots),
+            )
+            changed = True
 
 
 def schedule(steps: Sequence[StepLike], *, max_running: int = DEFAULT_MAX_RUNNING) -> Schedule:
@@ -189,7 +216,8 @@ def schedule(steps: Sequence[StepLike], *, max_running: int = DEFAULT_MAX_RUNNIN
             state = "waiting"
         else:
             state = "ready"
-        readiness[step.step_key] = Readiness(state, tuple(waiting), tuple(blocked))
+        readiness[step.step_key] = Readiness(state, tuple(waiting), tuple(blocked), tuple(blocked))
+    _spread_blocks(readiness)
     room = max(0, max_running - sum(1 for s in steps if s.status == "running"))
     ready = [by_key[k] for k, r in readiness.items() if r.state == "ready"]
     return Schedule(deps, readiness, ready[:room])

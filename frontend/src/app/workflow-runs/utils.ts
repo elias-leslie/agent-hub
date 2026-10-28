@@ -150,6 +150,12 @@ export function pauseExplanation(
       return `Too many refusals${category} in this run. ${step} is paused for your decision.`
     case 'blocked_dependencies':
       return 'No step can start: the ones left wait on steps that were skipped, cancelled or failed. The plan needs a change from whoever coordinates the run, or you can cancel the run.'
+    case 'step_failed': {
+      const failed = Object.keys(pause.failed ?? {})
+      const blocked = Object.keys(pause.blocked ?? {})
+      const names = failed.length > 0 ? failed.join(', ') : 'a step'
+      return `${failed.length === 1 ? 'Step' : 'Steps'} ${names} failed. Everything that did not depend on ${failed.length === 1 ? 'it' : 'them'} has finished${blocked.length > 0 ? `; ${blocked.join(', ')} cannot start` : ''}. Retry or skip ${stepKey ? `"${stepKey}"` : 'the step'}, change the plan, or end the run.`
+    }
     case 'no_agent_route':
       return `${step} has no model route to run on${pause.error ? `: ${pause.error}` : '.'}`
     default:

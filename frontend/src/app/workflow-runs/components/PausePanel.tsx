@@ -83,6 +83,25 @@ export function PausePanel({ run }: { run: WorkflowRunDetail }) {
       <p className="mt-1 text-[13px] text-amber-50/90">
         {pauseExplanation(pause, stepKey)}
       </p>
+      {pause.reason === 'step_failed' ? (
+        <ul
+          className="mt-2 list-disc pl-5 text-[12px] text-amber-50/80"
+          data-testid="pause-failed"
+        >
+          {Object.entries(pause.failed ?? {}).map(([key, why]) => (
+            <li key={key} className="break-words">
+              {key}: {why.status}
+              {why.reason ? ` (${why.reason})` : ''}
+              {why.error ? `, ${why.error}` : ''}
+            </li>
+          ))}
+          {Object.entries(pause.blocked ?? {}).map(([key, readiness]) => (
+            <li key={key} className="break-words">
+              {key}: {readiness.reason ?? 'blocked'}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-[11px] text-slate-400">
           Retry on

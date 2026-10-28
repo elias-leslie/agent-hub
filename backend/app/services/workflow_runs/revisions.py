@@ -28,6 +28,7 @@ from .engine import (
     _set_meta,
     _steps,
     blocked_pause,
+    failed_pause,
 )
 from .plan import DEAD, explicit_deps, schedule, validate_graph
 from .policy import load_policy
@@ -107,7 +108,10 @@ def _settle(run: Any, meta: dict[str, Any], steps: list[Any], now: float) -> boo
 
     pause = meta.get("pause") or {}
     cap = load_policy(meta["policy"]).max_concurrent_steps
-    if meta.get("state") == "needs_owner" and pause.get("reason") == "blocked_dependencies":
+    if meta.get("state") == "needs_owner" and pause.get("reason") == "step_failed":
+        # Stays paused until the owner resumes (retry, skip or fail); the list of what is blocked follows the plan.
+        meta = {**meta, "pause": {**failed_pause(steps, schedule(steps, max_running=cap)), "at": pause.get("at", now)}}
+    elif meta.get("state") == "needs_owner" and pause.get("reason") == "blocked_dependencies":
         plan = schedule(steps, max_running=cap)
         if plan.start or not any(s.status == "pending" for s in steps):
             meta = {**meta, "state": "running", "pause": None}

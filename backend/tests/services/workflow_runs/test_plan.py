@@ -70,3 +70,17 @@ def test_a_cap_counts_the_steps_already_running_and_only_ready_steps_start() -> 
     assert [s.step_key for s in schedule(steps, max_running=9).start] == ["b", "c", "e"]
     assert schedule(steps, max_running=1).start == []  # at the cap
     assert schedule(steps, max_running=2).readiness["d"].state == "waiting"
+
+
+def test_a_step_behind_a_blocked_step_is_blocked_and_the_reason_names_the_failed_one() -> None:
+    steps = plan(
+        ("a", "failed", []), ("b", "running", []), ("c", "pending", ["a"]), ("d", "pending", ["c"]),
+        ("e", "pending", ["c", "b"]), ("f", "pending", ["b"]), ("g", "pending", []),
+    )
+    result = schedule(steps, max_running=3)
+    states = {k: r.state for k, r in result.readiness.items()}
+    assert states == {"c": "blocked", "d": "blocked", "e": "blocked", "f": "waiting", "g": "ready"}
+    assert result.readiness["c"].reason == "blocked by a (failed)"
+    assert result.readiness["d"].reason == "blocked by c (blocked), because a (failed)"
+    assert result.readiness["e"].waiting_on == ("b",) and result.readiness["e"].because == (("a", "failed"),)
+    assert [s.step_key for s in result.start] == ["g"]  # independent work keeps being scheduled

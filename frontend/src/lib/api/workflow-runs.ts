@@ -226,8 +226,10 @@ export interface StepReadiness {
   state: 'ready' | 'waiting' | 'blocked'
   /** Dependencies that have not finished and may still complete. */
   waiting_on: string[]
-  /** Dependencies that ended without completing (skipped, cancelled, failed), so this step cannot start. */
-  blocked_by: { key: string; status: StepStatus }[]
+  /** Dependencies that ended without completing (skipped, cancelled, failed), so this step cannot start. A dependency that is itself blocked shows as "blocked". */
+  blocked_by: { key: string; status: StepStatus | 'blocked' }[]
+  /** The ended steps at the root of the block, however many steps back. */
+  because?: { key: string; status: StepStatus }[]
   reason: string | null
 }
 
@@ -328,9 +330,18 @@ export interface WorkflowStepView {
   attempt_history: WorkflowAttempt[]
 }
 
+/** A step that failed: how it ended, and the last error it reported. */
+export interface FailedStepRecord {
+  status: StepStatus
+  reason: string | null
+  error: string | null
+}
+
 export interface RunPause {
   reason: string
   step_key?: string
+  /** For reason step_failed: every failed step. Steps that do not depend on them have finished. */
+  failed?: Record<string, FailedStepRecord>
   /** For a run blocked on dependencies: each blocked step and what blocks it. */
   blocked?: Record<string, StepReadiness>
   category?: string | null

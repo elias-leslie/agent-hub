@@ -472,8 +472,12 @@ async def test_stale_heartbeat_restarts_from_checkpoint_then_fails_at_the_limit(
         await recover_stale_steps(world.deps)
         view = await view_of(pg_db, run_id)
         assert (view["steps"][2]["status"], view["steps"][2]["restarts"]) == (expected, restarts)
-    assert view["state"] == "failed" and "no restart left: 2/2 used" in view["failure"]
-    assert view["steps"][3]["status"] == "skipped"
+    # The step stays failed; the run does not fail, it waits for the owner once nothing else can run.
+    assert (await world.run_to_stop(run_id))["reason"] == "step_failed"
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and view["failure"] is None
+    assert "no restart left: 2/2 used" in str(view["pause"]["failed"])
+    assert view["steps"][3]["status"] == "pending" and view["steps"][3]["readiness"]["state"] == "blocked"
     assert view["limits"]["restart_limit"] == 2
 
 
@@ -688,13 +692,14 @@ async def test_acceptance_that_never_passes_fails_the_step_at_the_retry_limit(
     definition.policy = {"heartbeat_interval_seconds": 3600, "acceptance_retry_limit": 2}
     run_id, _ = await create_run(pg_db, definition, deps=world.deps)
     result = await world.run_to_stop(run_id)
-    assert (result["run_state"], result["reason"]) == ("failed", "acceptance_retry_limit")
+    assert result["reason"] == "step_failed"
     view = await view_of(pg_db, run_id)
     plan = view["steps"][0]
     assert (plan["status"], plan["attempts"], plan["acceptance_failures"]) == ("failed", 3, 3)
-    assert "plan: acceptance_retry_limit" in view["failure"]
+    assert (view["state"], view["pause"]["reason"], view["failure"]) == ("needs_owner", "step_failed", None)
+    assert view["pause"]["failed"]["plan"]["reason"] == "acceptance_retry_limit"
     assert view["limits"]["acceptance_retry_limit"] == 2 and plan["attempt_limit"] == view["limits"]["max_total_attempts"]
-    assert {s["status"] for s in view["steps"][1:]} == {"skipped"}
+    assert {s["status"] for s in view["steps"][1:]} == {"pending"} and set(view["pause"]["blocked"]) == {s["key"] for s in view["steps"][1:]}
 
 
 async def test_acceptance_timeout_and_unrunnable_command_count_as_failures(
@@ -848,14 +853,14 @@ async def test_usage_limit_cycling_alone_fails_the_step_at_max_total_attempts(
     run_id, _ = await create_run(pg_db, definition, deps=world.deps)
     for _ in range(10):
         result = await world.run_to_stop(run_id)
-        if result["reason"] == "max_total_attempts":
+        if result["reason"] == "step_failed":
             break
         world.clock += 120
         world.unavailable.clear()
         await recover_stale_steps(world.deps)
     view = await view_of(pg_db, run_id)
-    assert (view["state"], view["steps"][0]["attempts"]) == ("failed", 3)
-    assert "plan: max_total_attempts" in view["failure"] and len(world.faux.calls) == 3
+    assert (view["state"], view["steps"][0]["attempts"]) == ("needs_owner", 3)
+    assert view["pause"]["failed"]["plan"]["reason"] == "max_total_attempts" and len(world.faux.calls) == 3
 
 
 async def test_refusing_chain_and_owner_retry_stop_at_a_step_max_attempts(
@@ -868,9 +873,10 @@ async def test_refusing_chain_and_owner_retry_stop_at_a_step_max_attempts(
     run_id, _ = await create_run(pg_db, definition, deps=world.deps)
     result = await world.run_to_stop(run_id)
     # Refusals used to ignore max_attempts; now the second refusal ends the step instead of a third hop.
-    assert (result["run_state"], len(world.faux.calls)) == ("failed", 2)
+    assert (result["reason"], len(world.faux.calls)) == ("step_failed", 2)
     view = await view_of(pg_db, run_id)
-    assert view["steps"][0]["attempt_limit"] == 2 and "max_attempts" in view["failure"]
+    assert view["state"] == "needs_owner" and view["steps"][0]["attempt_limit"] == 2
+    assert view["pause"]["failed"]["plan"]["reason"].startswith("max_attempts")
 
 
 async def test_step_effort_overrides_the_agent_thinking_level(pg_db, repo, world_factory) -> None:
@@ -2209,21 +2215,150 @@ async def test_cancelling_the_run_stops_every_running_step_and_the_last_one_ends
     assert hold.active == set() and "c" not in hold.seen
 
 
-async def test_a_failing_step_stops_the_steps_running_beside_it(pg_db, repo, world_factory) -> None:
-    world = world_factory({"a": [FauxAction("error")]})
+def failing_graph(repo: Path, **extra: Any) -> RunDefinition:
+    """a fails (one attempt); c depends on a and d on c; b and e are independent. Cap 2."""
+
+    return parallel(
+        repo,
+        2,
+        {"key": "a", "depends_on": [], "max_attempts": 1},
+        {"key": "b", "depends_on": []},
+        {"key": "c", "depends_on": ["a"]},
+        {"key": "d", "depends_on": ["c"]},
+        {"key": "e", "depends_on": []},
+        **extra,
+    )
+
+
+def failing_world(world_factory: Any) -> World:
+    world = world_factory(
+        {
+            "a": [FauxAction("error"), FauxAction(write={"a.txt": "a\n"})],
+            **{k: [FauxAction(write={f"{k}.txt": f"{k}\n"})] for k in "bcde"},
+        }
+    )
     chains(world)
+    return world
+
+
+async def test_a_failing_step_lets_the_others_finish_blocks_only_its_dependents_and_pauses_the_run(
+    pg_db, repo, world_factory
+) -> None:
+    world = failing_world(world_factory)
     hold = with_hold(world)
     hold.gate("b")
-    definition = parallel(
-        repo, 2, {"key": "a", "depends_on": [], "max_attempts": 1}, {"key": "b", "depends_on": []},
-        policy={"heartbeat_interval_seconds": 0.1, "process_stop_grace_seconds": 0.3},
-    )
-    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    run_id, _ = await create_run(pg_db, failing_graph(repo), deps=world.deps)
     await world.spawn(run_id)
-    await world.settle(30)  # b is gated: it ends only because the run failed under it
+    # a fails while b is still working; the free slot goes to e, which does not depend on a.
+    await _until(lambda: "e" in hold.seen and "e" not in hold.active)
+    for _ in range(200):
+        view = await snapshot(world, pg_db, run_id)
+        if {s["key"]: s["status"] for s in view["steps"]}["e"] == "completed":
+            break
+        await asyncio.sleep(0.02)
+    status = {s["key"]: s["status"] for s in view["steps"]}
+    assert status == {"a": "failed", "b": "running", "c": "pending", "d": "pending", "e": "completed"}
+    assert view["state"] == "running" and "b" in hold.active
+    ready = {s["key"]: s["readiness"] for s in view["steps"] if s["status"] == "pending"}
+    assert ready["c"]["state"] == "blocked" and ready["c"]["reason"] == "blocked by a (failed)"
+    assert ready["d"]["state"] == "blocked" and ready["d"]["blocked_by"] == [{"key": "c", "status": "blocked"}]
+    assert ready["d"]["reason"] == "blocked by c (blocked), because a (failed)"
+    assert not [t for t in world.tasks if t.done() and t.exception()]
+
+    hold.gates["b"].set()  # the running step finishes normally
+    await world.settle()
     view = await view_of(pg_db, run_id)
-    assert view["state"] == "failed" and [s["status"] for s in view["steps"]] == ["failed", "cancelled"]
-    assert "run failed" in view["steps"][1]["cancel"]["reason"] and hold.active == set()
+    assert {s["key"]: s["status"] for s in view["steps"]} == {
+        "a": "failed", "b": "completed", "c": "pending", "d": "pending", "e": "completed",
+    }
+    assert "c" not in hold.seen and "d" not in hold.seen  # the dependents never started
+    # The run waits for the owner; it is not failed.
+    assert view["state"] == "needs_owner" and view["failure"] is None
+    pause = view["pause"]
+    assert (pause["reason"], pause["step_key"]) == ("step_failed", "a")
+    assert pause["failed"]["a"]["status"] == "failed" and pause["failed"]["a"]["reason"].startswith("max_attempts")
+    assert set(pause["blocked"]) == {"c", "d"} and "a (failed)" in pause["blocked"]["d"]["reason"]
+    assert view["steps"][0]["attempt_history"][0]["status"] == "failed"
+    assert view["usage_totals"]["total_tokens"] is not None  # b and e kept their work and usage
+    assert view["steps"][1]["checkpoint_sha"] and view["steps"][4]["checkpoint_sha"]
+
+
+async def test_resume_retry_clears_a_step_failed_pause_and_the_run_finishes(pg_db, repo, world_factory) -> None:
+    world = failing_world(world_factory)
+    hold = with_hold(world, 0.02)
+    run_id, _ = await create_run(pg_db, failing_graph(repo), deps=world.deps)
+    await world.drive(run_id)
+    assert (await view_of(pg_db, run_id))["pause"]["reason"] == "step_failed"
+    with pytest.raises(WorkflowRunError) as capped:  # the step used its one attempt: more must be asked for
+        await resume_run(pg_db, run_id, OwnerDecision(action="retry"), deps=world.deps)
+    assert capped.value.code == "attempt_limit"
+    resumed = await resume_run(pg_db, run_id, OwnerDecision(action="retry", extra_attempts=1), deps=world.deps)
+    assert (resumed["state"], resumed["step"], resumed["status"]) == ("running", "a", "pending")
+    await world.drive(run_id)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed" and view["pause"] is None
+    assert {s["status"] for s in view["steps"]} == {"completed"}
+    assert hold.peak <= 2 and view["steps"][0]["attempts"] == 2
+    assert view["result"]["state"] == "merged"
+
+
+async def test_resume_fail_ends_a_step_failed_run_as_failed(pg_db, repo, world_factory) -> None:
+    world = failing_world(world_factory)
+    with_hold(world, 0.02)
+    run_id, _ = await create_run(pg_db, failing_graph(repo), deps=world.deps)
+    await world.drive(run_id)
+    ended = await resume_run(pg_db, run_id, OwnerDecision(action="fail"), deps=world.deps)
+    assert (ended["state"], ended["step"], ended["status"]) == ("failed", "a", "failed")
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "failed" and "a: owner ended the run" in view["failure"]
+    assert {s["key"]: s["status"] for s in view["steps"]} == {
+        "a": "failed", "b": "completed", "c": "skipped", "d": "skipped", "e": "completed",
+    }
+
+
+async def test_the_plan_can_be_revised_while_a_step_failed_pause_waits_and_resume_skip_then_finishes(
+    pg_db, repo, world_factory
+) -> None:
+    world = failing_world(world_factory)
+    with_hold(world, 0.02)
+    run_id, _ = await create_run(pg_db, failing_graph(repo), deps=world.deps)
+    await world.drive(run_id)
+
+    async def nothing(_run_id: str) -> None:  # revisions here must not start anything by themselves
+        return None
+
+    world.deps.enqueue_advance = nothing
+    # Pending steps can be added, changed and removed while the run waits; the pause follows the plan.
+    await revise_step(pg_db, run_id, "c", StepRevision(effort="low"), deps=world.deps)
+    await add_steps(pg_db, run_id, AddSteps(steps=[{"key": "f", "instructions": "x", "agent_slug": "coder", "depends_on": ["e"]}]), deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and set(view["pause"]["blocked"]) == {"c", "d"}
+    assert view["steps"][-1]["readiness"]["state"] == "ready"  # waits for the owner's resume, not for a dependency
+    await remove_step(pg_db, run_id, "d", deps=world.deps)
+    await remove_step(pg_db, run_id, "c", deps=world.deps)
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "needs_owner" and view["pause"]["reason"] == "step_failed" and view["pause"]["blocked"] == {}
+    skipped = await resume_run(pg_db, run_id, OwnerDecision(action="skip"), deps=world.deps)
+    assert skipped["state"] == "running"
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"
+    view = await view_of(pg_db, run_id)
+    assert view["state"] == "completed"
+    assert {s["key"]: s["status"] for s in view["steps"]} == {"a": "skipped", "b": "completed", "e": "completed", "f": "completed"}
+
+
+async def test_with_a_cap_of_one_a_failed_step_also_waits_for_the_owner(pg_db, repo, world_factory) -> None:
+    world = world_factory({"a": [FauxAction("error")], "b": [FauxAction()]})
+    chains(world)
+    run_id, _ = await create_run(
+        pg_db, graph(repo, {"key": "a", "max_attempts": 1}, {"key": "b"}, {"key": "c", "depends_on": []}), deps=world.deps
+    )
+    stopped = await world.run_to_stop(run_id)
+    view = await view_of(pg_db, run_id)
+    # The independent step still ran after a failed; b follows a by default and is blocked.
+    assert stopped["reason"] == "step_failed" and view["state"] == "needs_owner" and view["failure"] is None
+    assert {s["key"]: s["status"] for s in view["steps"]} == {"a": "failed", "b": "pending", "c": "completed"}
+    assert view["steps"][1]["readiness"]["reason"] == "blocked by a (failed)"
+    assert set(view["pause"]["blocked"]) == {"b"}
 
 
 async def test_recovery_after_a_crash_with_two_steps_running_restarts_both_on_their_own_worktrees(

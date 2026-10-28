@@ -20,7 +20,7 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Awaitable, Callable, Collection, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -87,6 +87,8 @@ FINISHED_RUN = ("completed", "failed", "cancelled")
 TERMINAL_STEP = ("completed", "skipped", "cancelled")
 # A step in any of these has nothing left to stop.
 FINISHED_STEP = ("completed", "failed", "refused", "skipped", "cancelled")
+# A step that ended without completing and without the owner's say-so: the run waits for the owner when nothing else can run.
+FAILED_STEP = ("failed", "refused")
 
 
 class WorkflowRunError(Exception):
@@ -831,6 +833,33 @@ def blocked_pause(plan: Schedule) -> dict[str, Any]:
     }
 
 
+def _failure_of(step: WorkflowStep) -> dict[str, Any]:
+    last = _scratch(step).get("last") or {}
+    return {"status": step.status, "reason": last.get("reason"), "error": (last.get("error") or "")[:300] or None}
+
+
+def failed_steps(steps: Sequence[WorkflowStep]) -> list[WorkflowStep]:
+    return sorted((s for s in steps if s.status in FAILED_STEP), key=lambda s: s.position)
+
+
+def failed_pause(steps: Sequence[WorkflowStep], plan: Schedule) -> dict[str, Any]:
+    """The pause for a run with nothing left to run and a step that failed: each failed step, and the steps it blocks."""
+
+    failed = {s.step_key: _failure_of(s) for s in failed_steps(steps)}
+    return {
+        "reason": "step_failed",
+        "step_key": next(iter(failed), None),
+        "failed": failed,
+        "blocked": {key: r.as_dict() for key, r in plan.blocked.items()},
+    }
+
+
+def stuck_pause(steps: Sequence[WorkflowStep], plan: Schedule) -> dict[str, Any]:
+    """Why a run with nothing running cannot go on: a failed step, else pending steps blocked by skipped or cancelled ones."""
+
+    return failed_pause(steps, plan) if failed_steps(steps) else blocked_pause(plan)
+
+
 def _pause_for_step(
     run: Session, step: WorkflowStep, meta: dict[str, Any], reason: str, now: float, **extra: Any
 ) -> None:
@@ -855,6 +884,10 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         if not any(s.status == "pending" for s in steps):
             if running:
                 return {"next": "stop", "reason": "step_running"}, None
+            if failed_steps(steps):  # the work is done except for what failed: the owner decides
+                _pause_run(run, meta, failed_pause(steps, schedule(steps)), now)
+                await db.commit()
+                return {"next": "stop", "reason": "step_failed"}, None
             result = await _integrate_result(meta, steps)
             _complete_run(run, {**meta, **({"result": result} if result else {})}, now)
             await db.commit()
@@ -863,11 +896,13 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         if not plan.start:
             if running:  # at the cap, or everything left waits on a running step: its end queues the next advance
                 return {"next": "stop", "reason": "step_running"}, None
-            # Nothing can start: every pending step waits on one that will never complete. The owner or coordinator
-            # revises the plan (the step is skipped, cancelled or failed; point its dependents elsewhere or remove them).
-            _pause_run(run, meta, blocked_pause(plan), now)
+            # Nothing can start: every pending step waits on one that will never complete. A failed step is the owner's
+            # call (retry, skip or end the run); otherwise the owner or coordinator revises the plan (the step is
+            # skipped or cancelled; point its dependents elsewhere or remove them).
+            pause = stuck_pause(steps, plan)
+            _pause_run(run, meta, pause, now)
             await db.commit()
-            return {"next": "stop", "reason": "blocked_dependencies"}, None
+            return {"next": "stop", "reason": pause["reason"]}, None
         step = plan.start[0]
         scratch = _scratch(step)
         if not scratch.get("chain"):
@@ -883,10 +918,9 @@ async def _commit_intent(run_id: str, deps: EngineDeps) -> tuple[dict[str, Any],
         )
         if cap:  # no path may start another attempt past the cap
             step.status = "failed"
-            step.outcome = scratch
-            _fail_run(run, meta, steps, f"{step.step_key}: {cap}", now)
+            step.outcome = {**scratch, "last": {**(scratch.get("last") or {}), "reason": cap}}
             await db.commit()
-            return {"next": "stop", "reason": cap}, None
+            return {"next": "continue", "reason": cap}, None  # the other steps go on; the next advance decides
         untried = [m for m in state.chain if m not in state.tried]
         unavailable = await deps.availability([*untried, *state.usage_limited])
         choice = choose_attempt_model(state, unavailable, now)
@@ -1418,8 +1452,9 @@ async def _commit_outcome(
             step.status = "pending"
             scratch.update(hop=decision.hop, pinned_model=decision.next_model)
         elif decision.action == "fail":
+            # The run goes on with every step that does not depend on this one; it waits for the owner only when
+            # nothing else can run.
             step.status = "failed"
-            _fail_run(run, meta, steps, f"{intent.step_key}: {decision.reason}", now)
         elif decision.action == "cancelled":
             # Stays cancelled: no next model, no retry. A run-level request ends the run; a step-level one leaves
             # the run to carry on with its other steps, like a skip.
@@ -1688,6 +1723,7 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
             "status": "failed",
             "reason": "cancelled" if verdict == "cancelled" else "stale_heartbeat",
             "kind": "cancelled" if verdict == "cancelled" else "crash",
+            "error": None if verdict in ("retry", "cancelled") else reason + note,
             "attempt_session_id": step.current_attempt_session_id,
         }
         if verdict == "retry":
@@ -1703,10 +1739,9 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
                     _cancel_run(run, meta, all_steps, meta["cancel"], now)
         else:
             step.status = "failed"
-            _fail_run(run, meta, await _steps(db, run_id), f"{step.step_key}: {reason}", now)
         step.outcome = scratch
         await db.commit()
-        return verdict == "retry" or (verdict == "cancelled" and _meta(run)["state"] == "running")
+        return _meta(run)["state"] == "running"
 
 
 async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:
@@ -1768,7 +1803,9 @@ async def resume_run(
         )
     steps = await _steps(db, run_id)
     key = decision.step_key or (meta.get("pause") or {}).get("step_key")
-    step = next((s for s in steps if s.step_key == key and s.status == "needs_owner"), None)
+    # A step the owner is asked about waits as needs_owner; when the run waits because steps failed, those are the ones.
+    waiting = ("failed", "refused") if (meta.get("pause") or {}).get("reason") == "step_failed" else ("needs_owner",)
+    step = next((s for s in steps if s.step_key == key and s.status in waiting), None)
     if step is None:
         raise WorkflowRunError(
             "no_such_step", f"no step waiting for the owner{f' named {key}' if key else ''}"
@@ -1830,7 +1867,7 @@ async def resume_run(
         step.status, step.outcome = "skipped", scratch
         _set_meta(run, {**meta, "state": "running", "pause": None}, now=now)
     else:
-        refused = (scratch.get("last") or {}).get("kind") == "refused"
+        refused = step.status == "refused" or (scratch.get("last") or {}).get("kind") == "refused"
         step.status, step.outcome = ("refused" if refused else "failed"), scratch
         _fail_run(run, meta, steps, f"{step.step_key}: owner ended the run", now)
     await db.commit()

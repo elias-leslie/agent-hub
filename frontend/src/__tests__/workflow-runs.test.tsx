@@ -541,6 +541,72 @@ describe('workflow run detail', () => {
     )
   })
 
+  it('says a run waits because a step failed, what finished and what is blocked, and sends skip for the failed step', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        state: 'needs_owner',
+        failure: null,
+        pause: {
+          reason: 'step_failed',
+          step_key: 'a',
+          failed: {
+            a: {
+              status: 'failed',
+              reason: 'acceptance_retry_limit',
+              error: null,
+            },
+          },
+          blocked: {
+            c: {
+              state: 'blocked',
+              waiting_on: [],
+              blocked_by: [{ key: 'a', status: 'failed' }],
+              because: [{ key: 'a', status: 'failed' }],
+              reason: 'blocked by a (failed)',
+            },
+          },
+        },
+        steps: [
+          step({
+            key: 'a',
+            position: 0,
+            status: 'failed',
+            checkpoint_sha: null,
+          }),
+          step({ key: 'b', position: 1, status: 'completed' }),
+          step({
+            key: 'c',
+            position: 2,
+            status: 'pending',
+            attempts: 0,
+            attempt_history: [],
+            handoff: null,
+          }),
+        ],
+      }),
+    )
+    vi.mocked(resumeWorkflowRun).mockResolvedValue({
+      run_id: 'r1',
+      state: 'running',
+      step: 'a',
+      status: 'skipped',
+    })
+    mount(<WorkflowRunPage />)
+    const panel = await screen.findByRole('region', { name: 'Waiting for you' })
+    expect(panel).toHaveTextContent('Step a failed.')
+    expect(panel).toHaveTextContent('c cannot start')
+    const list = within(panel).getByTestId('pause-failed')
+    expect(list).toHaveTextContent('a: failed (acceptance_retry_limit)')
+    expect(list).toHaveTextContent('c: blocked by a (failed)')
+    fireEvent.click(within(panel).getByRole('button', { name: 'Skip step' }))
+    await waitFor(() =>
+      expect(resumeWorkflowRun).toHaveBeenCalledWith(
+        'r1111111-0000-0000-0000-000000000000',
+        { action: 'skip', step_key: 'a', model: undefined },
+      ),
+    )
+  })
+
   it("shows who launched the run, each step's dependencies, which are ready and why one is blocked", async () => {
     vi.mocked(fetchWorkflowRun).mockResolvedValue(
       run({
