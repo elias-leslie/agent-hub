@@ -22,6 +22,14 @@ No daemon configuration or inference request is involved. Ollama 0.30.5's
 tensor downloader may transfer a blob twice because it follows a local
 `Location` header even on a successful streamed response.
 
+`st models route --task TASK` reads Agent Hub's advisory model selection
+(`/api/models/select`): the advised model and effort, each checked candidate
+with its unavailability reasons, and whether automatic application is
+qualified. Without `--task` it lists the policy's task types; `--json` prints
+the API response. After a `models` command change, regenerate
+`st-extensions/models.json` with `describe_app` at `COLUMNS=80`;
+`backend/tests/st_cli/test_entrypoint.py` fails on drift.
+
 `st workflow` drives Agent Hub's durable workflow runner (`/api/workflow-runs`):
 create a run from a step plan, `get`/`wait` on it with distinct exit codes,
 `add-step`/`revise`/`remove-step` while it runs, `cancel` and `resume`. Aico

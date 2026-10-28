@@ -1,0 +1,74 @@
+{
+  "id": "agent-hub.models",
+  "owner": "agent-hub",
+  "version": "0.5.0",
+  "st_contract_versions": [
+    1
+  ],
+  "summary": "Find models, read routing advice and download public Ollama models.",
+  "effects": [
+    "network",
+    "read-remote",
+    "write-remote",
+    "process",
+    "credentials"
+  ],
+  "namespace": "models",
+  "help": {
+    "": "Usage: models [OPTIONS] COMMAND [ARGS]...\n\n  Agent Hub model catalog, routing advice and managed local downloads\n\nOptions:\n  --id <str>            Filter by model id or alias.\n  --provider <str>      Filter by provider.\n  --free                Only models marked free/free-tier.\n  --coding              Only tool-capable coding candidates.\n  --limit <int range>   [default: 50; 1<=x<=500]\n  --json                Print filtered payload as JSON.\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  list   List canonical model catalog entries.\n  route  Show the advised model, effort and candidate availability for a...\n  pull   Download through an ephemeral registry; preserve the native...",
+    "list": "Usage: models list [OPTIONS]\n\n  List canonical model catalog entries.\n\nOptions:\n  --id <str>           Filter by model id or alias.\n  --provider <str>     Filter by provider.\n  --free               Only models marked free/free-tier.\n  --coding             Only tool-capable coding candidates.\n  --limit <int range>  [default: 50; 1<=x<=500]\n  --json               Print filtered payload as JSON.\n  --help               Show this message and exit.",
+    "route": "Usage: models route [OPTIONS]\n\n  Show the advised model, effort and candidate availability for a task type.\n\nOptions:\n  --task <str>  Task type; omit to list task types.\n  --json        Print the API response as JSON.\n  --help        Show this message and exit.",
+    "pull": "Usage: models pull [OPTIONS] {model}\n\n  Download through an ephemeral registry; preserve the native model manifest.\n\nArguments:\n  model  Public Ollama [namespace/]name[:tag].  [required]\n\nOptions:\n  --help  Show this message and exit."
+  },
+  "usage": [
+    {
+      "surface": "st.models",
+      "tier": "reference",
+      "cmd": "st models [list] [--id MODEL] [--provider PROVIDER] [--free] [--coding] --limit N",
+      "when": "inspect canonical Agent Hub model catalog without raw DB queries",
+      "task_types": [
+        "model-admin",
+        "prompt-tuning",
+        "model-review"
+      ],
+      "on_demand": "model administration"
+    },
+    {
+      "surface": "st.models.route",
+      "tier": "reference",
+      "cmd": "st models route [--task TASK] [--json]",
+      "when": "read Agent Hub's model and effort advice for a task type; no --task lists task types",
+      "task_types": [
+        "model-admin",
+        "model-review"
+      ],
+      "on_demand": "model administration"
+    },
+    {
+      "surface": "st.models.pull",
+      "tier": "reference",
+      "cmd": "st models pull MODEL",
+      "when": "download a public model while the local Ollama daemon stays offline",
+      "precautions": [
+        "Uses managed resource admission and a temporary loopback registry. Refuses to replace an existing different manifest; requires the official ollama CLI and a running local daemon."
+      ],
+      "task_types": [
+        "model-admin"
+      ],
+      "on_demand": "model administration"
+    }
+  ],
+  "help_options": {
+    "": {
+      "--id": 1,
+      "--provider": 1,
+      "--free": 0,
+      "--coding": 0,
+      "--limit": 1,
+      "--json": 0,
+      "--install-completion": 0,
+      "--show-completion": 0,
+      "--help": 0
+    }
+  }
+}

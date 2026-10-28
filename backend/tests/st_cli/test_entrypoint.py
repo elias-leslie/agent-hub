@@ -86,6 +86,21 @@ def test_shipped_workflow_manifest_lists_every_command_and_a_guide_command() -> 
     assert all(usage.get("on_demand") for usage in surfaces.values())
 
 
+def test_shipped_models_manifest_matches_the_command_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regenerate st-extensions/models.json (describe_app at COLUMNS=80) whenever a command or its help changes."""
+    monkeypatch.setenv("COLUMNS", "80")
+    root = Path(__file__).resolve().parents[3]
+    manifest = json.loads((root / "st-extensions/models.json").read_text())
+    described = describe_app(entrypoint.OWNED_APPS["models"], "models")
+    assert (manifest["id"], manifest["namespace"], manifest["version"]) == (
+        "agent-hub.models", "models", agent_hub_st.__version__,
+    )
+    assert manifest["help"] == described["help"]
+    assert manifest["usage"] == described["usage"]
+    assert manifest["help_options"] == described["help_options"]
+    assert "route" in manifest["help"]
+
+
 def test_owner_package_has_no_reverse_summitflow_imports() -> None:
     package_root = Path(agent_hub_st.__file__).parent
     imported_roots: set[str] = set()

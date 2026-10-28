@@ -10,15 +10,27 @@ import typer
 from st_sdk.output import output_json
 from st_sdk.usage import usage
 
-from ._api_paths import MODELS_BASE_PATH
+from ._api_paths import MODELS_BASE_PATH, MODELS_SELECT_PATH, MODELS_SELECTION_POLICY_PATH
 from .agents_formatters import print_table
 from .memory_api import agent_hub_request
 
-app = typer.Typer(help="Agent Hub model catalog and managed local downloads")
+app = typer.Typer(help="Agent Hub model catalog, routing advice and managed local downloads")
 
 
 def _models_api() -> dict[str, Any]:
     return agent_hub_request("GET", MODELS_BASE_PATH, tool_name="st models")
+
+
+def _selection_policy_api() -> dict[str, Any]:
+    return agent_hub_request("GET", MODELS_SELECTION_POLICY_PATH, tool_name="st models route")
+
+
+def _select_api(task: str) -> dict[str, Any]:
+    # Advisory mode only: the service reports whether automatic use would qualify.
+    return agent_hub_request(
+        "POST", MODELS_SELECT_PATH, json={"task_type": task, "mode": "advisory"},
+        tool_name="st models route",
+    )
 
 
 def _score(model: dict[str, Any], key: str) -> str:
@@ -155,6 +167,72 @@ def list_models(
         limit=limit,
         as_json=as_json,
     )
+
+
+def _print_task_types(policy: dict[str, Any]) -> None:
+    task_types = [str(item) for item in policy.get("task_types") or []]
+    print(f"TASK_TYPES[{len(task_types)}] policy=v{policy.get('version', '-')}")
+    print("  " + ("  ".join(task_types) if task_types else "-"))
+
+
+def _print_route(advice: dict[str, Any]) -> None:
+    effort = advice.get("effort_details")
+    effort = effort if isinstance(effort, dict) else {}
+    provenance = advice.get("provenance")
+    provenance = provenance if isinstance(provenance, dict) else {}
+    health = advice.get("catalog_health")
+    health = health if isinstance(health, dict) else {}
+    print(
+        f"ROUTE[{advice.get('task_type', '-')}] policy=v{provenance.get('policy_version', '-')} "
+        f"mode={advice.get('mode', '-')}"
+    )
+    target = f"model={advice.get('model', '-')} effort={advice.get('effort', '-')}"
+    if not advice.get("available"):
+        target = f"none available; first candidate {target}"
+    effective = effort.get("effective") or "unmapped"
+    print(f"  {target} effective={effective} ({effort.get('basis') or '-'})")
+    if provenance.get("rationale"):
+        print(f"  why={provenance['rationale']}")
+    qualified = "qualified" if advice.get("automatic_eligible") else "not qualified"
+    print(f"  automatic={qualified}: {advice.get('automatic_reason') or '-'}")
+    stale = health.get("is_stale")
+    state = "unknown" if stale is None else ("stale" if stale else "fresh")
+    print(f"  catalog={state} last_sync={str(health.get('last_sync') or '-')[:10]}")
+    raw = advice.get("candidates_checked")
+    checked = [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+    print(f"CANDIDATES[{len(checked)} checked]")
+    print_table(["model", "effort", "available", "reasons"], [
+        [
+            str(item.get("model") or "-"),
+            str(item.get("effort") or "-"),
+            "yes" if item.get("available") else "no",
+            "; ".join(str(reason) for reason in item.get("reasons") or []) or "-",
+        ]
+        for item in checked
+    ])
+
+
+@app.command("route")
+@usage(
+    surface="st.models.route",
+    cmd="st models route [--task TASK] [--json]",
+    when="read Agent Hub's model and effort advice for a task type; no --task lists task types",
+    task_types=("model-admin", "model-review"),
+    on_demand="model administration",
+    tier="reference",
+)
+def route_model(
+    task: Annotated[str | None, typer.Option("--task", help="Task type; omit to list task types.")] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the API response as JSON.")] = False,
+) -> None:
+    """Show the advised model, effort and candidate availability for a task type."""
+    payload = _select_api(task) if task else _selection_policy_api()
+    if as_json:
+        output_json(payload)
+    elif task:
+        _print_route(payload)
+    else:
+        _print_task_types(payload)
 
 
 @app.command("pull")
