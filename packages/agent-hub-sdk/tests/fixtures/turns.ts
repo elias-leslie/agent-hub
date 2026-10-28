@@ -59,3 +59,38 @@ export const cancelTurn = [
     sse({ type: 'content', seq: 2, content: 'Working on', ...routing }),
     sse({ type: 'cancel_acknowledged', seq: 3, session_id: 's-cancel' }),
 ].join('');
+
+/**
+ * A server-owned turn as the backend sends it (`connected` carries `turn_id`), cut into the part a first connection
+ * delivered and the rest a reattach replays. Written to the wire format of `backend/app/services/turn_runs.py`.
+ */
+export const ownedTurn = {
+    sessionId: 's-owned',
+    turnId: 'turn-1',
+    events: [
+        { type: 'connected', seq: 1, session_id: 's-owned', turn_id: 'turn-1', model: 'm/primary', provider: 'p' },
+        { type: 'content', seq: 2, content: 'One ', ...routing },
+        { type: 'content', seq: 3, content: 'two ', ...routing },
+        { type: 'tool_use', seq: 4, tool_id: 't1', tool_name: 'ls', tool_input: {} },
+        { type: 'tool_result', seq: 5, tool_id: 't1', tool_result: 'a b', tool_status: 'complete' },
+        { type: 'content', seq: 6, content: 'three.', ...routing },
+        { type: 'done', seq: 7, session_id: 's-owned', ...routing },
+    ],
+};
+
+/** The events with `from <= seq <= to` as SSE; `end` adds the stream's closing marker. */
+export function ownedSlice(from: number, to: number, end = false): string {
+    const body = ownedTurn.events
+        .filter((e) => e.seq >= from && e.seq <= to)
+        .map((e) => sse(e))
+        .join('');
+    return end ? `${body}data: [DONE]\n\n` : body;
+}
+
+export const interruptedReplay =
+    sse({ type: 'error', seq: 4, error: 'Turn interrupted: the backend stopped while it was running', code: 'turn_interrupted', session_id: 's-owned' }) +
+    'data: [DONE]\n\n';
+
+export const idleReplay =
+    sse({ type: 'idle', session_id: 's-owned', last_state: 'completed', turn_id: 'turn-1', ended_at: '2026-10-28T20:00:00+00:00' }) +
+    'data: [DONE]\n\n';

@@ -9,7 +9,17 @@ import {
     type TurnEvent,
     type TurnRequest,
 } from '../src';
-import { cancelTurn, errorTurn, recordedPong, retryTurn, toolTurn } from './fixtures/turns';
+import {
+    cancelTurn,
+    errorTurn,
+    idleReplay,
+    interruptedReplay,
+    ownedSlice,
+    ownedTurn,
+    recordedPong,
+    retryTurn,
+    toolTurn,
+} from './fixtures/turns';
 import { byteSlices, collect, jsonResponse, mockFetch, slices, sseResponse } from './helpers';
 
 const request: TurnRequest = {
@@ -105,7 +115,7 @@ describe('turns.stream', () => {
 
     it('throws stream_interrupted when the stream ends before a terminal event', async () => {
         const cut = toolTurn.split('data: {"type":"done"')[0]!;
-        const run = collect(clientFor(mockFetch(sseResponse([cut]))).turns.stream(request));
+        const run = collect(clientFor(mockFetch(sseResponse([cut]))).turns.stream(request, { reattach: false }));
         await expect(run).rejects.toMatchObject({ name: 'AgentHubError', code: 'stream_interrupted' });
     });
 
@@ -124,7 +134,7 @@ describe('turns.stream', () => {
         );
         const seen: string[] = [];
         const run = (async () => {
-            for await (const e of clientFor(mockFetch(broken)).turns.stream(request)) seen.push(e.type);
+            for await (const e of clientFor(mockFetch(broken)).turns.stream(request, { reattach: false })) seen.push(e.type);
         })();
         await expect(run).rejects.toMatchObject({ code: 'stream_interrupted', message: expect.stringContaining('socket hang up') });
         expect(seen).toEqual(['connected']);
@@ -261,12 +271,12 @@ describe('turns.stream connectRetry', () => {
         expect(down.requests).toHaveLength(4);
     });
 
-    it('never retries once the stream is open', async () => {
+    it('never repeats the POST once the stream is open', async () => {
         const cut = toolTurn.split('data: {"type":"done"')[0]!;
         const fetch = mockFetch(() => sseResponse([cut]));
-        await expect(collect(clientFor(fetch).turns.stream(request, { connectRetry: retry }))).rejects.toMatchObject({
-            code: 'stream_interrupted',
-        });
+        await expect(
+            collect(clientFor(fetch).turns.stream(request, { connectRetry: retry, reattach: false })),
+        ).rejects.toMatchObject({ code: 'stream_interrupted' });
         expect(fetch.requests).toHaveLength(1);
     });
 });
@@ -348,5 +358,193 @@ describe('turns.cancel', () => {
             method: 'POST',
             body: { session_id: 's1' },
         });
+    });
+});
+
+describe('turns.attach', () => {
+    const attachUrl = 'http://hub.test/api/sessions/s-owned/stream';
+
+    it('asks for the events after a seq and yields exactly those, to the end', async () => {
+        const fetch = mockFetch(sseResponse([ownedSlice(4, 7, true)]));
+        const events = await collect(clientFor(fetch).turns.attach('s-owned', { afterSeq: 3, turnId: 'turn-1' }));
+
+        expect(fetch.requests[0]).toMatchObject({ method: 'GET', url: `${attachUrl}?after_seq=3&turn_id=turn-1` });
+        expect(fetch.requests[0]!.headers.Accept).toBe('text/event-stream');
+        expect(events.map((e) => e.seq)).toEqual([4, 5, 6, 7]);
+        expect(types(events as TurnEvent[])).toEqual(['tool_use', 'tool_result', 'content', 'done']);
+    });
+
+    it('drops anything at or before afterSeq even if the server sent it', async () => {
+        const fetch = mockFetch(sseResponse([ownedSlice(1, 7, true)]));
+        const events = await collect(clientFor(fetch).turns.attach('s-owned', { afterSeq: 5 }));
+        expect(events.map((e) => e.seq)).toEqual([6, 7]);
+    });
+
+    it('defaults to the whole turn and encodes the session id', async () => {
+        const fetch = mockFetch(sseResponse([ownedSlice(1, 7, true)]));
+        const events = await collect(clientFor(fetch).turns.attach('a/b c'));
+        expect(fetch.requests[0]!.url).toBe('http://hub.test/api/sessions/a%2Fb%20c/stream?after_seq=0');
+        expect(events).toHaveLength(7);
+    });
+
+    it('yields the error event of a turn a backend restart cut off, as its last event', async () => {
+        const events = await collect(clientFor(mockFetch(sseResponse([interruptedReplay]))).turns.attach('s-owned', { afterSeq: 3 }));
+        expect(events).toEqual([expect.objectContaining({ type: 'error', seq: 4, code: 'turn_interrupted' })]);
+    });
+
+    it('yields one idle event when no turn is running', async () => {
+        const events = await collect(clientFor(mockFetch(sseResponse([idleReplay]))).turns.attach('s-owned'));
+        expect(events).toEqual([expect.objectContaining({ type: 'idle', last_state: 'completed' })]);
+    });
+
+    it('refuses to continue when the server says the turn is gone', async () => {
+        for (const [status, error] of [[404, 'http_error'], [409, 'turn_mismatch'], [410, 'turn_log_gap']] as const) {
+            const fetch = mockFetch(jsonResponse({ error, message: 'no' }, status));
+            await expect(collect(clientFor(fetch).turns.attach('s-owned'))).rejects.toMatchObject({ status });
+            expect(fetch.requests).toHaveLength(1);
+        }
+    });
+
+    it('rejects with AbortError when the signal aborts', async () => {
+        const controller = new AbortController();
+        const fetch = mockFetch((req) => sseResponse([ownedSlice(1, 2)], { hang: true, signal: req.signal }));
+        const run = (async () => {
+            for await (const _ of clientFor(fetch).turns.attach('s-owned', { signal: controller.signal })) controller.abort();
+        })();
+        expect(isAbortError(await run.catch((e: unknown) => e))).toBe(true);
+    });
+});
+
+describe('turns.stream reattach', () => {
+    const fast = { attempts: 3, initialDelayMs: 1, maxDelayMs: 2, jitter: 0 };
+    const gets = (fetch: ReturnType<typeof mockFetch>) => fetch.requests.filter((r) => r.method === 'GET');
+
+    it('picks the turn up from the last seq seen when the connection drops, without repeating the POST', async () => {
+        const fetch = mockFetch((req, call) =>
+            call === 0 ? sseResponse([ownedSlice(1, 3)]) : sseResponse([ownedSlice(1, 7, true)], { signal: req.signal }),
+        );
+        const onReattach = vi.fn();
+        const events = await collect(clientFor(fetch).turns.stream(request, { reattach: fast, onReattach }));
+
+        expect(fetch.requests.map((r) => r.method)).toEqual(['POST', 'GET']);
+        expect(fetch.requests[1]!.url).toBe('http://hub.test/api/sessions/s-owned/stream?after_seq=3&turn_id=turn-1');
+        expect(events.map((e) => e.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]); // every event once, in order
+        expect(onReattach).toHaveBeenCalledWith(expect.objectContaining({ attempt: 1, afterSeq: 3 }));
+    });
+
+    it('gives the same turn state as an unbroken stream', async () => {
+        const broken = mockFetch((_req, call) => (call === 0 ? sseResponse([ownedSlice(1, 5)]) : sseResponse([ownedSlice(6, 7, true)])));
+        const whole = mockFetch(sseResponse([ownedSlice(1, 7, true)]));
+        const a = await clientFor(broken).turns.run(request, { reattach: fast });
+        const b = await clientFor(whole).turns.run(request);
+        expect(a).toEqual(b);
+        expect(a).toMatchObject({ status: 'done', content: 'One two three.' });
+    });
+
+    it('keeps trying through network errors and 5xx, then gives up with stream_interrupted', async () => {
+        const fetch = mockFetch([
+            sseResponse([ownedSlice(1, 3)]),
+            jsonResponse({ error: 'down', message: 'down' }, 502),
+            new TypeError('fetch failed'), // and again for every try after
+        ]);
+        const error = await collect(clientFor(fetch).turns.stream(request, { reattach: fast })).catch((e: unknown) => e);
+        expect(error).toMatchObject({ code: 'stream_interrupted' });
+        expect(gets(fetch)).toHaveLength(3); // exactly the allowed attempts
+    });
+
+    it('counts only reconnects that make no progress', async () => {
+        // Each connection delivers one more event and drops: five drops with a limit of two in a row still finishes.
+        const fetch = mockFetch((_req, call) => {
+            if (call < 6) return sseResponse([ownedSlice(call + 1, call + 1)]);
+            return sseResponse([ownedSlice(7, 7, true)]);
+        });
+        const events = await collect(clientFor(fetch).turns.stream(request, { reattach: { ...fast, attempts: 2 } }));
+        expect(events.map((e) => e.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    });
+
+    it('does not reattach when the server refuses (turn gone), and surfaces that refusal', async () => {
+        const fetch = mockFetch((_req, call) =>
+            call === 0 ? sseResponse([ownedSlice(1, 3)]) : jsonResponse({ error: 'turn_mismatch', message: 'other turn' }, 409),
+        );
+        const error = await collect(clientFor(fetch).turns.stream(request, { reattach: fast })).catch((e: unknown) => e);
+        expect(error).toMatchObject({ status: 409, code: 'turn_mismatch' });
+        expect(gets(fetch)).toHaveLength(1);
+    });
+
+    it('ends with the interrupted error event when the backend restarted under the turn', async () => {
+        const fetch = mockFetch((_req, call) => (call === 0 ? sseResponse([ownedSlice(1, 3)]) : sseResponse([interruptedReplay])));
+        const events = await collect(clientFor(fetch).turns.stream(request, { reattach: fast }));
+        expect(events.at(-1)).toMatchObject({ type: 'error', code: 'turn_interrupted', seq: 4 });
+        const state = await clientFor(fetch).turns.run(request, { reattach: fast }).catch((e: unknown) => e);
+        expect(state).toMatchObject({ code: 'turn_error' });
+    });
+
+    it('fails with turn_not_running when the server has no turn and no log any more', async () => {
+        const fetch = mockFetch((_req, call) => (call === 0 ? sseResponse([ownedSlice(1, 3)]) : sseResponse([idleReplay])));
+        const error = await collect(clientFor(fetch).turns.stream(request, { reattach: fast })).catch((e: unknown) => e);
+        expect(error).toMatchObject({ code: 'turn_not_running', details: { last_state: 'completed' } });
+    });
+
+    it('does not reattach before the turn is known (no connected event yet)', async () => {
+        const fetch = mockFetch(sseResponse(['']));
+        const error = await collect(clientFor(fetch).turns.stream({ ...request, session_id: 'old' }, { reattach: fast })).catch((e: unknown) => e);
+        expect(error).toMatchObject({ code: 'stream_interrupted' });
+        expect(fetch.requests).toHaveLength(1);
+    });
+
+    it('can be switched off, and with zero attempts reconnects never', async () => {
+        for (const reattach of [false, { attempts: 0 }] as const) {
+            const fetch = mockFetch(sseResponse([ownedSlice(1, 3)]));
+            await expect(collect(clientFor(fetch).turns.stream(request, { reattach }))).rejects.toMatchObject({ code: 'stream_interrupted' });
+            expect(fetch.requests).toHaveLength(1);
+        }
+    });
+
+    it('stops waiting to reconnect when the signal aborts', async () => {
+        const controller = new AbortController();
+        const fetch = mockFetch(sseResponse([ownedSlice(1, 3)]));
+        const slow = { attempts: 3, initialDelayMs: 5000, jitter: 0 };
+        const run = collect(
+            clientFor(fetch).turns.stream(request, {
+                signal: controller.signal,
+                reattach: slow,
+                onReattach: () => controller.abort(),
+            }),
+        );
+        expect(isAbortError(await run.catch((e: unknown) => e))).toBe(true);
+        expect(gets(fetch)).toHaveLength(0);
+    });
+
+    it('turns.attach reconnects the same way', async () => {
+        const fetch = mockFetch((_req, call) => (call === 0 ? sseResponse([ownedSlice(4, 5)]) : sseResponse([ownedSlice(1, 7, true)])));
+        const events = await collect(clientFor(fetch).turns.attach('s-owned', { afterSeq: 3, reattach: fast }));
+        expect(events.map((e) => e.seq)).toEqual([4, 5, 6, 7]);
+        expect(fetch.requests[1]!.url).toBe('http://hub.test/api/sessions/s-owned/stream?after_seq=5');
+    });
+});
+
+describe('turn ownership contract', () => {
+    it('keeps a turn running when the client aborts, and a later attach gets the rest', async () => {
+        // The backend keeps one log per turn; the first client leaves after seq 3, a second one attaches after 3.
+        const controller = new AbortController();
+        const fetch = mockFetch((req) =>
+            req.method === 'POST'
+                ? sseResponse([ownedSlice(1, 3)], { hang: true, signal: req.signal })
+                : sseResponse([ownedSlice(4, 7, true)]),
+        );
+        const client = clientFor(fetch);
+        const first: number[] = [];
+        const left = (async () => {
+            for await (const event of client.turns.stream(request, { signal: controller.signal })) {
+                first.push(event.seq);
+                if (event.seq === 3) controller.abort();
+            }
+        })();
+        expect(isAbortError(await left.catch((e: unknown) => e))).toBe(true);
+
+        const rest = await collect(client.turns.attach('s-owned', { afterSeq: Math.max(...first) }));
+        expect([...first, ...rest.map((e) => e.seq)]).toEqual([1, 2, 3, 4, 5, 6, 7]);
+        expect(rest.at(-1)).toMatchObject({ type: 'done' });
+        expect(fetch.requests.map((r) => r.method)).toEqual(['POST', 'GET']); // abort did not trigger a cancel call
     });
 });

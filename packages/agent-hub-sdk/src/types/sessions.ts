@@ -53,6 +53,10 @@ export interface SessionSummary {
     provider: string;
     model: string;
     status: string;
+    /** `running` while a chat turn is in flight for the session on the server, else `idle`. */
+    turn_state?: 'running' | 'idle';
+    /** Where the running turn is: `waiting_for_model`, `thinking`, `responding`, `running_tool[:name]` or `retrying`. */
+    turn_phase?: string | null;
     agent_slug?: string | null;
     session_type?: string;
     parent_session_id?: string | null;

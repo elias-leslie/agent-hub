@@ -110,6 +110,8 @@ export interface ConnectedEvent extends Seq {
     session_id: string;
     model?: string;
     provider?: string;
+    /** The server-side turn this stream belongs to; pass it as `turnId` to `turns.attach` to be sure of the same turn. */
+    turn_id?: string;
 }
 
 export interface ContentEvent extends Seq, TurnRouting {
@@ -181,6 +183,22 @@ export interface TurnErrorEvent extends Seq {
     model?: string;
     provider?: string;
     session_id?: string;
+    /** `turn_interrupted` when the backend stopped while the turn was running; the turn did not finish. */
+    code?: string;
+}
+
+/**
+ * Only from `turns.attach`: no turn is running and the server no longer holds the last one's events. It carries no
+ * `seq`. `last_state` is how that turn ended (`completed`, `error`, `cancelled`) or `none`; read the session for
+ * the stored result.
+ */
+export interface IdleEvent {
+    type: 'idle';
+    session_id: string;
+    last_state: string;
+    turn_id?: string | null;
+    ended_at?: string | null;
+    seq?: undefined;
 }
 
 export type TurnEvent =

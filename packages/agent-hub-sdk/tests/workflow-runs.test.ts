@@ -313,6 +313,7 @@ describe('workflowRuns requests', () => {
         const definition = { goal: 'g', project_id: 'p', steps: [{ key: 'a', instructions: 'do', agent_slug: 'worker' }] };
         await runs.create(definition);
         await runs.list({ limit: 10, offset: 20 });
+        await runs.list({ launched_by: 'aico-1', coordinator: 'c x' });
         await runs.get('run 1');
         await runs.revise('run 1', { max_concurrent_steps: 2 });
         await runs.addSteps('run 1', { steps: definition.steps, after: 'a' });
@@ -326,6 +327,7 @@ describe('workflowRuns requests', () => {
         expect(fetch.requests.map(sent)).toEqual([
             ['POST', '/api/workflow-runs', definition],
             ['GET', '/api/workflow-runs?limit=10&offset=20', undefined],
+            ['GET', '/api/workflow-runs?launched_by=aico-1&coordinator=c+x', undefined],
             ['GET', '/api/workflow-runs/run%201', undefined],
             ['PATCH', '/api/workflow-runs/run%201', { max_concurrent_steps: 2 }],
             ['POST', '/api/workflow-runs/run%201/steps', { steps: definition.steps, after: 'a' }],

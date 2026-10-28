@@ -211,6 +211,10 @@ export interface ListRunsParams {
     /** 1 to 200; default 50. */
     limit?: number;
     offset?: number;
+    /** Only runs launched by this session (the run's `launched_by`). */
+    launched_by?: string;
+    /** Only runs of this coordinator (the run's `coordinator`). */
+    coordinator?: string;
 }
 
 /** Result of resume / cancel / cancel step: the run's new state. */

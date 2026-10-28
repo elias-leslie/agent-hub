@@ -2,6 +2,7 @@
 export type ClientErrorCode =
     | 'network_error'
     | 'stream_interrupted'
+    | 'turn_not_running'
     | 'invalid_response'
     | 'turn_error'
     | 'http_error';

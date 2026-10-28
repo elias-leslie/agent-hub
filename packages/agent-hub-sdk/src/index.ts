@@ -8,8 +8,17 @@ export type { FetchLike, HeaderSource } from './http';
 export { SseParser } from './sse';
 export { applyTurnEvent, createTurnState } from './turn-state';
 export type { ToolCall, TurnState, TurnStatus } from './turn-state';
-export { isTerminalTurnEvent } from './turns';
-export type { CancelResult, ConnectRetry, RunOptions, StreamOptions, StreamWarning, TurnsApi } from './turns';
+export { DEFAULT_REATTACH, isTerminalTurnEvent } from './turns';
+export type {
+    AttachOptions,
+    CancelResult,
+    ConnectRetry,
+    ReattachPolicy,
+    RunOptions,
+    StreamOptions,
+    StreamWarning,
+    TurnsApi,
+} from './turns';
 
 export type { SessionsApi } from './sessions';
 export type { AgentsApi, ModelsApi } from './catalog';

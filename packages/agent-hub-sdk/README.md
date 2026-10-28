@@ -40,13 +40,31 @@ for await (const event of hub.turns.stream(
 
 Events are a typed union (`connected`, `content`, `thinking`, `tool_use`, `tool_start`, `tool_result`, `turn_retry`,
 `cancel_acknowledged`, `done`, `error`), deduplicated by `seq`. The iterator ends after the first terminal event
-(`done`, `error`, `cancel_acknowledged`) and throws `stream_interrupted` if the connection ends before one. Leaving
-the loop closes the connection.
+(`done`, `error`, `cancel_acknowledged`). Leaving the loop closes only this client's connection: the server owns the
+turn and keeps running it.
 
 To get the finished turn instead, or to drive a UI, use `turns.run(request, { onEvent })`, or fold events yourself
 with `createTurnState()` / `applyTurnEvent(state, event)` (it handles `turn_retry` voiding the interrupted model
-turn's partial output). `connectRetry: { attempts: 3 }` retries only the connect step (network, 5xx, 429); an open
-stream is never retried because the backend cannot resume a turn.
+turn's partial output). `connectRetry: { attempts: 3 }` retries only the connect step (network, 5xx, 429).
+
+## Reattach
+
+A turn keeps running when its client goes away. `turns.stream` reattaches by itself after a dropped connection,
+from the last `seq` it saw, with bounded tries (`reattach: { attempts, initialDelayMs, maxDelayMs, jitter }`,
+default `DEFAULT_REATTACH`; `reattach: false` turns it off; `onReattach` reports each try). If every try fails it
+throws `stream_interrupted` with the last error as `cause`. A refused reattach (404, 409, 410) is thrown at once.
+
+To join a turn yourself, for example from another client or after a restart of the app:
+
+```ts
+for await (const event of hub.turns.attach(sessionId, { afterSeq: lastSeq, signal })) {
+  if (event.type === 'idle') break; // no turn is running; event.last_state says how the last one ended
+}
+```
+
+`attach` replays the events after `afterSeq`, follows the turn live and ends at its terminal event. Several clients
+see the same stream. A turn cut off by a backend restart ends with `error` code `turn_interrupted`. A session's
+`turn_state` (`running` | `idle`) and `turn_phase` come with `sessions.get/list`.
 
 ## Cancel
 
@@ -83,7 +101,7 @@ if (outcome === 'needs_owner') {
 `'step:<key>'`. Outcomes: `completed`, `failed`, `cancelled`, `needs_owner` (any entry in the pause's `waiting` map
 counts; a usage-limit wait that clears itself does not), `step_done`, `step_ended`, `changed`.
 
-The rest of the surface: `workflowRuns.list/get/revise/addSteps/reviseStep/removeStep/cancel/cancelStep`,
+The rest of the surface: `workflowRuns.list` (filters `launched_by`, `coordinator`), `workflowRuns.get/revise/addSteps/reviseStep/removeStep/cancel/cancelStep`,
 `sessions.create/get/list/close/messages/events`, `models.list()`, `agents.list()`, and
 `events.subscribe(handler, { sessionIds, eventTypes })` for the owner-only live WebSocket (reconnects by default;
 browsers cannot send headers on a WebSocket, so there it relies on same-origin access).
