@@ -4,12 +4,15 @@ Every harness (and acceptance command) runs in its own session and process group
 pid, process group and start time (``/proc/<pid>/stat``); a later sweep may only signal a recorded group after it has
 confirmed the pid still belongs to that start time, so a recycled pid is never signalled. A group whose leader is
 already gone is only touched when its members carry the attempt's marker in their environment (the kernel keeps a
-process-group id from being reused while any member lives). Nothing here matches processes by name.
+process-group id from being reused while any member lives). Tools a harness starts often leave its group (a shell
+tool of its own session); they inherit the marker too, so after the group is stopped every process still carrying the
+attempt's marker is stopped as well. Nothing here matches processes by name.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -181,6 +184,58 @@ async def _wait_gone(pgid: int, seconds: float) -> bool:
     return True
 
 
+def _marked(marker: str) -> list[tuple[int, int, int]]:
+    """``(pid, pgid, start_time)`` of the live processes carrying ``marker`` in their environment, except this one."""
+
+    found: list[tuple[int, int, int]] = []
+    for entry in os.listdir(PROC):
+        if not entry.isdigit() or int(entry) == os.getpid():
+            continue
+        stat = read_stat(int(entry))
+        if stat is not None and stat.state != "Z" and _carries_marker(int(entry), marker):
+            found.append((int(entry), stat.pgrp, stat.start_time))
+    return found
+
+
+def _signal_marked(found: list[tuple[int, int, int]], sig: signal.Signals) -> None:
+    for pid, _pgid, start_time in found:
+        stat = read_stat(pid)
+        if stat is None or stat.start_time != start_time:  # gone, or the pid now belongs to another process
+            continue
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, sig)
+
+
+async def stop_marked(marker: str, grace: float) -> list[dict[str, Any]]:
+    """Stop what the attempt's process groups did not cover: processes that carry its marker but left the group.
+
+    SIGTERM, then SIGKILL after ``grace`` seconds (``grace`` 0 kills at once). Each result is
+    ``{pid, pgid, recovery}`` with ``recovery`` ``terminated``, ``killed`` or ``survived``.
+    """
+
+    found = await asyncio.to_thread(_marked, marker)
+    if not found:
+        return []
+    deadline = time.monotonic() + grace
+    outcome = "terminated"
+    if grace > 0:
+        await asyncio.to_thread(_signal_marked, found, signal.SIGTERM)
+        while await asyncio.to_thread(_marked, marker) and time.monotonic() < deadline:
+            await asyncio.sleep(POLL_SECONDS)
+    left = await asyncio.to_thread(_marked, marker)
+    if left:
+        outcome = "killed"
+        await asyncio.to_thread(_signal_marked, left, signal.SIGKILL)
+        deadline = time.monotonic() + max(grace, 1.0)
+        while await asyncio.to_thread(_marked, marker) and time.monotonic() < deadline:
+            await asyncio.sleep(POLL_SECONDS)
+    survivors = {pid for pid, _, _ in await asyncio.to_thread(_marked, marker)}
+    return [
+        {"pid": pid, "pgid": pgid, "recovery": "survived" if pid in survivors else outcome}
+        for pid, pgid, _ in found
+    ]
+
+
 async def stop_group(identity: ProcessIdentity, marker: str | None, grace: float) -> str:
     """SIGTERM the recorded group, SIGKILL it after ``grace`` seconds; returns what happened.
 
@@ -222,13 +277,20 @@ class TrackedProcess:
         """End the whole group (the child and everything it started) and reap the child."""
 
         verdict = await self._act(lambda i: stop_group(i, self.marker, grace))
+        await self._sweep(grace)
         await self.reap()
         return verdict
 
     async def kill(self) -> str:
         verdict = await self._act(lambda i: kill_group(i, self.marker))
+        await self._sweep(0)
         await self.reap()
         return verdict
+
+    async def _sweep(self, grace: float) -> None:
+        # Children of the process that left its group; they carry the same marker.
+        if self.marker:
+            await stop_marked(self.marker, grace)
 
     async def _act(self, action: Callable[[ProcessIdentity], Awaitable[str]]) -> str:
         if self.identity is None:

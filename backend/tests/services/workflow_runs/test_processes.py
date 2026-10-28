@@ -23,6 +23,7 @@ from app.services.workflow_runs.processes import (
     read_stat,
     start_tracked,
     stop_group,
+    stop_marked,
 )
 
 # A leader and a grandchild; the grandchild's pid is printed. With IGNORE the grandchild ignores SIGTERM.
@@ -191,3 +192,45 @@ async def test_a_grandchild_holding_the_output_pipe_does_not_turn_a_finished_com
     assert (result["timed_out"], result["exit_code"], result["passed"]) == (False, 0, True)
     assert result["output_tail"] == "checked" and result["duration_s"] < 10
     assert await gone(int((tmp_path / "gc.pid").read_text()), within=3)
+
+
+# A harness whose tool runs in a session of its own (what a shell tool does): it is outside the harness's group.
+DETACHED = (
+    "import json, subprocess, sys, time\n"
+    "child = subprocess.Popen(['sleep', '300'], start_new_session=True)\n"
+    "print(json.dumps({'child': child.pid}), flush=True)\n"
+    "time.sleep(300)\n"
+)
+
+
+async def test_a_tool_that_left_the_harness_group_is_stopped_by_the_attempt_marker() -> None:
+    tracker = ProcessTracker("attempt-detached")
+    token = current_tracker.set(tracker)
+    try:
+        tracked = await start_tracked(sys.executable, "-c", DETACHED, kind="harness", env={"PATH": os.environ["PATH"]})
+    finally:
+        current_tracker.reset(token)
+    assert tracked.process.stdout is not None
+    tool = json.loads(await tracked.process.stdout.readline())["child"]
+    stat = read_stat(tool)
+    assert stat is not None and stat.pgrp != tracked.process.pid  # not covered by the harness's group
+    assert await tracker.stop_all(2) == ["terminated"]
+    assert await gone(tracked.process.pid, tool, within=5)
+
+
+async def test_only_processes_carrying_the_marker_are_swept() -> None:
+    ours = subprocess.Popen(
+        ["sleep", "300"], start_new_session=True, env={**os.environ, MARKER_ENV: "attempt-sweep"}
+    )
+    other = subprocess.Popen(["sleep", "300"], start_new_session=True)
+    try:
+        await asyncio.sleep(0.2)
+        result = await stop_marked("attempt-sweep", 0)
+        assert [(r["pid"], r["recovery"]) for r in result] == [(ours.pid, "killed")]
+        assert await gone(ours.pid, within=5)
+        assert alive(other.pid)
+        assert await stop_marked("attempt-sweep", 0) == []
+    finally:
+        for proc in (ours, other):
+            proc.kill()
+            proc.wait()

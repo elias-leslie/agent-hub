@@ -52,7 +52,7 @@ from .policy import (
     pause_reason,
     usage_limit_cooldown,
 )
-from .processes import ProcessIdentity, ProcessTracker, current_tracker, stop_group
+from .processes import ProcessIdentity, ProcessTracker, current_tracker, stop_group, stop_marked
 from .schemas import CancelRequest, OwnerDecision, RunDefinition
 from .settings import get_workflow_run_settings
 from .usage import cost_of, record_attempt_cost, usage_totals
@@ -1250,6 +1250,8 @@ async def _stop_orphans(attempt: Session | None, grace: float) -> list[dict[str,
         identity = ProcessIdentity.from_dict(entry)
         outcome = "unrecorded" if identity is None else await stop_group(identity, attempt.id, grace)
         results.append({**entry, "recovery": outcome})
+    # What the harness started outside its group (a tool in a session of its own) carries the attempt's marker.
+    results += [{"kind": "tool_process", **found} for found in await stop_marked(attempt.id, grace)]
     return results
 
 
