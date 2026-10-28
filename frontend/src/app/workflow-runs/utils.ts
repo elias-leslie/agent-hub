@@ -128,6 +128,8 @@ export function pauseExplanation(
       const reset = formatResetTime(pause.resume_after ?? undefined)
       return `${step} is waiting for a usage limit to reset${reset ? ` at ${reset}` : ''}. It resumes by itself after that.`
     }
+    case 'usage_limit_resume_limit':
+      return `${step} has waited out its usage limit as many times as allowed. It is paused for your decision.`
     case 'owner_only_category':
       return `${step} was refused${category}. This category is yours to route, so the run stopped.`
     case 'refusal_threshold':
@@ -169,4 +171,14 @@ export function attemptDurationMs(attempt: WorkflowAttempt): number | null {
     new Date(attempt.finished_at).getTime() -
     new Date(attempt.started_at).getTime()
   return Number.isFinite(ms) && ms >= 0 ? ms : null
+}
+
+/** "3 of 12" for a count against its cap; just the count when the cap is unknown. */
+export function ofLimit(count: number, limit: number | undefined): string {
+  return limit === undefined ? String(count) : `${count} of ${limit}`
+}
+
+/** A count that has used all of its cap is worth a second look. */
+export function atLimit(count: number, limit: number | undefined): boolean {
+  return limit !== undefined && limit > 0 && count >= limit
 }

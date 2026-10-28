@@ -274,6 +274,67 @@ describe('workflow run detail', () => {
     )
   })
 
+  it('shows attempts against their caps and the acceptance checks the runner ran', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        steps: [
+          step({
+            status: 'failed',
+            attempts: 3,
+            attempt_limit: 3,
+            acceptance: [{ cmd: 'make test', timeout_s: null }],
+            acceptance_failures: 2,
+            usage_limit_resumes: 1,
+            restarts: 1,
+            effort: 'low',
+            attempt_history: [
+              attempt({
+                status: 'failed',
+                decision: { action: 'retry', reason: 'acceptance_failed' },
+                acceptance: [
+                  {
+                    cmd: 'make test',
+                    exit_code: 2,
+                    timed_out: false,
+                    duration_s: 1.5,
+                    output_tail: 'FAILED test_export',
+                    passed: false,
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    const limits = await screen.findByTestId('step-limits')
+    expect(limits).toHaveTextContent(
+      'Attempt 3 of 3 · acceptance retries 2 of 2 · usage-limit resumes 1 of 3 · restarts 1 of 2 · effort low',
+    )
+    expect(screen.getByTestId('run-limits')).toHaveTextContent(
+      '12 attempts · 3 usage-limit resumes · 2 acceptance retries · 2 restarts',
+    )
+    const checks = screen.getByTestId('acceptance')
+    expect(checks).toHaveTextContent('Failed (exit 2)')
+    expect(checks).toHaveTextContent('make test')
+    expect(checks).toHaveTextContent('FAILED test_export')
+  })
+
+  it('shows the plain attempt count when the run reports no limits', async () => {
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        limits: undefined,
+        steps: [step({ attempt_limit: undefined, attempts: 2 })],
+      }),
+    )
+    mount(<WorkflowRunPage />)
+    expect(await screen.findByTestId('step-limits')).toHaveTextContent(
+      'Attempt 2',
+    )
+    expect(screen.queryByTestId('run-limits')).toBeNull()
+  })
+
   it('explains a paused run and sends the owner decision', async () => {
     vi.mocked(fetchWorkflowRun).mockResolvedValue(
       run({

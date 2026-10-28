@@ -1,6 +1,7 @@
 import { formatRelativeTime } from '@/app/sessions/utils'
-import type { WorkflowStepView } from '@/lib/api/workflow-runs'
-import { modelLabel, STEP_STATUS_LABEL } from '../utils'
+import type { RunLimits, WorkflowStepView } from '@/lib/api/workflow-runs'
+import { cn } from '@/lib/utils'
+import { atLimit, modelLabel, ofLimit, STEP_STATUS_LABEL } from '../utils'
 import { AttemptCard } from './AttemptCard'
 import { StatusDot } from './StatusDot'
 
@@ -44,7 +45,63 @@ function HandoffNote({ step }: { step: WorkflowStepView }) {
   )
 }
 
-export function StepCard({ step }: { step: WorkflowStepView }) {
+/** Attempts and retries against the caps the runner enforces, so a loop that stops is not a surprise. */
+function LimitLine({
+  step,
+  limits,
+}: {
+  step: WorkflowStepView
+  limits: RunLimits | undefined
+}) {
+  const parts: { text: string; hot: boolean }[] = [
+    {
+      text: `Attempt ${ofLimit(step.attempts, step.attempt_limit)}`,
+      hot: atLimit(step.attempts, step.attempt_limit),
+    },
+  ]
+  const failures = step.acceptance_failures ?? 0
+  if ((step.acceptance?.length ?? 0) > 0 || failures > 0) {
+    parts.push({
+      text: `acceptance retries ${ofLimit(failures, limits?.acceptance_retry_limit)}`,
+      hot: atLimit(failures, limits?.acceptance_retry_limit),
+    })
+  }
+  const resumes = step.usage_limit_resumes ?? 0
+  if (resumes > 0) {
+    parts.push({
+      text: `usage-limit resumes ${ofLimit(resumes, limits?.max_usage_limit_resumes)}`,
+      hot: atLimit(resumes, limits?.max_usage_limit_resumes),
+    })
+  }
+  if (step.restarts > 0) {
+    parts.push({
+      text: `restarts ${ofLimit(step.restarts, limits?.restart_limit)}`,
+      hot: atLimit(step.restarts, limits?.restart_limit),
+    })
+  }
+  if (step.effort) parts.push({ text: `effort ${step.effort}`, hot: false })
+  return (
+    <p
+      className="mt-1 font-mono text-[12px] tabular-nums text-slate-400"
+      data-testid="step-limits"
+    >
+      {parts.map((part, i) => (
+        <span key={part.text}>
+          {i > 0 ? ' · ' : ''}
+          <span className={cn(part.hot && 'text-amber-300')}>{part.text}</span>
+        </span>
+      ))}
+    </p>
+  )
+}
+
+export function StepCard({
+  step,
+  limits,
+}: {
+  step: WorkflowStepView
+  limits?: RunLimits
+}) {
   const decision = step.owner_decision
   return (
     <li
@@ -75,12 +132,7 @@ export function StepCard({ step }: { step: WorkflowStepView }) {
           Model chain: {step.chain.map(modelLabel).join(' then ')}
         </p>
       ) : null}
-      {step.restarts > 0 ? (
-        <p className="mt-1 text-[12px] text-amber-300">
-          Restarted {step.restarts} {step.restarts === 1 ? 'time' : 'times'}{' '}
-          after a stalled attempt
-        </p>
-      ) : null}
+      {step.attempts > 0 ? <LimitLine step={step} limits={limits} /> : null}
       {decision ? (
         <p className="mt-1 text-[12px] text-slate-300">
           You chose to {decision.action}

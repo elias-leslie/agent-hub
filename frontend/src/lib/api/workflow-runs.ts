@@ -67,6 +67,32 @@ export interface Hop {
   kind: string
 }
 
+/** One acceptance command the runner ran after the executor finished (exit 0 passes). */
+export interface AcceptanceResult {
+  cmd: string
+  /** null when the command timed out or could not start. */
+  exit_code: number | null
+  timed_out: boolean
+  duration_s: number
+  output_tail: string
+  passed: boolean
+}
+
+export interface AcceptanceCommand {
+  cmd: string
+  timeout_s: number | null
+}
+
+/** The caps the runner enforces; each is a per-step count unless noted. */
+export interface RunLimits {
+  max_total_attempts: number
+  max_usage_limit_resumes: number
+  acceptance_retry_limit: number
+  restart_limit: number
+  /** Refusals per category across the whole run. */
+  refusal_pause_threshold: number
+}
+
 export interface WorkflowAttempt {
   session_id: string
   attempt: number
@@ -86,6 +112,8 @@ export interface WorkflowAttempt {
   native_session_id: string | null
   transcript_path: string | null
   context_status: string | null
+  /** null when the step has no acceptance commands (or the attempt never got that far). */
+  acceptance?: AcceptanceResult[] | null
   executor: string | null
   started_at: string | null
   finished_at: string | null
@@ -114,7 +142,14 @@ export interface WorkflowStepView {
   agent_slug: string
   chain: string[] | null
   attempts: number
+  /** Most attempts the step may use (the run cap, lowered by the step's own max_attempts). */
+  attempt_limit?: number
   restarts: number
+  usage_limit_resumes?: number
+  acceptance_failures?: number
+  acceptance?: AcceptanceCommand[]
+  /** The step's own thinking-level override; null when the agent's applies. */
+  effort?: string | null
   chosen_model: string | null
   answered_by: string[] | null
   hops: Hop[]
@@ -150,6 +185,7 @@ export interface WorkflowRunDetail {
   pause: RunPause | null
   failure: string | null
   refusals: Record<string, number>
+  limits?: RunLimits
   created_at: string | null
   last_activity_at: string | null
   steps: WorkflowStepView[]

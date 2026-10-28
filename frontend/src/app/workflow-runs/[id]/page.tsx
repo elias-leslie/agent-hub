@@ -69,6 +69,19 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           ? ` · started ${new Date(run.created_at).toLocaleString()}`
           : ''}
       </p>
+      {run.limits ? (
+        <p
+          className="font-mono text-[12px] tabular-nums text-slate-500"
+          data-testid="run-limits"
+        >
+          Limits per step: {run.limits.max_total_attempts} attempts ·{' '}
+          {run.limits.max_usage_limit_resumes} usage-limit resumes ·{' '}
+          {run.limits.acceptance_retry_limit} acceptance retries ·{' '}
+          {run.limits.restart_limit} restarts
+          {' · '}
+          {run.limits.refusal_pause_threshold} refusals per category in the run
+        </p>
+      ) : null}
       {refusals.length > 0 ? (
         <p className="text-[12px] text-amber-300">
           Refusals so far:{' '}
@@ -163,7 +176,7 @@ export default function WorkflowRunPage() {
                 data-testid="step-list"
               >
                 {run.steps.map((step) => (
-                  <StepCard key={step.key} step={step} />
+                  <StepCard key={step.key} step={step} limits={run.limits} />
                 ))}
               </ol>
             </>
