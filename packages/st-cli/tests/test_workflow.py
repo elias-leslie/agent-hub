@@ -222,18 +222,18 @@ def test_cancel_run_or_step_and_resume_actions() -> None:
         assert request.call_count == calls
 
 
-def test_list_mine_filters_by_session_and_needs_the_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    rows = {"runs": [{"id": "r1", "state": "running", "launched_by": "aico-widget-1", "goal": "mine", "step_counts": {"running": 1}},
-                     {"id": "r2", "state": "completed", "launched_by": "other", "goal": "theirs", "step_counts": {}}]}
+def test_list_mine_asks_the_server_to_filter_by_session_and_needs_the_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = {"runs": [{"id": "r1", "state": "running", "launched_by": "aico-widget-1", "goal": "mine", "step_counts": {"running": 1}}]}
     monkeypatch.delenv("AICO_SESSION_ID", raising=False)
     with patch.object(workflow, "agent_hub_request", return_value=rows) as request:
         assert runner.invoke(workflow.app, ["list", "--mine"]).exit_code == 2
         everyone = runner.invoke(workflow.app, ["list"])
-        assert "r1" in everyone.output and "r2" in everyone.output
+        assert "r1" in everyone.output
+        assert "launched_by" not in request.call_args.kwargs["params"]
         monkeypatch.setenv("AICO_SESSION_ID", "aico-widget-1")
-        mine = runner.invoke(workflow.app, ["list", "--mine"])
-    assert "r1" in mine.output and "r2" not in mine.output
-    assert request.call_args.kwargs["params"]["limit"] == 200
+        mine = runner.invoke(workflow.app, ["list", "--mine", "--limit", "5"])
+    assert "r1" in mine.output
+    assert request.call_args.kwargs["params"] == {"limit": 5, "offset": 0, "launched_by": "aico-widget-1"}
 
 
 # --- text view --------------------------------------------------------------------------------------------------

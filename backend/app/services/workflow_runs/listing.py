@@ -15,17 +15,29 @@ from .usage import usage_totals
 _FLAGGED_OUTCOMES = ("refused", "substituted", "usage_limit", "interrupted")
 
 
-async def list_runs(db: AsyncSession, *, limit: int = 50, offset: int = 0) -> dict[str, Any]:
-    """Newest runs first, with step counts by status and totals over the runs' attempts."""
+async def list_runs(
+    db: AsyncSession,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    launched_by: str | None = None,
+    coordinator: str | None = None,
+) -> dict[str, Any]:
+    """Newest runs first, with step counts by status and totals over the runs' attempts.
 
-    total = (
-        await db.execute(select(func.count()).select_from(Session).where(Session.session_type == "workflow"))
-    ).scalar_one()
+    ``launched_by`` and ``coordinator`` keep only runs recorded with exactly that value.
+    """
+
+    conditions = [Session.session_type == "workflow"]
+    for field, wanted in (("launched_by", launched_by), ("coordinator", coordinator)):
+        if wanted:
+            conditions.append(Session.provider_metadata["workflow"][field].as_string() == wanted)
+    total = (await db.execute(select(func.count()).select_from(Session).where(*conditions))).scalar_one()
     runs = (
         (
             await db.execute(
                 select(Session)
-                .where(Session.session_type == "workflow")
+                .where(*conditions)
                 .order_by(Session.created_at.desc(), Session.id)
                 .limit(limit)
                 .offset(offset)

@@ -42,7 +42,7 @@ FRONTEND_URL_ENV = "AGENT_HUB_FRONTEND_URL"
 FRONTEND_PORT_ENV = "AGENT_HUB_FRONTEND_PORT"
 # Host default for the page address, like the host default for the API address: the web app's port on the API's host.
 DEFAULT_FRONTEND_PORT = 3003
-LIST_FETCH_MAX = 200  # the API's page limit; --mine filters this many recent runs
+LIST_FETCH_MAX = 200  # the API's page limit
 
 # Step fields a revision may set, and how --set reads their value.
 _TEXT_FIELDS = ("instructions", "agent_slug", "model_override", "executor", "level", "effort")
@@ -390,10 +390,11 @@ def list_runs(
     session = os.environ.get(SESSION_ENV)
     if mine and not session:
         raise _fail(f"--mine needs {SESSION_ENV}, which is not set in this shell")
-    result = _api("GET", WORKFLOW_RUNS_PATH, params={"limit": LIST_FETCH_MAX if mine else limit, "offset": offset}, retries=3)
-    rows = [r for r in result.get("runs") or [] if isinstance(r, dict)]
+    params: dict[str, Any] = {"limit": limit, "offset": offset}
     if mine:
-        rows = [r for r in rows if r.get("launched_by") == session][:limit]
+        params["launched_by"] = session
+    result = _api("GET", WORKFLOW_RUNS_PATH, params=params, retries=3)
+    rows = [r for r in result.get("runs") or [] if isinstance(r, dict)]
     if as_json:
         output_json({**result, "runs": rows})
         return

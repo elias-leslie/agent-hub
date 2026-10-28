@@ -115,8 +115,10 @@ async def list_workflow_runs(
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    launched_by: Annotated[str | None, Query(max_length=200, description="Only runs launched by this session")] = None,
+    coordinator: Annotated[str | None, Query(max_length=200, description="Only runs of this coordinator")] = None,
 ) -> dict[str, Any]:
-    return await list_runs(db, limit=limit, offset=offset)
+    return await list_runs(db, limit=limit, offset=offset, launched_by=launched_by, coordinator=coordinator)
 
 
 @router.get("/{run_id}")

@@ -655,6 +655,36 @@ async def test_list_runs_newest_first_with_counts_usage_and_served_models(
     assert [r["id"] for r in page["runs"]] == [first] and page["total"] == 2
 
 
+async def test_list_runs_filters_by_launched_by_and_coordinator(pg_db, repo, world_factory) -> None:
+    from app.services.workflow_runs.listing import list_runs
+
+    world = world_factory({})
+    chains(world)
+    ids = {}
+    for key, launched_by, coordinator in (
+        ("a", "aico-1", "coord-x"),
+        ("b", "aico-2", "coord-x"),
+        ("c", None, None),
+    ):
+        ids[key], _ = await create_run(
+            pg_db,
+            example(
+                "plan-implement-review-fix", repo, request_id=key, launched_by=launched_by, coordinator=coordinator
+            ),
+            deps=world.deps,
+        )
+
+    async def listed(**filters):
+        result = await list_runs(pg_db, **filters)
+        return {r["id"] for r in result["runs"]}, result["total"]
+
+    assert await listed(launched_by="aico-1") == ({ids["a"]}, 1)
+    assert await listed(coordinator="coord-x") == ({ids["a"], ids["b"]}, 2)
+    assert await listed(launched_by="aico-2", coordinator="coord-x") == ({ids["b"]}, 1)
+    assert await listed(launched_by="aico-1", coordinator="other") == (set(), 0)
+    assert (await listed())[1] == 3
+
+
 async def test_workflow_runs_endpoints_list_and_paginate(pg_db, repo, world_factory) -> None:
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
@@ -678,6 +708,8 @@ async def test_workflow_runs_endpoints_list_and_paginate(pg_db, repo, world_fact
         empty = (await client.get("/workflow-runs", params={"offset": 5})).json()
         assert empty["runs"] == [] and empty["total"] == 1
         assert (await client.get("/workflow-runs", params={"limit": 0})).status_code == 422
+        none = (await client.get("/workflow-runs", params={"launched_by": "nobody"})).json()
+        assert none["runs"] == [] and none["total"] == 0
         assert (await client.get(f"/workflow-runs/{run_id}")).json()["id"] == run_id
 
 
