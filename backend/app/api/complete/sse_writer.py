@@ -127,6 +127,17 @@ class SseWriter:
             }
         )
 
+    def turn_retry(self, attempt: int, max_retries: int, reason: str) -> str:
+        return _format_sse(
+            {
+                "type": "turn_retry",
+                "seq": self.next_seq(),
+                "attempt": attempt,
+                "max_retries": max_retries,
+                "reason": reason,
+            }
+        )
+
     def cancel_acknowledged(self) -> str:
         return _format_sse(
             {

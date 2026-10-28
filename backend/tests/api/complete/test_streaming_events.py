@@ -22,6 +22,7 @@ from app.llm.tool_loop import ToolLoopEvent
 from app.llm.types import (
     AssistantMessage,
     DoneEvent,
+    StartEvent,
     StopReason,
     TextContent,
     TextDeltaEvent,
@@ -160,3 +161,28 @@ async def test_emit_events_persists_a_refused_attempt_with_its_outcome(monkeypat
         refused.error_message,
         {"provider_outcome": {"kind": "refused", "requested_model": CLAUDE_SONNET, "category": "cyber"}},
     )]
+
+
+@pytest.mark.asyncio
+async def test_emit_events_announces_a_turn_retry_and_drops_the_voided_text() -> None:
+    msg = _message([TextContent(text="ok")], "stop", Usage(input=1, output=1, total_tokens=2))
+    buf = ["earlier "]
+
+    async def events() -> AsyncIterator[ToolLoopEvent]:
+        yield StartEvent(partial=msg)
+        yield TextDeltaEvent(content_index=0, delta="half", partial=msg)
+        yield tool_loop.TurnRetry(attempt=1, max_retries=2, reason="no progress", delay_s=0.5)
+        yield StartEvent(partial=msg)
+        yield TextDeltaEvent(content_index=0, delta="ok", partial=msg)
+        yield DoneEvent(reason="stop", message=msg)
+
+    writer = SseWriter(session_id="sess-retry")
+    _attach_routing(writer, make_stream_ctx("sess-retry"))
+    chunks = []
+    with patched_done_persistence():
+        async for raw in _emit_events(events(), writer, make_stream_ctx("sess-retry"), buf):
+            chunks.append(json.loads(raw[len("data: ") : -2]))
+
+    assert [c["type"] for c in chunks] == ["content", "turn_retry", "content", "done"]
+    assert (chunks[1]["attempt"], chunks[1]["max_retries"], chunks[1]["reason"]) == (1, 2, "no progress")
+    assert buf[0] == "earlier ok"

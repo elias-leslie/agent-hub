@@ -17,7 +17,8 @@ from .diagnostics import AssistantMessageDiagnostic, append_assistant_message_di
 
 OUTCOME_DIAGNOSTIC = "provider_outcome"
 
-OutcomeKind = Literal["refused", "substituted", "usage_limit"]
+# "interrupted": the stream died (transport error, progress timeout, runaway tool call); the turn can be re-sent.
+OutcomeKind = Literal["refused", "substituted", "usage_limit", "interrupted"]
 
 
 @dataclass(slots=True, frozen=True)

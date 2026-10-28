@@ -124,6 +124,7 @@ class HandoffPacket:
         if self.acceptance:
             lines.append(
                 "# Acceptance commands\n" + "\n".join(f"- `{cmd}`" for cmd in self.acceptance)
+                + "\nRun them when your change is complete. Once they pass, finish with the handoff note."
             )
         if self.retry_label:
             lines.append(

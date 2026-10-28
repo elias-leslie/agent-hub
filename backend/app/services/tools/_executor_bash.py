@@ -61,6 +61,9 @@ async def run_bash(
         if max_output_size is not None and len(output) > max_output_size:
             output = output[:max_output_size] + "\n... (output truncated)"
 
+        # Without the status the model cannot tell a quiet failure from success and reruns to check.
+        if process.returncode:
+            return f"{output}\n\nCommand exited with code {process.returncode}".lstrip()
         return output or "(no output)"
 
     except asyncio.CancelledError:

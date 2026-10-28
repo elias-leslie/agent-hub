@@ -39,6 +39,12 @@ class TestDirectToolExecutor:
         """Test basic bash command."""
         result = await executor.bash("echo hello")
         assert "hello" in result
+        assert "exited with code" not in result
+
+    @pytest.mark.asyncio
+    async def test_bash_reports_a_failing_exit_code(self, executor: DirectToolExecutor) -> None:
+        assert await executor.bash("exit 3") == "Command exited with code 3"
+        assert (await executor.bash("echo partial; exit 1")).endswith("partial\n\n\nCommand exited with code 1")
 
     @pytest.mark.asyncio
     async def test_bash_inherits_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

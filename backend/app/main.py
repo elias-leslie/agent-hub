@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import router
 from app.config import settings
+from app.core.logging_config import configure_logging
 from app.core.project_roots import ProjectRegistryUnavailable, get_registered_project_roots
 from app.db import async_session
 from app.exception_handlers import setup_exception_handlers
@@ -38,9 +39,7 @@ from app.services.telemetry import init_telemetry
 from app.services.tools.command_guard import warm_shared_command_guard
 
 # Configure logging for application modules (must be after imports)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

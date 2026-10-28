@@ -108,7 +108,7 @@ class AgentHubExecutor:
                     parent_session_id=attempt.run_id,
                     request_source="workflow_run",
                     agent_slug=attempt.agent_slug,
-                    thinking_level=thinking_level_for_provider(provider, agent.thinking_level),
+                    thinking_level=thinking_level_for_provider(provider, packet.thinking_level or agent.thinking_level),
                     max_turns=max_turns,
                     tools=tools,
                     execute_tools=True,

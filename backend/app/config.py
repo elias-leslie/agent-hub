@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     port: int = AGENT_HUB_BACKEND_PORT
     debug: bool = False
     log_level: str = "INFO"
+    # Per-logger overrides, e.g. "app.llm=DEBUG,httpx=WARNING" (app/core/logging_config.py).
+    log_levels: str = ""
 
     # Database
     agent_hub_db_url: str = ""
@@ -190,6 +192,19 @@ class Settings(BaseSettings):
     opencode_go_usage_url: str = "https://opencode.ai/zen/go/v1/usage"
     opencode_go_usage_cache_seconds: float = Field(default=60.0, ge=0)
     opencode_go_usage_timeout_seconds: float = Field(default=10.0, gt=0)
+
+    # Model stream resilience (app/llm/providers/openai_codex_responses.py, app/llm/tool_loop.py).
+    # Re-sends of an interrupted request/turn; a request's options.max_retries overrides it.
+    llm_stream_max_retries: int = Field(default=2, ge=0)
+    # Seconds without a non-keepalive event before a stream counts as dead. Measured on gpt-6.1-sol
+    # (108 healthy requests, low and high effort): max gap 20.4s, p95 4.9s. 90s leaves ~4x headroom
+    # for slower xhigh reasoning while a dead stream still recovers in about a minute and a half;
+    # Codex CLI's idle timeout is 300s. options.timeout_ms overrides it per request.
+    llm_stream_progress_timeout_s: float = Field(default=90.0, gt=0)
+    # Characters of arguments one streamed tool call may reach before the attempt is cut off. A
+    # runaway call was seen streaming ~32,000 argument deltas; 64Ki chars (~16k tokens) is far
+    # beyond any single legitimate edit or write, which the model should split.
+    llm_tool_args_max_chars: int = Field(default=65_536, gt=0)
 
     # Local OpenAI-compatible endpoint. Ollama exposes this at /v1 by default.
     local_openai_base_url: str = "http://127.0.0.1:11434/v1"

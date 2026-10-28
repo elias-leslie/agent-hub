@@ -24,9 +24,10 @@ translates this loop's events into SSE in
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 from .headroom_compress import compress_tool_results
@@ -35,6 +36,7 @@ from .types import (
     AssistantMessage,
     AssistantMessageEvent,
     Context,
+    ErrorEvent,
     Model,
     SimpleStreamOptions,
     TextContent,
@@ -42,7 +44,11 @@ from .types import (
     ToolResultMessage,
     UserMessage,
 )
+from .utils.outcomes import outcome_of
+from .utils.retry import retry_budget, retry_delay
 
+# Per-turn and per-tool timing at DEBUG (LOG_LEVELS=app.llm=DEBUG): what a slow run spent its time on.
+logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class ToolRunStart:
@@ -72,8 +78,22 @@ class ToolRunError:
     type: Literal["tool_run_error"] = "tool_run_error"
 
 
+@dataclass(slots=True)
+class TurnRetry:
+    """A turn was interrupted and is being re-run from the same context.
+
+    Everything streamed since this turn's ``start`` event is void: consumers drop that partial text.
+    """
+
+    attempt: int
+    max_retries: int
+    reason: str
+    delay_s: float
+    type: Literal["turn_retry"] = "turn_retry"
+
+
 ToolRunEvent = ToolRunStart | ToolRunComplete | ToolRunError
-ToolLoopEvent = AssistantMessageEvent | ToolRunEvent
+ToolLoopEvent = AssistantMessageEvent | ToolRunEvent | TurnRetry
 
 ToolRunner = Callable[[ToolCall], Awaitable[ToolResultMessage]]
 
@@ -108,10 +128,14 @@ def _batches(calls: list[ToolCall], is_parallel_safe: ParallelSafe | None) -> li
 
 async def _run_one(run_tool: ToolRunner, tool_call: ToolCall) -> tuple[ToolResultMessage, str | None]:
     """Run one tool; a raise becomes an error result the next turn can see."""
+    start = time.monotonic()
     try:
-        return await run_tool(tool_call), None
+        result = await run_tool(tool_call)
+        logger.debug("tool %s took %.2fs", tool_call.name, time.monotonic() - start)
+        return result, None
     except Exception as exc:
         error_msg = str(exc) or type(exc).__name__
+        logger.debug("tool %s failed after %.2fs: %s", tool_call.name, time.monotonic() - start, error_msg)
         return (
             ToolResultMessage(
                 tool_call_id=tool_call.id,
@@ -122,6 +146,40 @@ async def _run_one(run_tool: ToolRunner, tool_call: ToolCall) -> tuple[ToolResul
             ),
             error_msg,
         )
+
+
+async def _turn(
+    model: Model[Any],
+    context: Context,
+    options: SimpleStreamOptions | None,
+    sink: list[AssistantMessage],
+) -> AsyncIterator[ToolLoopEvent]:
+    """One model turn. An interrupted stream (dead connection, stall, runaway tool call) is re-run from the
+    same context after a backoff, up to the retry budget; the partial message never reaches ``context``.
+
+    The provider is told not to retry on its own (``max_retries=0``), so this is the single place the
+    budget is spent. The turn's final message is appended to ``sink``.
+    """
+    retries = retry_budget(options)
+    attempt_options = replace(options or SimpleStreamOptions(), max_retries=0)
+    for attempt in range(retries + 1):
+        stream_handle = stream_simple(model, context, attempt_options)
+        interrupted: ErrorEvent | None = None
+        async for event in stream_handle:
+            if isinstance(event, ErrorEvent) and attempt < retries:
+                outcome = outcome_of(event.error)
+                if outcome is not None and outcome.kind == "interrupted":
+                    interrupted = event
+                    continue
+            yield event
+        if interrupted is None:
+            sink.append(await stream_handle.result())
+            return
+        reason = interrupted.error.error_message or "interrupted"
+        delay = retry_delay(attempt)
+        logger.warning("turn interrupted (%s); retry %d/%d in %.1fs", reason, attempt + 1, retries, delay)
+        yield TurnRetry(attempt=attempt + 1, max_retries=retries, reason=reason, delay_s=delay)
+        await asyncio.sleep(delay)
 
 
 async def run(
@@ -170,12 +228,16 @@ async def run(
                         turn_stats.get(key, 0)
                     )
 
-        stream_handle = stream_simple(model, context, options)
-
-        async for event in stream_handle:
+        turn_start = time.monotonic()
+        sunk: list[AssistantMessage] = []
+        async for event in _turn(model, context, options, sunk):
             yield event
-
-        final = await stream_handle.result()
+        final = sunk[0]
+        logger.debug(
+            "turn %d model_s=%.2f stop=%s tool_calls=%d output_tokens=%d",
+            turns, time.monotonic() - turn_start, final.stop_reason,
+            sum(isinstance(b, ToolCall) for b in final.content), final.usage.output,
+        )
         # Each turn's final assistant message becomes part of the context
         # for the next turn. Errored/aborted messages are still appended
         # so transform_messages can decide what to replay.
@@ -244,10 +306,10 @@ async def run(
             timestamp=int(_time.time() * 1000),
         )
     )
-    stream_handle = stream_simple(model, context, options)
-    async for event in stream_handle:
+    sunk = []
+    async for event in _turn(model, context, options, sunk):
         yield event
-    context.messages.append(await stream_handle.result())
+    context.messages.append(sunk[0])
 
 
 __all__ = [
@@ -259,5 +321,6 @@ __all__ = [
     "ToolRunEvent",
     "ToolRunStart",
     "ToolRunner",
+    "TurnRetry",
     "run",
 ]

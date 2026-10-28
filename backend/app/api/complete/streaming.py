@@ -32,11 +32,13 @@ from app.llm.tool_loop import (
     ToolRunComplete,
     ToolRunError,
     ToolRunStart,
+    TurnRetry,
 )
 from app.llm.types import (
     AssistantMessage,
     DoneEvent,
     ErrorEvent,
+    StartEvent,
     TextDeltaEvent,
     ThinkingDeltaEvent,
     ToolCallEndEvent,
@@ -222,10 +224,19 @@ async def _emit_events(
     cancel_event = ctx.cancel_event
     usage_messages: list[AssistantMessage] = []
     total_cost_usd = 0.0
+    turn_text_start = len(content_buf[0])
     async for event in events:
         if cancel_event is not None and cancel_event.is_set():
             yield writer.cancel_acknowledged()
             return
+        if isinstance(event, StartEvent):
+            turn_text_start = len(content_buf[0])
+            continue
+        if isinstance(event, TurnRetry):
+            # The interrupted turn's partial text is void; clients drop it on the same event.
+            content_buf[0] = content_buf[0][:turn_text_start]
+            yield writer.turn_retry(event.attempt, event.max_retries, event.reason)
+            continue
         if isinstance(event, TextDeltaEvent):
             if event.delta:
                 if attempt_output_started is not None:
