@@ -226,6 +226,16 @@ def test_step_line_shows_models_fallback_attempts_live_phase_and_cost() -> None:
     assert "$? unknown" in step_line(unpriced)
 
 
+def test_a_fresh_run_and_a_just_started_attempt_format_without_numbers_or_cost() -> None:
+    fresh = view(usage_totals={"total_tokens": None, "cost": {}})
+    started = step("a", "running", attempts=1, attempt_history=[
+        {"status": "active", "requested_model": None, "served_model": None, "usage": None,
+         "cost": {"usd": None, "basis": "unknown"}}])
+    text = run_text(view(steps=[started], usage_totals=fresh["usage_totals"]))
+    assert "a | running | m/flash | attempt 1/2" in text and "$?" not in text
+    assert "totals: 0 tokens; cost no usage yet" in text
+
+
 def test_run_text_has_header_steps_totals_and_pause() -> None:
     paused = view("needs_owner", [step("a", "needs_owner")], pause={"reason": "chain_exhausted", "step_key": "a", "at": 1},
                   usage_totals={"total_tokens": 12345, "cost": {"by_basis": {"metered": {"usd": 0.5, "attempts": 2}}}})

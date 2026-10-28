@@ -40,11 +40,12 @@ def last_attempt(step: dict[str, Any]) -> dict[str, Any] | None:
 def model_text(step: dict[str, Any]) -> str:
     """"requested→served" once an attempt has run (just the model when they match), else the model it will start on."""
     attempt = last_attempt(step)
-    if attempt is None:
+    requested = (attempt or {}).get("requested_model") or (attempt or {}).get("effective_model")
+    served = (attempt or {}).get("served_model")
+    if not requested and not served:  # not started, or the attempt has not named its model yet
         chain = step.get("chain") or []
         return str(step.get("chosen_model") or (chain[0] if chain else "-"))
-    requested = attempt.get("requested_model") or attempt.get("effective_model") or "-"
-    served = attempt.get("served_model")
+    requested = requested or "-"
     if served and served != requested:
         return f"{requested}→{served}"
     return str(served or requested)
@@ -69,6 +70,8 @@ def cost_text(step: dict[str, Any]) -> str | None:
     """Cost summed per basis across attempts; an attempt without a price shows "$?", never zero."""
     by_basis: dict[str, float | None] = {}
     for attempt in step.get("attempt_history") or []:
+        if attempt.get("status") == "active" and not attempt.get("usage"):
+            continue  # still running: no usage reported yet, which is not the same as unpriced
         cost = attempt.get("cost") or {}
         basis = cost.get("basis") or "unknown"
         usd = cost.get("usd")
@@ -121,7 +124,7 @@ def totals_text(view: dict[str, Any]) -> str:
     if cost.get("unpriced_attempts"):
         parts.append(f"{cost['unpriced_attempts']} unpriced")
     spent = "; ".join(parts) or "no usage yet"
-    return f"totals: {totals.get('total_tokens', 0):,} tokens; cost {spent}"
+    return f"totals: {totals.get('total_tokens') or 0:,} tokens; cost {spent}"
 
 
 def pause_text(pause: dict[str, Any] | None) -> str | None:
