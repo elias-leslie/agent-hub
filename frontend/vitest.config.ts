@@ -9,6 +9,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/__tests__/setup.ts'],
+    // The SDK package's tests run with the frontend suite (st check runs vitest from here only).
+    include: [
+      '**/*.{test,spec}.?(c|m)[jt]s?(x)',
+      '../packages/agent-hub-sdk/tests/**/*.test.ts',
+    ],
     exclude: ['**/node_modules/**', '**/e2e/**'],
     coverage: {
       provider: 'v8',
