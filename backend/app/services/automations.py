@@ -493,20 +493,26 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
 
 
 _FINISHED_RUN_STATUSES = ("succeeded", "failed", "skipped", "cancelled", "rejected")
+# Schedules deleted from SCHEDULE_DEFINITIONS whose catalog rows are pruned. Listed
+# explicitly so a schedule that is only renamed or briefly missing keeps its history.
+RETIRED_AGENT_HUB_SCHEDULES = ("agent-hub.feedback_cleanup",)
 
 
 async def retire_removed_agent_hub_schedules(db: AsyncSession) -> list[str]:
-    """Delete Agent Hub's own catalog entries whose static schedule left the code.
+    """Delete the catalog entries of Agent Hub schedules retired from the code.
 
     Their Hatchet task is gone, so the definition, its static profile (revisions
     cascade) and its finished run receipts can never be used again. A definition
     with a run still in flight is kept until that run finishes.
     """
-    current = [f"agent-hub.{schedule.schedule_id}" for schedule in SCHEDULE_DEFINITIONS]
+    current = {f"agent-hub.{schedule.schedule_id}" for schedule in SCHEDULE_DEFINITIONS}
+    retired_keys = [key for key in RETIRED_AGENT_HUB_SCHEDULES if key not in current]
+    if not retired_keys:
+        return []
     rows = (await db.execute(select(AutomationDefinition).where(
         AutomationDefinition.owner_project_id == "agent-hub",
         AutomationDefinition.dispatch_kind == "hatchet",
-        AutomationDefinition.workflow_key.not_in(current),
+        AutomationDefinition.workflow_key.in_(retired_keys),
     ))).scalars().all()
     retired: list[str] = []
     for key in sorted({row.workflow_key for row in rows}):

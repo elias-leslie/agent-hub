@@ -53,10 +53,10 @@ async def test_removed_agent_hub_schedule_is_deleted_with_its_profile_and_finish
 
     assert retired == ["agent-hub.feedback_cleanup"]
     lookup, *deletes = _statements(db)
-    # Only Agent Hub's own Hatchet schedules that left the code are candidates.
+    # Only Agent Hub's own Hatchet schedules explicitly listed as retired are candidates.
     assert "owner_project_id = 'agent-hub'" in lookup
     assert "dispatch_kind = 'hatchet'" in lookup
-    assert "'agent-hub.session_cleanup'" in lookup and "NOT IN" in lookup
+    assert "IN ('agent-hub.feedback_cleanup')" in lookup and "NOT IN" not in lookup
     assert [statement.split()[2] for statement in deletes] == [
         "automation_runs", "automation_profiles", "automation_definitions",
     ]
@@ -70,3 +70,12 @@ async def test_removed_agent_hub_schedule_with_a_run_in_flight_is_kept() -> None
 
     assert await automations.retire_removed_agent_hub_schedules(db) == []
     assert db.execute.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retired_list_never_prunes_a_schedule_still_in_code() -> None:
+    db = _retirement_db([], in_flight=0)
+
+    with patch.object(automations, "RETIRED_AGENT_HUB_SCHEDULES", ("agent-hub.session_cleanup",)):
+        assert await automations.retire_removed_agent_hub_schedules(db) == []
+    db.execute.assert_not_awaited()
