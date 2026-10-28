@@ -92,6 +92,51 @@ describe.skipIf(!live)('live Agent Hub', () => {
         }
     }, 150_000);
 
+    it('a turn survives its client going away and a second client reattaches to the rest', async () => {
+        const controller = new AbortController();
+        const first: Array<{ type: string; seq?: number }> = [];
+        let sessionId: string | undefined;
+        try {
+            for await (const event of hub.turns.stream(
+                {
+                    agent_slug: agent,
+                    project_id: 'agent-hub',
+                    use_memory: false,
+                    messages: [{ role: 'user', content: 'Count from 1 to 60, one number per line, nothing else.' }],
+                },
+                { signal: controller.signal, reattach: false },
+            )) {
+                first.push({ type: event.type, seq: 'seq' in event ? event.seq : undefined });
+                if (event.type === 'connected') sessionId = event.session_id;
+                if (event.type === 'content') controller.abort(); // the first client goes away mid-stream
+            }
+        } catch (error) {
+            expect((error as Error).name).toBe('AbortError');
+        }
+        expect(sessionId).toBeDefined();
+        const lastSeq = Math.max(...first.map((e) => e.seq ?? 0));
+        expect(first.some((e) => e.type === 'done')).toBe(false);
+
+        // Session info shows the turn, or already idle if it finished while we reconnected.
+        expect(['running', 'idle']).toContain((await hub.sessions.get(sessionId!)).turn_state);
+
+        const rest: Array<{ type: string; seq?: number }> = [];
+        for await (const event of hub.turns.attach(sessionId!, { afterSeq: lastSeq, signal: AbortSignal.timeout(120_000) })) {
+            rest.push({ type: event.type, seq: 'seq' in event ? event.seq : undefined });
+        }
+        expect(rest.at(-1)?.type).toBe('done');
+        expect(rest.filter((e) => e.seq !== undefined).every((e) => e.seq! > lastSeq)).toBe(true);
+
+        // A later attach to the finished session returns promptly; the answer was persisted.
+        const after: string[] = [];
+        for await (const event of hub.turns.attach(sessionId!, { afterSeq: 0 })) after.push(event.type);
+        expect(after.length).toBeGreaterThan(0);
+        expect((await hub.sessions.get(sessionId!)).turn_state).toBe('idle');
+        const messages = await hub.sessions.messages(sessionId!);
+        expect(messages.some((m) => m.role === 'assistant')).toBe(true);
+        await hub.sessions.close(sessionId!);
+    }, 180_000);
+
     it('cancel of a turn that is not running is not an error', async () => {
         expect(await hub.turns.cancel('00000000-0000-0000-0000-000000000000')).toMatchObject({ cancelled: false });
     });
