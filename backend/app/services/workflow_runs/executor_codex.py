@@ -4,6 +4,9 @@ The model comes from the step chain (catalog id, provider prefix stripped throug
 cyber access program from the catalog entry (standard when the model needs none), reasoning effort from the
 agent's thinking level. Sandbox and approvals are data (``executor_defaults.json``): workspace-write, never ask; the
 run's ``read`` tool level runs it read-only (Codex has no tool list, the sandbox mode is its only access setting).
+The tool level also picks ``-c`` overrides (``codex.levels``): ``read`` and ``lean`` drop what a single step does not use
+(skills list, goal, image, app, plugin, browser, computer-use and sub-agent tools, web search), ``full`` keeps the
+owner's whole Codex config. Hooks are never touched: the publication guard runs in every level.
 The packet's canonical context goes in as developer instructions next to the user's own Codex ones.
 """
 
@@ -213,6 +216,7 @@ class CodexExecutor:
             f"approval_policy={json.dumps(self.settings['approval_policy'])}",
             "-c",
             f"model_reasoning_effort={json.dumps(effort)}",
+            *self.settings["levels"][packet.level or self.settings["default_level"]],
         ]
         if packet.context:
             argv += ["-c", "developer_instructions=" + json.dumps(instructions)]

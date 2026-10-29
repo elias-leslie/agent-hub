@@ -515,6 +515,29 @@ def test_codex_sandbox_follows_the_runs_tool_level(tmp_path, level, sandbox) -> 
     assert argv[argv.index("--sandbox") + 1] == sandbox
 
 
+def overrides(argv: list[str]) -> list[str]:
+    return [argv[i + 1] for i, value in enumerate(argv) if value == "-c"]
+
+
+@pytest.mark.parametrize("level", ["read", "lean", None])
+def test_codex_trims_what_a_single_step_does_not_use_at_read_and_lean(tmp_path, level) -> None:
+    argv, _, _ = CodexExecutor(load_defaults(), model_lookup=CATALOG.get).command(
+        packet(level=level), CODEX_MODEL, tmp_path
+    )
+    trims = overrides(argv)
+    assert "skills.include_instructions=false" in trims and "features.multi_agent=false" in trims
+    assert 'web_search="disabled"' in trims
+    # Only supported config overrides, and none touches hooks: the publication guard must still run in the step.
+    assert not any("hooks" in value for value in trims) and not any(a.startswith("--dangerously") for a in argv)
+
+
+def test_codex_full_level_keeps_the_owners_whole_config(tmp_path) -> None:
+    argv, _, _ = CodexExecutor(load_defaults(), model_lookup=CATALOG.get).command(
+        packet(level="full"), CODEX_MODEL, tmp_path
+    )
+    assert overrides(argv) == ['approval_policy="never"', 'model_reasoning_effort="high"']
+
+
 def test_pi_tools_follow_the_runs_tool_level(tmp_path) -> None:
     pi = PiExecutor(load_defaults(), model_lookup=CATALOG.get)
     read, _, _ = pi.command(packet(level="read"), CODEX_MODEL, tmp_path)
@@ -555,4 +578,5 @@ def test_every_tool_level_is_mapped_by_every_executor() -> None:
         assert level in defaults["claude_code"]["levels"]
         assert level in defaults["agent_hub"]["levels"]
         assert level in defaults["pi"]["levels"]
+        assert level in defaults["codex"]["levels"]
     assert set(defaults["codex"]["sandbox_by_level"]) <= set(defaults["tool_levels"])

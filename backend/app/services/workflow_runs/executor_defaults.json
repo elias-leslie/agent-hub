@@ -18,7 +18,13 @@
     "sandbox": "workspace-write",
     "sandbox_by_level": {"read": "read-only"},
     "approval_policy": "never",
-    "default_cyber_program": "standard"
+    "default_cyber_program": "standard",
+    "default_level": "lean",
+    "levels": {
+      "read": ["-c", "features.goals=false", "-c", "features.image_generation=false", "-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.browser_use=false", "-c", "features.computer_use=false", "-c", "features.tool_suggest=false", "-c", "features.multi_agent=false", "-c", "web_search=\"disabled\"", "-c", "skills.bundled.enabled=false", "-c", "skills.include_instructions=false"],
+      "lean": ["-c", "features.goals=false", "-c", "features.image_generation=false", "-c", "features.apps=false", "-c", "features.plugins=false", "-c", "features.browser_use=false", "-c", "features.computer_use=false", "-c", "features.tool_suggest=false", "-c", "features.multi_agent=false", "-c", "web_search=\"disabled\"", "-c", "skills.bundled.enabled=false", "-c", "skills.include_instructions=false"],
+      "full": []
+    }
   },
   "pi": {
     "binary": "pi",
