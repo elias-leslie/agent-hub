@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     agent_hub_db_max_overflow: int = Field(default=25, ge=0)
     agent_hub_db_pool_timeout: int = Field(default=30, ge=1)
     agent_hub_db_pool_recycle: int = Field(default=1800, ge=30)
+    # How long a project's owner/specialist lane ids are reused by session list and detail reads. The
+    # lanes come from scanning the last day's tool events, so every poll must not repeat it. 0 = always fresh.
+    session_lane_cache_seconds: float = Field(default=5.0, ge=0)
+    # The session list's default accounting window (the last 24 h) ends on a boundary of this many seconds and
+    # its per-session result is reused until the next boundary, so repeated polls do not re-read every
+    # session's tool history. 0 = a window ending now, recomputed on every read.
+    session_accounting_cache_seconds: int = Field(default=30, ge=0)
 
     @field_validator("agent_hub_db_url")
     @classmethod

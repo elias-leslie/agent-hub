@@ -5,12 +5,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import time
+from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import Session, SessionEvent
 from app.services.activity_accounting import returned_characters_expression
 from app.services.context_accounting import context_split, tool_context_row
@@ -39,6 +42,8 @@ def accounting_window(start: datetime | None, end: datetime | None, cursor: str 
         start, end = retained
     if end is None:
         end = datetime.now(UTC)
+        if settings.session_accounting_cache_seconds:
+            end = end - timedelta(seconds=end.timestamp() % settings.session_accounting_cache_seconds)
         start = end - timedelta(hours=24)
     assert start is not None
     if start.tzinfo is None or end.tzinfo is None:
@@ -79,7 +84,46 @@ def summarize_session_duration(events: list[Any], *, start: datetime, end: datet
     return duration_split(_occupancy(intervals), calls=len(tools), missing=missing, truncated=False) | {"context_split": context_split(context)}
 
 
+_ACCOUNTING_CACHE: OrderedDict[tuple[str, datetime, datetime], tuple[float, dict | None]] = OrderedDict()
+_ACCOUNTING_CACHE_ENTRIES = 4096
+
+
+def clear_accounting_cache() -> None:
+    _ACCOUNTING_CACHE.clear()
+
+
 async def fetch_session_accounting(db: AsyncSession, selected_ids: Any, *, start: datetime, end: datetime) -> dict[str, dict]:
+    """Accounting for listed sessions, reusing a result computed within ``session_accounting_cache_seconds``.
+
+    A subquery of ids (a sort over every session) is always read fresh; a list of ids reads only the ones
+    without a recent result for the same window.
+    """
+    ttl = settings.session_accounting_cache_seconds
+    if not ttl or not isinstance(selected_ids, list | tuple | set):
+        return await _read_session_accounting(db, selected_ids, start=start, end=end)
+    now = time.monotonic()
+    found: dict[str, dict] = {}
+    cached: set[str] = set()
+    for sid in selected_ids:
+        hit = _ACCOUNTING_CACHE.get((sid, start, end))
+        if hit is not None and now - hit[0] < ttl:
+            cached.add(sid)
+            if hit[1] is not None:
+                found[sid] = hit[1]
+    missing = [sid for sid in selected_ids if sid not in cached]
+    if missing:
+        fresh = await _read_session_accounting(db, missing, start=start, end=end)
+        now = time.monotonic()
+        for sid in missing:  # a session with no tool events in the window is remembered as having none
+            _ACCOUNTING_CACHE[(sid, start, end)] = (now, fresh.get(sid))
+            _ACCOUNTING_CACHE.move_to_end((sid, start, end))
+        while len(_ACCOUNTING_CACHE) > _ACCOUNTING_CACHE_ENTRIES:
+            _ACCOUNTING_CACHE.popitem(last=False)
+        found.update(fresh)
+    return found
+
+
+async def _read_session_accounting(db: AsyncSession, selected_ids: Any, *, start: datetime, end: datetime) -> dict[str, dict]:
     """Stream complete filtered session histories; cap neither sessions nor event rows.
 
     Memory holds one session at a time. The event boundaries, pairing, wrapper

@@ -274,6 +274,19 @@ def allow_test_transcript_roots(monkeypatch: pytest.MonkeyPatch, tmp_path_factor
 
 
 @pytest.fixture(autouse=True)
+def clear_session_list_caches() -> Generator[None]:
+    """Lane ids and list accounting are reused for seconds in production; each test starts without them."""
+    from app.services.session_accounting import clear_accounting_cache
+    from app.services.session_responses import clear_lane_cache
+
+    clear_lane_cache()
+    clear_accounting_cache()
+    yield
+    clear_lane_cache()
+    clear_accounting_cache()
+
+
+@pytest.fixture(autouse=True)
 def clear_hatchet_cache() -> Generator[None]:
     """Clear Hatchet client cache so tests get fresh instances."""
     from app.hatchet_app import get_hatchet

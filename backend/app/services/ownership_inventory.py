@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -283,10 +284,8 @@ def _build_owner(
     )
 
 
-async def query_project_ownership(db: AsyncSession, project_id: str) -> list[OwnershipOwner]:
-    """Return normalized live ownership rows for a project."""
-    sessions = await _fetch_candidate_sessions(db, project_id)
-    scope_events = await _fetch_scope_events(db, [s.id for s in sessions])
+def _build_owners(sessions: list[Session], scope_events: dict[str, list[SessionEvent]]) -> list[OwnershipOwner]:
+    """Pure CPU and file-system work (shlex, path resolution) over rows already loaded; run it off the event loop."""
     owners: list[OwnershipOwner] = []
     for session in sessions:
         metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
@@ -298,6 +297,14 @@ async def query_project_ownership(db: AsyncSession, project_id: str) -> list[Own
         )
         if owner is not None:
             owners.append(owner)
+    return owners
+
+
+async def query_project_ownership(db: AsyncSession, project_id: str) -> list[OwnershipOwner]:
+    """Return normalized live ownership rows for a project."""
+    sessions = await _fetch_candidate_sessions(db, project_id)
+    scope_events = await _fetch_scope_events(db, [s.id for s in sessions])
+    owners = await asyncio.to_thread(_build_owners, sessions, scope_events)
     return collapse_ownership_owners(owners)
 
 

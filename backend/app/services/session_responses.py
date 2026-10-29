@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.event_storage import known_model
 from app.services.session_live_activity import is_session_actionably_active
@@ -81,6 +84,47 @@ async def _resolve_agent_display_names(
     return names
 
 
+_LANE_CACHE: dict[str, tuple[float, frozenset[str], frozenset[str]]] = {}
+_LANE_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def clear_lane_cache() -> None:
+    """Forget cached lane ids (tests, and callers that just changed ownership)."""
+    _LANE_CACHE.clear()
+
+
+def _fresh_lane_ids(project_id: str) -> tuple[frozenset[str], frozenset[str]] | None:
+    hit = _LANE_CACHE.get(project_id)
+    if hit is not None and time.monotonic() - hit[0] < settings.session_lane_cache_seconds:
+        return hit[1], hit[2]
+    return None
+
+
+async def _project_lane_ids(db: AsyncSession, project_id: str) -> tuple[frozenset[str], frozenset[str]]:
+    """Owner and specialist session ids of one project, reused for ``session_lane_cache_seconds``.
+
+    Computing them scans the project's recent tool events, so one caller per project does it while the others
+    wait for its result instead of repeating the scan on every list or detail read.
+    """
+    if (fresh := _fresh_lane_ids(project_id)) is not None:
+        return fresh
+    async with _LANE_LOCKS.setdefault(project_id, asyncio.Lock()):
+        if (fresh := _fresh_lane_ids(project_id)) is not None:
+            return fresh
+        owners = frozenset(
+            str(owner.session_id)
+            for owner in await query_project_ownership(db, project_id)
+            if getattr(owner, "session_id", None)
+        )
+        specialists = frozenset(
+            str(session.session_id)
+            for session in await query_project_active_specialists(db, project_id)
+            if getattr(session, "session_id", None)
+        )
+        _LANE_CACHE[project_id] = (time.monotonic(), owners, specialists)
+        return owners, specialists
+
+
 async def build_project_lane_session_ids(
     db: AsyncSession,
     project_ids: set[str],
@@ -89,16 +133,9 @@ async def build_project_lane_session_ids(
     owner_session_ids: set[str] = set()
     specialist_session_ids: set[str] = set()
     for project_id in sorted(project_id for project_id in project_ids if project_id):
-        owner_session_ids.update(
-            str(owner.session_id)
-            for owner in await query_project_ownership(db, project_id)
-            if getattr(owner, "session_id", None)
-        )
-        specialist_session_ids.update(
-            str(session.session_id)
-            for session in await query_project_active_specialists(db, project_id)
-            if getattr(session, "session_id", None)
-        )
+        owners, specialists = await _project_lane_ids(db, project_id)
+        owner_session_ids |= owners
+        specialist_session_ids |= specialists
     return owner_session_ids, specialist_session_ids
 
 
