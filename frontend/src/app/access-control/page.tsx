@@ -6,6 +6,7 @@ import {
   Clock,
   DollarSign,
   FolderLock,
+  KeyRound,
   Settings,
   Shield,
   Users,
@@ -207,6 +208,21 @@ export default function AccessControlPage() {
                   </div>
                   <p className="text-xs text-slate-400">
                     Per-project automation tiers and execution control
+                  </p>
+                </a>
+
+                <a
+                  href="/access-control/logins"
+                  className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-3"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <KeyRound className="h-5 w-5 text-amber-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Agent logins
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Logins lent to agents and lab test logins
                   </p>
                 </a>
 
