@@ -738,3 +738,59 @@ async def test_detail_carries_the_session_cost_tool_places_and_thinking_time(
     assert (await api.get("/api/sessions/free")).json()["total_cost_usd"] is None
     events = (await api.get("/api/sessions/chat/events")).json()["events"]
     assert [e["content_offset"] for e in events if e["event_type"] == "tool_use"] == [11]
+
+
+async def _hub_turn(db: AsyncSession, session_id: str, model: str, **named: str) -> Session:
+    """One Agent Hub turn on agent `coder` (whose own model is codex/gpt-6.1-sol), as the request path opens it."""
+    from app.api.complete.session_repo import get_or_create_session
+
+    session, _, _ = await get_or_create_session(
+        db, session_id, "agent-hub", model.split("/")[0], model, session_type="chat", agent_slug="coder", **named
+    )
+    await db.commit()
+    return session
+
+
+@pytest.fixture
+def agent_default_codex(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr("app.constants.projects.validate_project_id", AsyncMock())
+    resolved = SimpleNamespace(provider="codex", model="codex/gpt-6.1-sol")
+    monkeypatch.setattr("app.services.session_ingestion.service.resolve_agent", AsyncMock(return_value=resolved))
+
+
+def _route(session: Session) -> tuple[str, str, bool]:
+    from app.services._session_metadata_helpers import session_model_info
+
+    info = session_model_info(session)
+    return str(info["requested_model"]), str(info["effective_model"]), bool(info["fallback_used"])
+
+
+async def test_turn_override_that_answers_is_not_a_fallback(pg_db: AsyncSession, agent_default_codex: None) -> None:
+    # The model picker names deepseek for a turn on an agent whose default is codex: that turn asked for deepseek.
+    session = await _hub_turn(pg_db, "override-served", "opencode-go/deepseek-v4.1-flash")
+    assert _route(session) == ("opencode-go/deepseek-v4.1-flash", "opencode-go/deepseek-v4.1-flash", False)
+    assert session.model == "opencode-go/deepseek-v4.1-flash"
+    assert session.models_used == ["opencode-go/deepseek-v4.1-flash"]
+    # The next message in the same session, with the same pick, stays the same.
+    again = await _hub_turn(pg_db, "override-served", "opencode-go/deepseek-v4.1-flash")
+    assert _route(again) == ("opencode-go/deepseek-v4.1-flash", "opencode-go/deepseek-v4.1-flash", False)
+
+
+async def test_turn_override_answered_by_another_model_is_a_fallback(pg_db: AsyncSession, agent_default_codex: None) -> None:
+    await _hub_turn(pg_db, "override-fell-back", "opencode-go/deepseek-v4.1-flash")
+    # The turn named deepseek, the route failed over to another model and answered there.
+    session = await _hub_turn(
+        pg_db, "override-fell-back", "zai/glm-5.1", requested_provider="opencode-go", requested_model="opencode-go/deepseek-v4.1-flash"
+    )
+    assert _route(session) == ("opencode-go/deepseek-v4.1-flash", "zai/glm-5.1", True)
+
+
+async def test_turn_without_override_keeps_the_agent_default(pg_db: AsyncSession, agent_default_codex: None) -> None:
+    session = await _hub_turn(pg_db, "agent-default", "codex/gpt-6.1-sol")
+    assert _route(session) == ("codex/gpt-6.1-sol", "codex/gpt-6.1-sol", False)
+    # A later turn that does name a model is its own choice, not the session's earlier default.
+    later = await _hub_turn(pg_db, "agent-default", "opencode-go/deepseek-v4.1-flash")
+    assert _route(later) == ("opencode-go/deepseek-v4.1-flash", "opencode-go/deepseek-v4.1-flash", False)

@@ -155,6 +155,11 @@ async def _create(db: AsyncSession, req: SessionRequest) -> SessionResult:
             provider_metadata={"harness": "agent_hub"},
         ),
     )
+    # A session registered with an agent slug is filed under that agent's own model. This turn ran the
+    # model it named (a per-request override), so the row and the requested/effective record say that.
+    session.model, session.provider = req.model, req.provider
+    session.models_used, session.providers_used = [], []
+    await _update_metadata(db, session, req)
     _apply_trace_id(session, req.trace_id)
     if req.parent_session_id:
         await store_child_session_lifecycle_event(
