@@ -5,7 +5,10 @@ from __future__ import annotations
 GUIDE: tuple[str, ...] = (
     "st workflow: drive a durable run. The runner holds all state, so your chat can end and re-attach.",
     "PLAN",
-    "- One step per deliverable: key, stand-alone instructions, agent_slug, model_override + allowed_models, acceptance.",
+    "- Few steps. Every step pays its own startup context, so split only where it buys something: a separate deliverable,",
+    "  a cheaper model, an independent check, or work too big for one context. Work one agent finishes well is one step;",
+    "  never fan out the same task across many agents. Overlap only truly independent steps (max_concurrent_steps).",
+    "- One step per deliverable:key, stand-alone instructions, agent_slug, model_override + allowed_models, acceptance.",
     "- acceptance = commands the runner runs in the step's worktree (exit 0 = done). Without one nothing checks the step.",
     "- depends_on lists the steps needed first (omitted = the step before it, [] = none). A step sees only its",
     "  dependencies' handoffs. Independent steps may overlap where the run's max_concurrent_steps allows.",
