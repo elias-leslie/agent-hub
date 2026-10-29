@@ -8,9 +8,11 @@ import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
+from sqlalchemy import update
+
 from app.llm.types import AssistantMessage
 from app.models import Session as DBSession
-from app.models import SessionEventType
+from app.models import SessionEvent, SessionEventType
 from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_message, publish_tool_result, publish_tool_use
 from app.services.session_live_activity import mark_session_completed
@@ -38,8 +40,12 @@ async def save_messages_to_db(
     usage: dict[str, object] | None = None,
     trace: Sequence[TurnTraceStep] = (),
     thinking_tokens: int | None = None,
+    prompt_event_id: str | None = None,
 ) -> None:
-    """Save streamed messages to the database using a fresh session."""
+    """Save streamed messages to the database using a fresh session.
+
+    ``prompt_event_id`` names a prompt already stored at turn start; it gets this turn's input tokens.
+    """
     if not accumulated_content:
         return
     try:
@@ -61,7 +67,13 @@ async def save_messages_to_db(
                 usage=usage,
                 trace=trace,
                 thinking_tokens=thinking_tokens,
+                commit=prompt_event_id is None,
             )
+            if prompt_event_id is not None:
+                await fresh_db.execute(
+                    update(SessionEvent).where(SessionEvent.id == prompt_event_id).values(tokens=input_tokens)
+                )
+                await fresh_db.commit()
             logger.info("Streaming: saved messages for session %s", session_id)
     except Exception as save_err:
         logger.error("Failed to save streaming messages: %s", save_err)
@@ -72,23 +84,23 @@ async def save_turn_prompt_to_db(
     user_messages: list[MessageInput],
     source_metadata: dict[str, object] | None = None,
     agent_used: str | None = None,
-) -> bool:
+) -> str | None:
     """Store the prompt that starts a turn, so every client that opens the session mid-turn sees it.
 
-    Returns True once stored; the end-of-turn save then must not store it again.
+    Returns the stored event's id; the end-of-turn save then must not store it again, only add its tokens.
     """
     if not any(msg.role in ("user", "system") for msg in user_messages):
-        return False
+        return None
     try:
         from app.db import async_session
 
         async with async_session() as fresh_db:
-            await save_user_message_events(fresh_db, session_id, user_messages, None, agent_used, source_metadata)
+            event = await save_user_message_events(fresh_db, session_id, user_messages, None, agent_used, source_metadata)
             await fresh_db.commit()
-        return True
+        return str(event.id) if event is not None else None
     except Exception as save_err:
         logger.error("Failed to save the turn's prompt: %s", save_err)
-        return False
+        return None
 
 
 async def _with_fresh_session(

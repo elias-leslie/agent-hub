@@ -224,5 +224,43 @@ async def test_the_prompt_is_stored_at_turn_start_so_a_second_client_sees_it_mid
         await asyncio.wait_for(run.finished.wait(), 2)
 
     assert [e["type"] for e in parse(response.text)][-1] == "done"
-    # The end-of-turn save no longer stores the prompt a second time.
-    assert not persistence.save_messages_to_db.await_args.kwargs["user_messages"]
+    # The end-of-turn save no longer stores the prompt a second time; it names it so it gets the turn's tokens.
+    done_save = persistence.save_messages_to_db.await_args.kwargs
+    assert not done_save["user_messages"]
+    assert done_save["prompt_event_id"] == mid["messages"][0]["id"]
+
+
+async def test_a_prompt_stored_at_turn_start_gets_the_turns_input_tokens_when_it_ends(
+    pg_db: AsyncSession, test_session_factory: None  # noqa: F811
+) -> None:
+    import time
+
+    from sqlalchemy import select
+
+    from app.api.complete.schemas import MessageInput
+    from app.api.complete.streaming_persistence import save_messages_to_db, save_turn_prompt_to_db
+    from app.models import SessionEvent, SessionEventType
+    from tests.model_ids import CLAUDE_SONNET
+
+    await add_session(pg_db, "counted", minutes=1, session_type="chat", status="active")
+    event_id = await save_turn_prompt_to_db("counted", [MessageInput(role="user", content="Count these tokens")])
+    assert event_id is not None
+
+    await save_messages_to_db(
+        session_id="counted", user_messages=[], accumulated_content="Done.", input_tokens=6254,
+        output_tokens=12, model=CLAUDE_SONNET, agent_used=None, stream_start=time.monotonic(),
+        prompt_event_id=event_id,
+    )
+
+    rows = (
+        await pg_db.execute(
+            select(SessionEvent.event_type, SessionEvent.tokens)
+            .where(SessionEvent.session_id == "counted")
+            .order_by(SessionEvent.sequence)
+        )
+    ).all()
+    pg_db.expire_all()
+    assert [(row.event_type, row.tokens) for row in rows] == [
+        (SessionEventType.USER_MESSAGE, 6254),
+        (SessionEventType.ASSISTANT_MESSAGE, 12),
+    ]

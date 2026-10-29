@@ -174,6 +174,7 @@ async def _persist_and_build_done_sse(
         usage=outcome_usage(message),
         trace=trace,
         thinking_tokens=thinking_tokens,
+        prompt_event_id=ctx.prompt_event_id,
     )
     await track_citations(ctx.session_id, accumulated_content, ctx.agent_used, ctx.model_used)
     if ctx.is_new_session and ctx.is_one_shot:
@@ -480,7 +481,10 @@ async def stream_completion(
         from .streaming_persistence import save_turn_prompt_to_db
 
         # Stored now, not with the answer: a client that opens the session mid-turn must see the prompt.
-        if await save_turn_prompt_to_db(session_id, ctx.user_messages, source_metadata, agent_used):
+        ctx.prompt_event_id = await save_turn_prompt_to_db(
+            session_id, ctx.user_messages, source_metadata, agent_used
+        )
+        if ctx.prompt_event_id is not None:
             ctx.user_messages = None
 
     yield writer.connected(model=model, provider=provider, turn_id=turn_id)

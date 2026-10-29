@@ -20,6 +20,8 @@ from .helpers import normalize_content_for_storage
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
+    from app.models import SessionEvent
+
     from .schemas import MessageInput
 
 logger = logging.getLogger(__name__)
@@ -90,13 +92,13 @@ async def save_user_message_events(
     input_tokens: int | None,
     agent_id: str | None,
     source_metadata: dict[str, object] | None = None,
-) -> None:
+) -> SessionEvent | None:
     """Store only the last user/system message (prior turns already persisted)."""
     user_msgs = [msg for msg in user_messages if msg.role in ("user", "system")]
     if not user_msgs:
-        return
+        return None
     msg = user_msgs[-1]
-    await store_message_event(
+    return await store_message_event(
         db=db,
         session_id=session_id,
         role=msg.role,

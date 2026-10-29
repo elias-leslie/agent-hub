@@ -14,10 +14,23 @@ class StreamContext:
     _active_contexts: ClassVar[dict[str, StreamContext]] = {}
 
     __slots__ = (
-        "_seq", "agent_used", "cancel_event", "fallback_used",
-        "is_new_session", "is_one_shot", "last_progress_at",
-        "last_progress_chars", "model", "model_used", "project_id", "provider",
-        "session_id", "source_metadata", "stream_start", "user_messages",
+        "_seq",
+        "agent_used",
+        "cancel_event",
+        "fallback_used",
+        "is_new_session",
+        "is_one_shot",
+        "last_progress_at",
+        "last_progress_chars",
+        "model",
+        "model_used",
+        "project_id",
+        "prompt_event_id",
+        "provider",
+        "session_id",
+        "source_metadata",
+        "stream_start",
+        "user_messages",
     )
 
     def __init__(
@@ -44,6 +57,8 @@ class StreamContext:
         self.model_used = model_used
         self.fallback_used = fallback_used
         self.user_messages = user_messages
+        # The prompt event stored at turn start; it gets the turn's input tokens once the turn ends.
+        self.prompt_event_id: str | None = None
         self.stream_start = stream_start
         self.is_new_session = is_new_session
         self.is_one_shot = is_one_shot
