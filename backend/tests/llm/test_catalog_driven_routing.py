@@ -123,3 +123,12 @@ def test_terra_routes_use_provider_specific_capabilities() -> None:
     assert codex.context_window == 500000
     assert _body(codex, Context(messages=[]), SimpleStreamOptions(reasoning="xhigh"))["access_programs"] == {"cyber": "standard"}
     assert resolve_llm_model("openai/gpt-6.1-terra", "openai").api == "openai-completions"
+
+
+def test_provider_endpoints_are_data_and_cloudflare_keeps_its_module_template() -> None:
+    from app.llm import model_resolver
+    from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
+
+    assert model_resolver._PROVIDER_BASE_URL["cloudflare"] == CLOUDFLARE_WORKERS_AI_BASE_URL
+    assert set(model_resolver._PROVIDER_API) == set(model_resolver._PROVIDER_BASE_URL)
+    assert model_resolver._PROVIDER_API_BASE_URL[("opencode-go", "anthropic-messages")].endswith("/anthropic")

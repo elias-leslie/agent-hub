@@ -1,0 +1,85 @@
+{
+  "_comment": "Provider wire defaults: the API a provider speaks unless its catalog model names one (models.api), its base URL, and per-API base URLs for a provider that serves more than one. 'local' is overridden by settings.local_openai_base_url; '{VAR}' placeholders are filled by the provider's support module.",
+  "default_api": "openai-completions",
+  "providers": {
+    "google": {
+      "api": "google-generative-ai",
+      "base_url": ""
+    },
+    "gemini": {
+      "api": "google-generative-ai",
+      "base_url": ""
+    },
+    "openai": {
+      "api": "openai-completions",
+      "base_url": "https://api.openai.com/v1"
+    },
+    "openrouter": {
+      "api": "openai-completions",
+      "base_url": "https://openrouter.ai/api/v1"
+    },
+    "xai": {
+      "api": "openai-completions",
+      "base_url": "https://api.x.ai/v1"
+    },
+    "zhipu": {
+      "api": "openai-completions",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4"
+    },
+    "minimax": {
+      "api": "anthropic-messages",
+      "base_url": "https://api.minimax.io/anthropic"
+    },
+    "minimax-cn": {
+      "api": "anthropic-messages",
+      "base_url": "https://api.minimaxi.com/anthropic"
+    },
+    "kimi-code": {
+      "api": "anthropic-messages",
+      "base_url": "https://api.kimi.com/coding"
+    },
+    "kimi-coding": {
+      "api": "anthropic-messages",
+      "base_url": "https://api.kimi.com/coding"
+    },
+    "moonshot": {
+      "api": "openai-completions",
+      "base_url": "https://api.moonshot.ai/v1"
+    },
+    "moonshotai": {
+      "api": "openai-completions",
+      "base_url": "https://api.moonshot.ai/v1"
+    },
+    "deepseek": {
+      "api": "openai-completions",
+      "base_url": "https://api.deepseek.com/v1"
+    },
+    "local": {
+      "api": "openai-completions",
+      "base_url": "http://127.0.0.1:11434/v1"
+    },
+    "nvidia": {
+      "api": "openai-completions",
+      "base_url": "https://integrate.api.nvidia.com/v1"
+    },
+    "cloudflare": {
+      "api": "openai-completions",
+      "base_url": "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+    },
+    "opencode-go": {
+      "api": "openai-completions",
+      "base_url": "https://opencode.ai/inference/go/openai/v1",
+      "api_base_urls": {
+        "anthropic-messages": "https://opencode.ai/inference/go/anthropic"
+      }
+    },
+    "codex": {
+      "api": "openai-codex-responses",
+      "base_url": "https://chatgpt.com/backend-api/codex/responses"
+    },
+    "claude": {
+      "api": "claude-code-cli",
+      "base_url": ""
+    }
+  }
+}

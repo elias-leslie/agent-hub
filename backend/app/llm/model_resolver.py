@@ -11,7 +11,9 @@ the transitional surface.
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import cast
 from urllib.parse import urlparse
 
@@ -21,7 +23,6 @@ from app.constants.catalog import (
     ModelEntry,
     resolve_model,
 )
-from app.llm.provider_support.cloudflare import CLOUDFLARE_WORKERS_AI_BASE_URL
 from app.llm.types import Api, Model, ModelCost, OpenAICompletionsCompat, ThinkingLevelMap
 
 logger = logging.getLogger(__name__)
@@ -30,57 +31,20 @@ logger = logging.getLogger(__name__)
 _UNCATALOGUED_CONTEXT_WINDOW = 128_000
 _UNCATALOGUED_MAX_TOKENS = 8192
 
-# Provider → API id mapping. Matches the three providers ported in Phase 1+2.
+# Provider wire defaults (API, base URL, per-API base URLs) are data: provider_endpoints.json.
+_ENDPOINTS = json.loads((Path(__file__).parent / "provider_endpoints.json").read_text())
+_DEFAULT_API: Api = _ENDPOINTS["default_api"]
 _PROVIDER_API: dict[str, Api] = {
-    "google": "google-generative-ai",
-    "gemini": "google-generative-ai",
-    # Everything OpenAI-compatible collapses here per D4.
-    "openai": "openai-completions",
-    "openrouter": "openai-completions",
-    "xai": "openai-completions",
-    "zhipu": "openai-completions",
-    "minimax": "anthropic-messages",
-    "minimax-cn": "anthropic-messages",
-    "kimi-code": "anthropic-messages",
-    "kimi-coding": "anthropic-messages",
-    "moonshot": "openai-completions",
-    "moonshotai": "openai-completions",
-    "deepseek": "openai-completions",
-    "local": "openai-completions",
-    "nvidia": "openai-completions",
-    "cloudflare": "openai-completions",
-    "opencode-go": "openai-completions",
-    "codex": "openai-codex-responses",
-    # Claude runs through the headless Claude Code CLI on the owner's subscription.
-    "claude": "claude-code-cli",
+    name: row["api"] for name, row in _ENDPOINTS["providers"].items() if "api" in row
 }
-
-# Provider → default base URL. Per-model overrides happen via Model.base_url.
 _PROVIDER_BASE_URL: dict[str, str] = {
-    "google": "",
-    "gemini": "",
-    "openai": "https://api.openai.com/v1",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "xai": "https://api.x.ai/v1",
-    "zhipu": "https://open.bigmodel.cn/api/paas/v4",
-    "minimax": "https://api.minimax.io/anthropic",
-    "minimax-cn": "https://api.minimaxi.com/anthropic",
-    "kimi-code": "https://api.kimi.com/coding",
-    "kimi-coding": "https://api.kimi.com/coding",
-    "moonshot": "https://api.moonshot.ai/v1",
-    "moonshotai": "https://api.moonshot.ai/v1",
-    "deepseek": "https://api.deepseek.com/v1",
-    "local": "http://127.0.0.1:11434/v1",  # Ollama; effective value read from settings.local_openai_base_url
-    "nvidia": "https://integrate.api.nvidia.com/v1",
-    "cloudflare": CLOUDFLARE_WORKERS_AI_BASE_URL,
-    "opencode-go": "https://opencode.ai/inference/go/openai/v1",
-    "codex": "https://chatgpt.com/backend-api/codex/responses",
-    "claude": "",
+    name: row["base_url"] for name, row in _ENDPOINTS["providers"].items() if "base_url" in row
 }
-
 # (provider, api) → base URL for a provider that serves more than one API; a model's catalog ``api`` picks the row.
 _PROVIDER_API_BASE_URL: dict[tuple[str, str], str] = {
-    ("opencode-go", "anthropic-messages"): "https://opencode.ai/inference/go/anthropic",
+    (name, api): url
+    for name, row in _ENDPOINTS["providers"].items()
+    for api, url in row.get("api_base_urls", {}).items()
 }
 
 
@@ -98,7 +62,7 @@ def resolve_llm_model(
     entry = _catalog_entry(resolved_id, model_id, provider)
     if entry is not None and entry.upstream_id:
         upstream_id = entry.upstream_id
-    api = (entry.api if entry is not None else None) or _PROVIDER_API.get(provider, "openai-completions")
+    api = (entry.api if entry is not None else None) or _PROVIDER_API.get(provider, _DEFAULT_API)
     base_url = _PROVIDER_API_BASE_URL.get((provider, api)) or _resolve_base_url(provider)
     headers = _provider_headers(provider)
 
