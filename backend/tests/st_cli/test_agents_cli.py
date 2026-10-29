@@ -575,7 +575,7 @@ class TestAgentMemoryConfigUpdate:
                     "--continuity-max-sessions",
                     "7",
                     "--add-audience-tags",
-                    "jenny-relevant,memory-system",
+                    "operator-relevant,memory-system",
                     "--remove-exclude-tags",
                     "deprecated",
                     "--change-reason",
@@ -590,7 +590,7 @@ class TestAgentMemoryConfigUpdate:
             "memory_config": {
                 "include_references": True,
                 "continuity_enabled": True,
-                "audience_tags": ["existing-tag", "jenny-relevant", "memory-system"],
+                "audience_tags": ["existing-tag", "operator-relevant", "memory-system"],
                 "exclude_tags": [],
                 "injection_enabled": True,
                 "continuity_max_sessions": 7,
@@ -614,7 +614,7 @@ class TestAgentMemoryConfigUpdate:
                     "--include-references",
                     "--no-include-guardrails",
                     "--audience-tags",
-                    "jenny-relevant,memory-system",
+                    "operator-relevant,memory-system",
                     "--exclude-tags",
                     "stale",
                 ],
@@ -625,7 +625,7 @@ class TestAgentMemoryConfigUpdate:
             "injection_enabled": False,
             "include_references": True,
             "include_guardrails": False,
-            "audience_tags": ["jenny-relevant", "memory-system"],
+            "audience_tags": ["operator-relevant", "memory-system"],
             "exclude_tags": ["stale"],
         }
 

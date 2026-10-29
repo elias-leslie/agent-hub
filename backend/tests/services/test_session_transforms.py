@@ -313,11 +313,11 @@ def test_convert_messages_to_response_synthesizes_incomplete_tool_turn() -> None
         ),
     ]
 
-    messages = convert_messages_to_response(events, agent_display_names={"persona": "Jenny"})
+    messages = convert_messages_to_response(events, agent_display_names={"persona": "Worker Agent"})
 
     assert len(messages) == 1
     assert messages[0].role == "assistant"
-    assert messages[0].agent_display_name == "Jenny"
+    assert messages[0].agent_display_name == "Worker Agent"
     assert messages[0].content == "Tool activity recorded without a final assistant summary. Tools: bash."
     assert messages[0].tool_executions is not None
     assert len(messages[0].tool_executions) == 1
@@ -399,7 +399,7 @@ def test_convert_messages_to_response_keeps_real_assistant_without_synthetic_dup
         ),
     ]
 
-    messages = convert_messages_to_response(events, agent_display_names={"persona": "Jenny"})
+    messages = convert_messages_to_response(events, agent_display_names={"persona": "Worker Agent"})
 
     assert [message.role for message in messages] == ["user", "assistant"]
     assert messages[1].content == "done"
