@@ -186,6 +186,7 @@ class TurnRun:
                     try:
                         await asyncio.wait_for(self._cond.wait(), interval)
                     except TimeoutError:
+                        pending = []  # already delivered: a heartbeat must not replay them
                         yield HEARTBEAT_CHUNK
                         continue
             pending = self.events_after(cursor)

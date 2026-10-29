@@ -10,6 +10,7 @@ import asyncio
 import shlex
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -234,6 +235,7 @@ def _command_family(words: list[str]) -> tuple[str, str]:
     return "unknown", "unknown"
 
 
+@lru_cache(maxsize=4096)  # a pure function of the command text; session lists re-classify the same commands on every read
 def _shell_family(command: str) -> tuple[str, str]:
     # No execution, expansion, or parsing of scripts. Unsupported syntax remains unknown.
     if any(token in command for token in ("$", "`", "<<", "(", ")")):

@@ -123,6 +123,19 @@ async def test_a_subscriber_that_is_idle_gets_heartbeats(registry: TurnRegistry)
     await asyncio.wait_for(run.finished.wait(), 2)
 
 
+async def test_heartbeats_while_the_turn_is_silent_do_not_replay_delivered_events(registry: TurnRegistry) -> None:
+    gate = asyncio.Event()
+    run = registry.start("s", gated(HEAD, gate, TAIL), persist=False)
+    reader = asyncio.create_task(drain(run.follow(heartbeat_seconds=0.01)))
+    await asyncio.sleep(0.15)  # many heartbeat intervals with nothing new
+    gate.set()
+    chunks = await asyncio.wait_for(reader, 2)
+    events = [c for c in chunks if c not in (HEARTBEAT_CHUNK, DONE_CHUNK)]
+    assert events == [*HEAD, *TAIL]
+    assert seqs(events) == sorted(set(seqs(events)))
+    assert chunks.count(HEARTBEAT_CHUNK) >= 2
+
+
 async def test_cancel_from_a_second_client_reaches_every_subscriber(registry: TurnRegistry) -> None:
     gate = asyncio.Event()
 
