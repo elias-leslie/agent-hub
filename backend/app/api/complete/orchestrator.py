@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
+from app.llm.compaction import Compactor
 from app.llm.tool_loop import ToolLoopEvent, ToolRunner, run_turn
 from app.llm.tool_loop import run as run_tool_loop
 from app.llm.types import (
@@ -218,6 +219,7 @@ async def run_completion(
     compress_tool_results_enabled: bool = False,
     compression_stats_sink: dict[str, int] | None = None,
     on_loop_event: Callable[[Any], None] | None = None,
+    compactor: Compactor | None = None,
 ) -> OrchestratorResult:
     """Drive the new pipeline to completion (non-streaming).
 
@@ -241,6 +243,7 @@ async def run_completion(
             max_turns=max_turns,
             compress_tool_results_enabled=compress_tool_results_enabled,
             compression_stats_sink=compression_stats_sink,
+            compactor=compactor,
         ):
             event_type = getattr(event, "type", None)
             if on_loop_event is not None:
@@ -286,6 +289,7 @@ async def run_completion_stream(
     options: SimpleStreamOptions | None = None,
     max_turns: int | None = DEFAULT_AGENTIC_MAX_TURNS,
     compress_tool_results_enabled: bool = False,
+    compactor: Compactor | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Streaming variant: yield each :class:`ToolLoopEvent` as it arrives.
 
@@ -304,6 +308,7 @@ async def run_completion_stream(
             options,
             max_turns=max_turns,
             compress_tool_results_enabled=compress_tool_results_enabled,
+            compactor=compactor,
         ):
             yield event
         return

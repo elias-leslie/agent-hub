@@ -29,6 +29,7 @@ from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 from app.llm.headroom_compress import compression_enabled_for
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.tool_loop import (
+    ContextCompacted,
     ToolLoopEvent,
     ToolRunComplete,
     ToolRunError,
@@ -49,6 +50,7 @@ from app.routing.registry import get_provider_for_model
 from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message, messages_to_dicts
 
+from .context_compaction import build_loop_compactor
 from .event_helpers import TurnTraceStep
 from .orchestrator import (
     build_context_from_messages,
@@ -314,6 +316,10 @@ async def _emit_events(
             thinking_since[0] = None
             thinking_spent_ms[0] = 0
             yield writer.turn_retry(event.attempt, event.max_retries, event.reason)
+            continue
+        if isinstance(event, ContextCompacted):
+            # Not output: the next model call just runs on a shorter history.
+            yield writer.context_compacted(event.record.as_dict())
             continue
         if isinstance(event, TextDeltaEvent):
             if event.delta:
@@ -631,6 +637,11 @@ async def stream_completion(
                     max_turns=tool_loop_turns(execute_tools, max_tool_turns),
                     compress_tool_results_enabled=(
                         execute_tools and compression_enabled_for(agent_used)
+                    ),
+                    compactor=(
+                        build_loop_compactor(llm_model, project_id=project_id, signal=ctx.cancel_event)
+                        if execute_tools
+                        else None
                     ),
                 )
                 async for chunk in _with_heartbeat(

@@ -33,6 +33,7 @@ from typing import Any, Literal
 from app.config import settings
 from app.constants.agent_limits import DEFAULT_AGENTIC_MAX_TURNS
 
+from .compaction import CompactionFailed, CompactionRecord, Compactor
 from .headroom_compress import compress_tool_results
 from .stream import stream_simple
 from .types import (
@@ -46,6 +47,7 @@ from .types import (
     TextContent,
     ToolCall,
     ToolResultMessage,
+    Usage,
     UserMessage,
 )
 from .utils.outcomes import outcome_of
@@ -108,8 +110,19 @@ class TurnBudgetExhausted:
     type: Literal["turn_budget_exhausted"] = "turn_budget_exhausted"
 
 
+@dataclass(slots=True)
+class ContextCompacted:
+    """The history was summarized before the next model call (see :mod:`app.llm.compaction`).
+
+    The record is also saved on that call's ``request_metrics`` so persistence stores it as a ``compaction`` event.
+    """
+
+    record: CompactionRecord
+    type: Literal["context_compacted"] = "context_compacted"
+
+
 ToolRunEvent = ToolRunStart | ToolRunComplete | ToolRunError
-ToolLoopEvent = AssistantMessageEvent | ToolRunEvent | TurnRetry | TurnBudgetExhausted
+ToolLoopEvent = AssistantMessageEvent | ToolRunEvent | TurnRetry | TurnBudgetExhausted | ContextCompacted
 
 ToolRunner = Callable[[ToolCall], Awaitable[ToolResultMessage]]
 
@@ -192,9 +205,11 @@ async def _run_one(run_tool: ToolRunner, tool_call: ToolCall) -> tuple[ToolResul
         )
 
 
-def _close_metrics(message: AssistantMessage, started: float, retry_log: list[dict[str, Any]]) -> None:
-    """Complete the turn's ``request_metrics`` record: what the provider could not see (retries) and, for a
-    provider that records none, the outcome and duration."""
+def _close_metrics(
+    message: AssistantMessage, started: float, retry_log: list[dict[str, Any]], notes: dict[str, Any] | None = None
+) -> None:
+    """Complete the turn's ``request_metrics`` record: what the provider could not see (retries), the loop's own
+    ``notes`` (compactions done just before the call) and, for a provider that records none, the outcome and duration."""
     if request_metrics_of(message) is None:
         failed = message.stop_reason in ("error", "aborted")
         record_request_metrics(
@@ -202,7 +217,7 @@ def _close_metrics(message: AssistantMessage, started: float, retry_log: list[di
             total_s=round(time.monotonic() - started, 2),
             outcome=(message.error_message or message.stop_reason)[:200] if failed else "ok",
         )
-    record_request_metrics(message, retries=len(retry_log), retry_log=retry_log)
+    record_request_metrics(message, retries=len(retry_log), retry_log=retry_log, **(notes or {}))
 
 
 async def run_turn(
@@ -210,6 +225,7 @@ async def run_turn(
     context: Context,
     options: SimpleStreamOptions | None,
     sink: list[AssistantMessage],
+    notes: dict[str, Any] | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """One model turn, and the only place a model request is re-sent.
 
@@ -219,7 +235,8 @@ async def run_turn(
     rate limits are not retried. Silence and elapsed time never end a request.
 
     The provider is told not to retry on its own (``max_retries=0``), so the budget is spent once, visibly, as
-    ``TurnRetry`` events. The turn's final message is appended to ``sink`` carrying its ``request_metrics``.
+    ``TurnRetry`` events. The turn's final message is appended to ``sink`` carrying its ``request_metrics``
+    (plus ``notes``, which the loop uses to report a compaction that preceded the call).
     """
     retries = retry_budget(options)
     attempt_options = replace(options or SimpleStreamOptions(), max_retries=0)
@@ -235,9 +252,9 @@ async def run_turn(
                     interrupted = event
                     continue
             if isinstance(event, DoneEvent):
-                _close_metrics(event.message, started, retry_log)
+                _close_metrics(event.message, started, retry_log, notes)
             elif isinstance(event, ErrorEvent):
-                _close_metrics(event.error, started, retry_log)
+                _close_metrics(event.error, started, retry_log, notes)
             yield event
         if interrupted is None:
             sink.append(await stream_handle.result())
@@ -257,6 +274,22 @@ async def run_turn(
         await asyncio.sleep(delay)
 
 
+def _compaction_failure(model: Model[Any], record: CompactionRecord) -> AssistantMessage:
+    """The terminal message of a loop whose history needed compacting and could not be: no model call was made."""
+    message = AssistantMessage(
+        content=[],
+        api=model.api,
+        provider=model.provider,
+        model=model.id,
+        usage=Usage(),
+        stop_reason="error",
+        timestamp=int(time.time() * 1000),
+        error_message=f"context_compaction_failed: {record.error}",
+    )
+    record_request_metrics(message, outcome=(message.error_message or "")[:200], compactions=[record.as_dict()])
+    return message
+
+
 async def run(
     model: Model[Any],
     context: Context,
@@ -268,6 +301,7 @@ async def run(
     is_parallel_safe: ParallelSafe | None = None,
     file_target: FileTarget | None = None,
     max_file_batch: int | None = None,
+    compactor: Compactor | None = None,
 ) -> AsyncIterator[ToolLoopEvent]:
     """Run the multi-turn tool loop.
 
@@ -277,6 +311,10 @@ async def run(
     appends ``ToolResultMessage``s to ``context.messages``, and starts
     the next turn. Stops on the first non-``toolUse`` terminal or when
     ``max_turns`` is exhausted (``None``: no turn budget, the loop ends only on a terminal stop).
+
+    With a ``compactor``, each turn is preceded by a check of the prompt size against the model's window; past the
+    threshold the oldest history becomes a summary (:class:`ContextCompacted`) and the turn runs on the shorter
+    context. A summary that cannot be made ends the loop with an ``error`` event ``context_compaction_failed``.
 
     Yields:
         Each :class:`AssistantMessageEvent` from the provider, plus
@@ -306,9 +344,28 @@ async def run(
                         turn_stats.get(key, 0)
                     )
 
+        notes: dict[str, Any] = {}
+        if compactor is not None:
+            try:
+                record = await compactor.compact_if_needed(context)
+            except CompactionFailed as exc:
+                failure = _compaction_failure(model, compactor.failure_record(context, str(exc)))
+                logger.warning("tool loop ended: %s", failure.error_message)
+                context.messages.append(failure)
+                yield ErrorEvent(reason="error", error=failure)
+                return
+            if record is not None:
+                logger.info(
+                    "context compacted: %d -> %d tokens (window %d, summarized %d messages with %s)",
+                    record.tokens_before, record.tokens_after, record.context_window,
+                    record.messages_summarized, record.summarizer_model,
+                )
+                notes["compactions"] = [record.as_dict()]
+                yield ContextCompacted(record=record)
+
         turn_start = time.monotonic()
         sunk: list[AssistantMessage] = []
-        async for event in run_turn(model, context, options, sunk):
+        async for event in run_turn(model, context, options, sunk, notes):
             yield event
         final = sunk[0]
         logger.debug(
@@ -405,6 +462,7 @@ async def run(
 
 
 __all__ = [
+    "ContextCompacted",
     "FileTarget",
     "ParallelSafe",
     "ToolLoopEvent",

@@ -35,6 +35,7 @@ from app.services.llm_errors import ProviderError
 from app.services.memory.context_injector_ops import has_verified_canonical_context
 from app.services.memory.context_resilience import CanonicalContextInjectionFailed
 
+from .context_compaction import build_loop_compactor
 from .error_summary import build_error_summary
 from .orchestrator import build_context_from_messages, completion_options, run_completion
 from .progress import AgentProgress
@@ -237,6 +238,7 @@ async def complete_internal(
         compress_tool_results_enabled=execute_tools and compression_enabled_for(agent_slug),
         compression_stats_sink=compression_stats,
         on_loop_event=on_loop_event,
+        compactor=build_loop_compactor(llm_model, project_id=project_id, signal=signal) if execute_tools else None,
     )
     message = result.message
     _normalize_tagged_thinking(message)

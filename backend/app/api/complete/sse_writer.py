@@ -142,6 +142,10 @@ class SseWriter:
             }
         )
 
+    def context_compacted(self, record: dict[str, Any]) -> str:
+        """The tool loop summarized older history before the next model call (sizes, summarizer model and cost)."""
+        return _format_sse({"type": "context_compacted", "seq": self.next_seq(), **record})
+
     def cancel_acknowledged(self) -> str:
         return _format_sse(
             {

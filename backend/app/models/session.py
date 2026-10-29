@@ -42,6 +42,8 @@ class SessionEventType:
     MEMORY_INJECT = "memory_inject"
     MEMORY_CITE = "memory_cite"
     ERROR = "error"
+    # The tool loop summarized older history before a model call; the originals stay in the session.
+    COMPACTION = "compaction"
     SUBAGENT_RESULT = "subagent_result"
     TOOL_AUDIT = "tool_audit"
     CHILD_SESSION_STARTED = "child_session_started"

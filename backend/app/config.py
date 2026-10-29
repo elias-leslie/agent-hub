@@ -175,6 +175,9 @@ class Settings(BaseSettings):
         "agent_hub_trusted_hosts",
         "workflow_owner_only_refusal_categories",
         "llm_fatal_error_codes",
+        "llm_compaction_read_tools",
+        "llm_compaction_write_tools",
+        "llm_compaction_summarizer_models",
         mode="before",
     )
     @classmethod
@@ -225,6 +228,26 @@ class Settings(BaseSettings):
     # Consecutive replies that stop for tool use but carry no parseable tool call before the turn
     # ends as an error. A protocol fault, not a time or turn budget: any valid reply resets it.
     llm_empty_tool_use_limit: int = Field(default=3, ge=1)
+    # Context compaction in the tool loop (app/llm/compaction.py), shaped like Pi's: before a provider call, when the
+    # prompt (last real usage plus newer messages) passes the model's catalog window minus the reserve, the oldest
+    # messages up to a safe cut point become one summary written by the llm_compaction_agent_slug agent; the newest
+    # llm_compaction_keep_recent_tokens stay verbatim. History is only shortened in what is sent; the session keeps
+    # every original event.
+    llm_compaction_enabled: bool = True
+    llm_compaction_reserve_tokens: int = Field(default=16_384, ge=0)
+    llm_compaction_keep_recent_tokens: int = Field(default=20_000, ge=1)
+    llm_compaction_agent_slug: str = "context-compactor"
+    # When set, these catalog model ids (tried in order) write the summary instead of the agent's own model chain;
+    # the agent still supplies the prompt and temperature. Empty: the agent's primary model, then its fallbacks.
+    llm_compaction_summarizer_models: Annotated[list[str], NoDecode] = []
+    # Tool results are clipped to this many characters in the text the summarizer reads.
+    llm_compaction_tool_result_chars: int = Field(default=2_000, ge=100)
+    # Which tools' calls count as reading or changing a file (their `path` argument), listed under the summary.
+    llm_compaction_read_tools: Annotated[list[str], NoDecode] = ["read_file"]
+    llm_compaction_write_tools: Annotated[list[str], NoDecode] = ["write_file", "edit_file"]
+    # Model id -> context window, replacing the catalog's for that model (a test or a provider that serves less than
+    # the catalog says). JSON in the environment, e.g. LLM_COMPACTION_WINDOW_OVERRIDES='{"deepseek-v4.1-flash": 8000}'.
+    llm_compaction_window_overrides: dict[str, int] = {}
     # Codex error codes (response.failed / error events) that a re-send cannot fix: the request is
     # invalid, over quota or over the context window. Any other failed response is re-sent.
     llm_fatal_error_codes: Annotated[list[str], NoDecode] = [

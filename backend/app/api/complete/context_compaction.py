@@ -1,5 +1,9 @@
 """Context compaction — prune long conversations before hitting token limits.
 
+Two layers. ``maybe_compact_context`` (below) trims a resumed chat's text history before the request runs. The tool
+loop's own compaction (``app.llm.compaction``) shortens the history in the middle of a run, tool calls included;
+``build_loop_compactor`` plugs this module's summarizer agent into it.
+
 Operates purely in-memory on the messages_dict list. Session events
 (the immutable log) are never modified. Compaction summarizes older
 messages using the configured ``context-compactor`` agent and
@@ -9,8 +13,15 @@ recent turns protected.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from app.config import settings
+
+if TYPE_CHECKING:
+    from app.llm.compaction import Compactor, SummaryRequest, SummaryResult
+    from app.llm.types import Model
 
 logger = logging.getLogger(__name__)
 
@@ -186,3 +197,110 @@ async def _summarize_messages(
     except Exception:
         logger.exception("Context compaction summarization failed")
         return None
+
+
+def _summary_prompt(request: SummaryRequest) -> str:
+    previous = f"<previous-summary>\n{request.previous_summary}\n</previous-summary>\n\n" if request.previous_summary else ""
+    return f"{previous}<conversation>\n{request.transcript}\n</conversation>\n\n{request.prompt}"
+
+
+async def summarize_with_agent(
+    request: SummaryRequest, *, project_id: str | None = None, signal: asyncio.Event | None = None
+) -> SummaryResult:
+    """Write the loop's summary with ``settings.llm_compaction_agent_slug``, trying its primary model, then fallbacks.
+
+    The model chain is the agent's (catalog and seed data) unless ``llm_compaction_summarizer_models`` names one, never
+    a literal here. Raises when no model in the chain answers.
+    """
+    from app.api.complete.core import complete_internal
+    from app.api.complete.runtime_usage import accounting_model, served_model
+    from app.db import async_session
+    from app.llm.compaction import SummaryResult
+    from app.routing.registry import get_provider_for_model
+    from app.services.agent_model_router import RoutingContext
+    from app.services.agent_routing_completion import (
+        route_preflight_error,
+        thinking_level_for_provider,
+    )
+    from app.services.agent_routing_utils import resolve_agent
+    from app.services.token_counter import estimate_usage_cost
+
+    slug = settings.llm_compaction_agent_slug
+    async with async_session() as db:
+        agent = (await resolve_agent(slug, db, RoutingContext())).agent
+    messages: list[dict[str, Any]] = [{"role": "user", "content": _summary_prompt(request)}]
+    if (agent.system_prompt or "").strip():
+        messages.insert(0, {"role": "system", "content": agent.system_prompt.strip()})
+    failures: list[str] = []
+    chain = settings.llm_compaction_summarizer_models or [agent.primary_model_id, *(agent.fallback_models or [])]
+    for model in dict.fromkeys(chain):
+        provider = get_provider_for_model(model)
+        if (unavailable := await route_preflight_error(model)) is not None:
+            failures.append(f"{model}: {unavailable}")
+            continue
+        try:
+            result = await complete_internal(
+                messages=messages,
+                model=model,
+                provider=provider,
+                temperature=agent.temperature,
+                project_id=project_id or "agent-hub",
+                db=None,
+                agent_slug=slug,
+                request_source="context_compaction",
+                use_memory=False,
+                thinking_level=thinking_level_for_provider(provider, agent.thinking_level),
+                signal=signal,
+            )
+        except Exception as exc:
+            failures.append(f"{model}: {exc}")
+            continue
+        message = result.message
+        if message.stop_reason in ("error", "aborted"):
+            failures.append(f"{model}: {message.error_message or message.stop_reason}")
+            continue
+        usage = message.usage
+        accounted = accounting_model(message, model)
+        cost = estimate_usage_cost(
+            usage.input, usage.output, accounted,
+            cache_read_tokens=usage.cache_read, cache_write_tokens=usage.cache_write,
+        )
+        return SummaryResult(
+            text=result.content or "",
+            model=served_model(message, model),
+            input_tokens=usage.input,
+            output_tokens=usage.output,
+            cache_read_tokens=usage.cache_read,
+            cache_write_tokens=usage.cache_write,
+            cost_usd=cost.total_cost_usd,
+        )
+    raise RuntimeError(f"no model of agent {slug!r} produced a summary: " + "; ".join(failures))
+
+
+def build_loop_compactor(
+    model: Model[Any], *, project_id: str | None = None, signal: asyncio.Event | None = None
+) -> Compactor | None:
+    """The tool loop's compactor for ``model``: its window (the catalog's, or an override) and the configured policy.
+
+    None when compaction is off or the model has no known window.
+    """
+    from app.llm.compaction import CompactionPolicy, Compactor
+
+    if not settings.llm_compaction_enabled:
+        return None
+    window = settings.llm_compaction_window_overrides.get(model.id) or model.context_window
+    if window <= 0:
+        return None
+    policy = CompactionPolicy(
+        context_window=window,
+        reserve_tokens=settings.llm_compaction_reserve_tokens,
+        keep_recent_tokens=settings.llm_compaction_keep_recent_tokens,
+        tool_result_chars=settings.llm_compaction_tool_result_chars,
+        read_tools=frozenset(settings.llm_compaction_read_tools),
+        write_tools=frozenset(settings.llm_compaction_write_tools),
+    )
+
+    async def summarize(request: SummaryRequest) -> SummaryResult:
+        return await summarize_with_agent(request, project_id=project_id, signal=signal)
+
+    return Compactor(policy, summarize)
