@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   parseSessionListState,
@@ -14,6 +21,7 @@ import {
 } from '@/app/sessions/utils'
 import type { SessionListItem } from '@/lib/api/sessions'
 import { createQueryClientWrapper } from './test-utils'
+import { attempt, run, step } from './workflow-runs-fixture'
 
 const nav = vi.hoisted(() => {
   let search = ''
@@ -62,12 +70,18 @@ vi.mock('@/lib/api/sessions', async (original) => ({
   fetchSessionEvents: vi.fn(),
 }))
 
+vi.mock('@/lib/api/workflow-runs', async (original) => ({
+  ...(await original<typeof import('@/lib/api/workflow-runs')>()),
+  fetchWorkflowRun: vi.fn(),
+}))
+
 import {
   fetchSession,
   fetchSessionEvents,
   fetchSessionFacets,
   querySessions,
 } from '@/lib/api/sessions'
+import { fetchWorkflowRun } from '@/lib/api/workflow-runs'
 
 function row(overrides: Partial<SessionListItem>): SessionListItem {
   return {
@@ -407,6 +421,61 @@ describe('SessionsPage', () => {
       }),
     )
     expect(screen.getByLabelText('Search sessions')).toHaveValue('retry')
+  })
+
+  it('shows which workflow run and step an attempt session belongs to, with a link back', async () => {
+    const runId = 'r1111111-0000-0000-0000-000000000000'
+    const attemptRow = row({
+      id: 'a7700000-1111-2222-3333-444444444444',
+      title: 'build attempt 2',
+      request_source: 'workflow_run',
+      parent_session_id: runId,
+      requested_model: 'codex/gpt-5.6-luna',
+      effective_model: 'codex/gpt-5.6-luna',
+    })
+    vi.mocked(querySessions).mockResolvedValue(listResponse([attemptRow]))
+    vi.mocked(fetchSession).mockResolvedValue({
+      ...attemptRow,
+      message_count: 4,
+      event_count: 9,
+    })
+    vi.mocked(fetchWorkflowRun).mockResolvedValue(
+      run({
+        id: runId,
+        steps: [
+          step({ key: 'plan' }),
+          step({
+            key: 'build',
+            position: 1,
+            attempt_history: [
+              attempt({ session_id: 'other', attempt: 1 }),
+              attempt({
+                session_id: attemptRow.id,
+                attempt: 2,
+                executor: 'agent_hub',
+              }),
+            ],
+          }),
+        ],
+      }),
+    )
+    nav.reset(`sel=${attemptRow.id}`)
+    mount()
+    const origin = await screen.findByTestId('workflow-origin')
+    const link = await within(origin).findByRole('link', {
+      name: /step build · attempt 2/,
+    })
+    expect(link).toHaveAttribute('href', `/workflow-runs/${runId}#step-build`)
+    expect(within(origin).getByText('Agent Hub')).toBeInTheDocument()
+    expect(within(origin).getByText('codex/gpt-5.6-luna')).toBeInTheDocument()
+  })
+
+  it('does not show a workflow origin on an ordinary session', async () => {
+    nav.reset(`sel=${codexRow.id}`)
+    mount()
+    await screen.findByTestId('session-inline')
+    expect(screen.queryByTestId('workflow-origin')).toBeNull()
+    expect(fetchWorkflowRun).not.toHaveBeenCalled()
   })
 
   it('debounces search into a replaced URL entry', async () => {

@@ -240,6 +240,7 @@ export function StepCard({
     (step.status === 'running' && Boolean(step.cancel))
   return (
     <li
+      id={`step-${step.key}`}
       data-testid="step"
       data-step-key={step.key}
       className="relative rounded-lg border border-slate-800 bg-slate-950/70 p-3"

@@ -19,6 +19,7 @@ import { CopyIdButton } from './CopyIdButton'
 import { RequestErrorsBadge, requestErrorsText } from './RequestErrorsBadge'
 import { hasText, isUsefulLiveSummary, liveWarnings } from './SessionEvidence'
 import { StatusCell } from './StatusCell'
+import { WorkflowOrigin, workflowRunIdOf } from './WorkflowOrigin'
 
 function absolute(value: string) {
   const date = new Date(value)
@@ -322,6 +323,9 @@ export function SessionInline({
         </label>
         {source ? (
           <Facts source={source} onFilterModel={onFilterModel} />
+        ) : null}
+        {source && workflowRunIdOf(source) ? (
+          <WorkflowOrigin source={source} />
         ) : null}
         {!listRow && session ? (
           <div className="text-[12px] text-slate-500">
