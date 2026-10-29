@@ -220,7 +220,7 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
         "include_guardrails": True,
         "include_references": True,
         "reference_index_enabled": True,
-        "continuity_enabled": True,
+        "continuity_enabled": False,
         "continuity_max_sessions": 5,
         "query_reference_selection_enabled": True,
         "runtime_consumer_profile": "agent_promptops",
