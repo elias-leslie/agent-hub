@@ -147,7 +147,7 @@ function LoginRow({
       >
         {login.updated_at ? formatRelativeTime(login.updated_at) : 'Unknown'}
       </td>
-      <td className="px-4 py-3">
+      <td className="sticky right-0 bg-slate-950/95 px-4 py-3 shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]">
         {confirming ? (
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs text-slate-300">
@@ -344,7 +344,7 @@ export default function AgentLoginsPage() {
           <button
             type="button"
             onClick={() => openPanel({ mode: 'add', login: null })}
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-slate-100 px-3 text-sm font-medium text-slate-900"
+            className="button-primary"
           >
             <Plus className="h-4 w-4" />
             Add login
@@ -539,7 +539,7 @@ export default function AgentLoginsPage() {
                         ))}
                         <th
                           scope="col"
-                          className="px-4 py-3 text-left text-[10px] font-bold tracking-wider text-slate-500 uppercase"
+                          className="sticky right-0 bg-slate-900 px-4 py-3 text-left text-[10px] font-bold tracking-wider text-slate-500 uppercase shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]"
                         >
                           Actions
                         </th>
