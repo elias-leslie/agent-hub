@@ -158,10 +158,26 @@ async def test_success_returns_handoff_usage_session_and_transcript(fake_claude,
     assert args[:2] == ["-p", "--input-format"] and "--no-session-persistence" not in args
     assert args[args.index("--model") + 1] == MODEL
     assert args[args.index("--effort") + 1] == "high"  # the executor default; the packet carries no agent level here
-    assert args[args.index("--settings") + 1] == '{"switchModelsOnFlag": false}'
+    assert json.loads(args[args.index("--settings") + 1])["switchModelsOnFlag"] is False
     assert args[args.index("--append-system-prompt") + 1] == "canonical context"
     sent = json.loads((tmp_path / "stdin.txt").read_text())
     assert sent["message"]["content"][0]["text"].startswith("# Run goal")
+
+
+def test_a_step_runs_the_shared_publication_guard_as_its_hook_when_it_is_installed(tmp_path) -> None:
+    settings = ClaudeCodeExecutor().settings
+    hook = tmp_path / settings["guard_hook"]["script"]
+    hook.parent.mkdir(parents=True)
+    hook.write_text("#!/usr/bin/env bash\n")
+
+    guarded = module.step_settings(settings, tmp_path)
+    assert guarded["switchModelsOnFlag"] is False
+    [entry] = guarded["hooks"]["PreToolUse"]
+    assert entry["matcher"].startswith("Bash")
+    assert entry["hooks"] == [{"type": "command", "command": f"bash {hook}"}]
+
+    # Without SummitFlow's scripts the guard is not installed and does not apply, as for Agent Hub's own bash.
+    assert "hooks" not in module.step_settings(settings, tmp_path / "missing")
 
 
 async def test_usage_carries_the_subscription_window_use_the_cli_reported(fake_claude, worktree, tmp_path) -> None:

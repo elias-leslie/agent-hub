@@ -1,7 +1,7 @@
 """Claude Code step executor: one fresh unmodified headless ``claude`` per attempt, inside the run's worktree.
 
 The CLI runs with its own tools under the permission mode in ``executor_defaults.json`` and the packet's canonical
-context as appended system prompt. Refusal, substitution and usage-limit detection is the provider's own
+context as appended system prompt; the shared publication guard runs as its PreToolUse hook (``step_settings``). Refusal, substitution and usage-limit detection is the provider's own
 (``llm/provider_support/claude_stream.py``); ``switchModelsOnFlag`` is off and ``child_env`` disables the CLI's refusal
 fallback, so a flagged turn fails instead of being answered by another model. The CLI keeps its own login: this module
 never reads or forwards credentials. The native JSONL transcript stays where Claude Code wrote it, for session ingestion.
@@ -101,6 +101,25 @@ def refusal_event(category: str, explanation: str) -> dict[str, Any]:
     }
 
 
+def step_settings(settings: Mapping[str, Any], scripts_dir: Path | None = None) -> dict[str, Any]:
+    """The step's ``--settings``: the configured ones plus the shared publication guard as a hook.
+
+    ``--setting-sources project`` keeps the user's own hooks out of a step, so the guard every interactive
+    Claude Code session runs before shell and git tools is passed here instead. Without SummitFlow's scripts
+    the guard is not installed and does not apply, as for Agent Hub's own bash tool.
+    """
+
+    from app.core.project_roots import resolve_summitflow_scripts_dir
+
+    merged = dict(settings["settings"])
+    guard = settings.get("guard_hook")
+    scripts = scripts_dir if scripts_dir is not None else resolve_summitflow_scripts_dir()
+    if guard and scripts is not None and (scripts / guard["script"]).is_file():
+        hook = {"type": "command", "command": f"bash {scripts / guard['script']}"}
+        merged["hooks"] = {guard["event"]: [{"matcher": guard["matcher"], "hooks": [hook]}]}
+    return merged
+
+
 class ClaudeCodeExecutor:
     def __init__(self, defaults: Mapping[str, Any] | None = None) -> None:
         self.defaults = dict(defaults or load_defaults())
@@ -133,7 +152,7 @@ class ClaudeCodeExecutor:
             "--setting-sources",
             self.settings["setting_sources"],
             "--settings",
-            json.dumps(self.settings["settings"]),
+            json.dumps(step_settings(self.settings)),
             *self.settings["levels"][packet.level or self.settings["default_level"]],
         ]
         if packet.context:

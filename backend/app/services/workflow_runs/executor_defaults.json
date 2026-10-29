@@ -36,6 +36,7 @@
     "permission_mode": "bypassPermissions",
     "setting_sources": "project",
     "settings": {"switchModelsOnFlag": false},
+    "guard_hook": {"event": "PreToolUse", "matcher": "Bash|mcp__.*(?:github|git).*", "script": "lib/publication-pretool-hook"},
     "default_level": "lean",
     "levels": {
       "read": ["--tools", "Read,Grep,Glob", "--disable-slash-commands", "--strict-mcp-config", "--exclude-dynamic-system-prompt-sections"],
