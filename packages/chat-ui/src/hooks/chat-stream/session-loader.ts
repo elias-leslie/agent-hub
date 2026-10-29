@@ -12,6 +12,8 @@ import type { SessionToolExecution } from "./types";
 export interface SessionStats {
   inputTokens?: number;
   outputTokens?: number;
+  /** What the session's model calls cost, when the server logged any. */
+  costUsd?: number;
   /** 0-100, only when the server measured it for the latest request. */
   contextPercent?: number;
   branch?: string;
@@ -39,6 +41,7 @@ function mapToolExecutions(
     result: t.result ?? undefined,
     startedAt: new Date(),
     completedAt: new Date(),
+    ...(typeof t.content_offset === "number" ? { contentOffset: t.content_offset } : {}),
   }));
 }
 
@@ -49,10 +52,12 @@ export function readSessionStats(session: Awaited<ReturnType<ChatHubClient["sess
   const usage = (session as { context_usage?: { percent_used?: unknown; measured?: unknown } | null }).context_usage;
   const percent = Number(usage?.percent_used);
   const branch = (session as { current_branch?: unknown }).current_branch;
+  const cost = Number(session.total_cost_usd);
   const hasTokens = (Number.isFinite(input) && input > 0) || (Number.isFinite(output) && output > 0);
   return {
     ...(hasTokens && Number.isFinite(input) && input > 0 ? { inputTokens: input } : {}),
     ...(hasTokens && Number.isFinite(output) && output > 0 ? { outputTokens: output } : {}),
+    ...(session.total_cost_usd != null && Number.isFinite(cost) && cost > 0 ? { costUsd: cost } : {}),
     ...(usage && usage.measured !== false && Number.isFinite(percent) ? { contextPercent: Math.min(100, Math.max(0, percent)) } : {}),
     ...(typeof branch === "string" && branch ? { branch } : {}),
   };
@@ -123,6 +128,7 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
       ...(m.id === lastAssistantId ? latestRoute : {}),
       ...(m.thinking ? { thinking: m.thinking } : {}),
       ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
+      ...(m.thinking_ms ? { thinkingMs: m.thinking_ms } : {}),
       ...(uniqueToolExecutionsByMessage.has(m.id)
         ? { toolExecutions: mapToolExecutions(uniqueToolExecutionsByMessage.get(m.id)) }
         : {}),

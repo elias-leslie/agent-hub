@@ -309,7 +309,7 @@ function ChatPanelBody({
               busy={isBusy}
               inputTokens={sessionStats.inputTokens}
               outputTokens={sessionStats.outputTokens}
-              costUsd={sessionCost(messages)}
+              costUsd={sessionCost(messages) ?? sessionStats.costUsd}
               contextPercent={sessionStats.contextPercent}
               branch={branch ?? sessionStats.branch}
             />

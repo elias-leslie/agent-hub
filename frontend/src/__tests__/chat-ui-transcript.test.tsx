@@ -518,3 +518,181 @@ describe('the transcript layout', () => {
     )
   })
 })
+
+describe('a reopened session reads like it did live', () => {
+  beforeEach(() => localStorage.clear())
+
+  const text1 = "I'll read the file."
+  const text2 = ' Now fixing it.'
+  const text3 = ' Fixed: total.py.'
+  const answer = text1 + text2 + text3
+
+  /** What the answer shows top to bottom: prose as its text, a tool call as "tool:<kind>". */
+  function order(): string[] {
+    const entry = screen.getByTestId('agent-entry')
+    return Array.from(entry.children).flatMap((child) => {
+      const lines = within(child as HTMLElement).queryAllByTestId('tool-line')
+      if (child.getAttribute('data-testid') === 'tool-line')
+        return [`tool:${child.getAttribute('data-kind')}`]
+      if (lines.length > 0)
+        return lines.map((line) => `tool:${line.getAttribute('data-kind')}`)
+      const text = child.textContent?.trim()
+      return text ? [text] : []
+    })
+  }
+
+  const storedTools = (offsets: Array<number | undefined>) => [
+    {
+      id: 'e1',
+      name: 'read_file',
+      input: { path: 'total.py' },
+      status: 'complete',
+      result: 'def f(): pass',
+      content_offset: offsets[0],
+    },
+    {
+      id: 'e2',
+      name: 'edit_file',
+      input: { path: 'total.py', old_text: 'pass', new_text: 'return 1' },
+      status: 'complete',
+      result: 'edited',
+      content_offset: offsets[1],
+    },
+  ]
+
+  const reopened = (tools: unknown[], extra: Record<string, unknown> = {}) => ({
+    turn_state: 'idle',
+    messages: [
+      finished.messages[0],
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: answer,
+        created_at: '2026-10-29T10:00:05Z',
+        model_used: 'deepseek-v4.1-flash',
+        tool_executions: tools,
+        ...extra,
+      },
+    ],
+  })
+
+  it('puts text, tool, text, tool, text in the order a watching view showed them', async () => {
+    const live = client({
+      turn_state: 'running',
+      turn_phase: 'waiting_for_model',
+      messages: finished.messages.slice(0, 1),
+    })
+    const view = panel(live.fake)
+    await screen.findByText('Fix the total.')
+    await act(async () => {
+      live.turn.push(
+        { type: 'content', seq: 1, content: text1 },
+        {
+          type: 'tool_use',
+          seq: 2,
+          tool_id: 't1',
+          tool_name: 'read_file',
+          tool_input: { path: 'total.py' },
+        },
+        {
+          type: 'tool_result',
+          seq: 3,
+          tool_id: 't1',
+          tool_status: 'complete',
+          tool_result: 'def f(): pass',
+        },
+        { type: 'content', seq: 4, content: text2 },
+        {
+          type: 'tool_use',
+          seq: 5,
+          tool_id: 't2',
+          tool_name: 'edit_file',
+          tool_input: {
+            path: 'total.py',
+            old_text: 'pass',
+            new_text: 'return 1',
+          },
+        },
+        {
+          type: 'tool_result',
+          seq: 6,
+          tool_id: 't2',
+          tool_status: 'complete',
+          tool_result: 'edited',
+        },
+        { type: 'content', seq: 7, content: text3 },
+      )
+    })
+    await screen.findByText(/Fixed: total.py/)
+    const watched = order()
+    expect(watched).toEqual([
+      text1,
+      'tool:read',
+      text2.trim(),
+      'tool:edit',
+      text3.trim(),
+    ])
+    view.unmount()
+
+    const stored = client(
+      reopened(storedTools([text1.length, text1.length + text2.length])),
+    )
+    panel(stored.fake)
+    await screen.findByText(/Fixed: total.py/)
+    expect(order()).toEqual(watched)
+  })
+
+  it('shows an answer stored without offsets as its data allows: the calls, then the text, nothing invented', async () => {
+    const { fake } = client(reopened(storedTools([undefined, undefined])))
+    panel(fake)
+    await screen.findByText(/Fixed: total.py/)
+    expect(order()).toEqual(['tool:read', 'tool:edit', answer.trim()])
+  })
+
+  it('counts an offset the way the browser counts text, so an emoji does not shift a call', () => {
+    const body = 'Done \u{1F600} first. Then more.'
+    const parts = interleave(body, [
+      {
+        id: 'a',
+        name: 'bash',
+        input: {},
+        status: 'complete',
+        startedAt: at,
+        contentOffset: 'Done \u{1F600} first.'.length,
+      } as never,
+    ])
+    expect(parts[0]).toEqual({ text: 'Done \u{1F600} first.' })
+    expect(parts[2]).toEqual({ text: ' Then more.' })
+  })
+
+  it('says how long the model thought and what the session cost', async () => {
+    const { fake } = client({
+      ...reopened(storedTools([text1.length, text1.length + text2.length]), {
+        thinking: 'Look first.',
+        thinking_tokens: 12,
+        thinking_ms: 3400,
+      }),
+      total_cost_usd: 0.0123,
+    })
+    panel(fake)
+    expect(await screen.findByTestId('thinking-toggle')).toHaveTextContent(
+      'Thought for 3s',
+    )
+    expect(screen.getByTestId('status-cost')).toHaveTextContent('$0.01')
+  })
+
+  it('does not say a thought took time that was not recorded or was under a second', async () => {
+    const { fake } = client(
+      reopened([], {
+        thinking: 'Look first.',
+        thinking_tokens: 12,
+        thinking_ms: 600,
+      }),
+    )
+    panel(fake)
+    expect(await screen.findByTestId('thinking-toggle')).toHaveTextContent(
+      'Thought (12 tokens)',
+    )
+    expect(screen.queryByTestId('status-cost')).not.toBeInTheDocument()
+  })
+})

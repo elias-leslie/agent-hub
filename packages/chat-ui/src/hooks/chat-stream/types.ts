@@ -30,6 +30,8 @@ export interface SessionToolExecution {
   status: string;
   result?: string | null;
   duration_ms?: number | null;
+  /** How much of the answer text had streamed when the call started; null for a turn stored before this was recorded. */
+  content_offset?: number | null;
 }
 
 /**

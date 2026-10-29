@@ -13,7 +13,7 @@ export interface ToolExecution {
   result?: string;
   startedAt: Date;
   completedAt?: Date;
-  /** How much of the answer text had streamed when the call started; the transcript layout puts the call there. Absent for a reloaded session. */
+  /** How much of the answer text had streamed when the call started; the transcript layout puts the call there. Absent for a turn stored before the server recorded it. */
   contentOffset?: number;
 }
 
@@ -83,7 +83,7 @@ export interface ChatMessage {
   // Extended thinking
   thinking?: string;
   thinkingTokens?: number;
-  /** How long the model spent thinking, in ms, when this view watched it happen. Absent for a reloaded session. */
+  /** How long the model spent thinking, in ms: measured live, or as the server stored it. Absent when not recorded. */
   thinkingMs?: number;
   // Output usage / truncation
   truncated?: boolean;

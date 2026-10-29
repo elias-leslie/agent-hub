@@ -8,7 +8,7 @@ import { ToolLine } from "./ToolLine";
 export function interleave(content: string, tools: ToolExecution[]): Array<{ text: string } | { tools: ToolExecution[] }> {
   const placed = tools.length > 0 && tools.every((tool) => typeof tool.contentOffset === "number");
   if (!placed) {
-    // A reloaded answer has no offsets: its calls come first, then the text.
+    // An answer stored before offsets were recorded has none: its calls come first, then the text. No order is invented.
     return [...(tools.length > 0 ? [{ tools }] : []), ...(content.trim() ? [{ text: content }] : [])];
   }
   const out: Array<{ text: string } | { tools: ToolExecution[] }> = [];
