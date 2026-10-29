@@ -39,6 +39,7 @@ from . import acceptance as acceptance_runner
 from .executor_common import catalog_served
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
 from .live import LiveStatus, current_live
+from .native_transcript import ingest_attempt_in_own_session
 from .packet import (
     AttemptRef,
     GitState,
@@ -1525,6 +1526,16 @@ async def _settle_attempt(
             f"steps/{intent.position:02d}-{intent.step_key}/partial-a{intent.attempt_no}.json",
             {"model": intent.model, "progress": list(result.progress)},
         )
+    # The harness's own transcript becomes the attempt session's events (success, failure or cancel alike); a missing
+    # one is a note on the attempt, never a failed step.
+    info["transcript"] = await ingest_attempt_in_own_session(
+        deps.factory(),
+        intent.attempt_id,
+        executor=intent.executor,
+        transcript_path=result.transcript_path,
+        native_session_id=result.native_session_id,
+        agent_slug=intent.definition.get("agent_slug"),
+    )
     now = deps.clock()
     if result.outcome is not None and result.outcome.kind == "usage_limit":
         # Same shared provider cooldown a rate limit trips, held until the limit resets.
@@ -1752,6 +1763,7 @@ def _finish_attempt(
         "error": None if decision.action == "cancelled" else result.error,
         "native_session_id": result.native_session_id,
         "transcript_path": result.transcript_path,
+        "transcript": info.get("transcript"),
         "tools": list(result.tools) if result.tools is not None else None,
         "served_reported": info.get("served_reported"),
         "decision": {"action": decision.action, "reason": decision.reason},

@@ -16,7 +16,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Enum, make_url, select, text, update
+from sqlalchemy import Enum, func, make_url, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
@@ -1076,6 +1076,64 @@ async def test_faux_and_agent_hub_attempts_write_no_cost_rows(pg_db, repo, world
     run_id, _ = await create_run(pg_db, example("plan-implement-review-fix", repo), deps=world.deps)
     await world.run_to_stop(run_id)
     assert await cost_rows(pg_db) == []
+
+
+class NativeTranscriptExecutor(FauxExecutor):
+    """A faux harness that also reports the native transcript it "wrote" (a path per step key)."""
+
+    def __init__(self, transcripts: dict[str, str | None]) -> None:
+        super().__init__()
+        self.transcripts = transcripts
+
+    async def run(self, packet, model, worktree, run_dir, on_event) -> StepResult:
+        from dataclasses import replace
+
+        result = await super().run(packet, model, worktree, run_dir, on_event)
+        return replace(
+            result,
+            transcript_path=self.transcripts.get(packet.step_key),
+            native_session_id="01a18394-8e96-764c-bce0-621d4806e5e3",
+        )
+
+
+async def test_native_harness_attempts_get_their_transcript_as_events_and_a_missing_one_only_a_note(
+    pg_db, repo, world_factory, tmp_path
+) -> None:
+    import shutil
+
+    fixture = Path(__file__).resolve().parents[2] / "fixtures/workflow_executors/native_pi_attempt.jsonl"
+    present = tmp_path / "pi" / "present.jsonl"
+    present.parent.mkdir()
+    shutil.copy(fixture, present)
+    world = world_factory({})
+    world.deps.get_executor = lambda _kind: NativeTranscriptExecutor(
+        {"plan": str(present), "implement": str(tmp_path / "pi" / "gone.jsonl"), "review": None}
+    )
+    chains(world)
+    definition = example("plan-implement-review-fix", repo)
+    for step in definition.steps:
+        step.executor = "pi"
+    run_id, _ = await create_run(pg_db, definition, deps=world.deps)
+    assert (await world.run_to_stop(run_id))["reason"] == "completed"  # a missing transcript fails nothing
+
+    steps = {s["key"]: s["attempt_history"][-1] for s in (await view_of(pg_db, run_id))["steps"]}
+    attempts = {
+        key: (await pg_db.get(Session, history["session_id"])).provider_metadata["workflow_attempt"]["transcript"]
+        for key, history in steps.items()
+    }
+    assert attempts["plan"]["note"] is None and attempts["plan"]["events"] == 9
+    assert "no longer on disk" in attempts["implement"]["note"]
+    assert "no transcript path" in attempts["review"]["note"]
+    counts = {
+        key: (
+            await pg_db.execute(
+                select(func.count()).select_from(SessionEvent).where(SessionEvent.session_id == history["session_id"])
+            )
+        ).scalar_one()
+        for key, history in steps.items()
+    }
+    assert counts["plan"] == 9 and counts["implement"] == counts["review"] == counts["fix"] == 0
+    assert len(await cost_rows(pg_db)) == 4  # the attempt's own accounting, one row each; the transcript adds none
 
 
 async def test_acceptance_failure_on_a_substituted_answer_retries_the_requested_model(

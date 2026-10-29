@@ -4,7 +4,8 @@ Pi's model is ``provider/id``; the provider comes from the catalog provider thro
 the id from the catalog's upstream id. The user's Agent Hub Pi extension is switched off for these runs
 (``--no-extensions``): the step's canonical context is already in the packet and goes in through
 ``--append-system-prompt``, and the extension would deliver a second, differently-scoped context and ingest the
-same transcript the engine ingests from ``transcript_path``. The one extension a step does load, explicitly, is
+same transcript a second time. The engine ingests Pi's session file (``transcript_path``) onto the attempt session
+when the attempt ends (``native_transcript``). The one extension a step does load, explicitly, is
 the shared publication guard (``guard_extension``). The packet's tool level (the run's, narrowed by the step)
 picks the ``--tools`` flags in ``executor_defaults.json`` ``pi.levels`` (``read`` is Pi's read-only set). Pi has no
 access-program support, so a catalog model that needs one fails fast and the chain moves on.
