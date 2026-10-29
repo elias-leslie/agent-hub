@@ -723,7 +723,9 @@ async def test_detail_carries_the_session_cost_tool_places_and_thinking_time(
     await add_event(pg_db, "chat", 1, 4, "assistant_message", role="assistant", content="Looking... Fixed.")
     pg_db.add_all([
         CostLog(session_id="chat", model="m", input_tokens=10, output_tokens=5, cost_usd=0.004),
-        CostLog(session_id="chat", model="m", input_tokens=10, output_tokens=5, cost_usd=0.0, api_equiv_usd=0.006),
+        CostLog(session_id="chat", model="m", input_tokens=10, output_tokens=5, cost_usd=0.006),
+        # A subscription call costs $0 cash; its list-price value is not spend, and a live turn does not show it.
+        CostLog(session_id="chat", model="m", input_tokens=10, output_tokens=5, cost_usd=0.0, api_equiv_usd=0.5),
     ])
     await pg_db.flush()
 
