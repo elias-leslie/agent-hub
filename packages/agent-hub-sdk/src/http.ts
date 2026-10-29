@@ -27,7 +27,9 @@ export function createTransport(options: {
     fetch?: FetchLike;
     headers?: HeaderSource;
 }): Transport {
-    const baseUrl = options.baseUrl.replace(/\/+$/, '');
+    let end = options.baseUrl.length;
+    while (end > 0 && options.baseUrl[end - 1] === '/') end -= 1;
+    const baseUrl = options.baseUrl.slice(0, end);
     // Called through globalThis so a detached browser `fetch` does not throw "Illegal invocation".
     const doFetch: FetchLike = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
 
