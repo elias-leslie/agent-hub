@@ -18,7 +18,7 @@ DEFAULT_TOTAL_BUDGET = 3500
 DEFAULT_MAX_MANDATES = 0  # 0 = unlimited
 DEFAULT_MAX_GUARDRAILS = 0  # 0 = unlimited
 DEFAULT_REFERENCE_INDEX_ENABLED = True  # TOON compressed reference index
-DEFAULT_CONTINUITY_ENABLED = True
+DEFAULT_CONTINUITY_ENABLED = False  # "Recent Activity" is opt-in per agent
 DEFAULT_CONTINUITY_MAX_SESSIONS = 5
 _UNSET = object()
 
@@ -33,7 +33,7 @@ class MemorySettingsDTO:
     max_mandates: int = 0
     max_guardrails: int = 0
     reference_index_enabled: bool = True
-    continuity_enabled: bool = True
+    continuity_enabled: bool = False
     continuity_max_sessions: int = 5
     active_variant: str | None = None
 

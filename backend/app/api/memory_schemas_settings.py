@@ -9,7 +9,7 @@ class SettingsResponse(BaseModel):
     """Response schema for memory settings."""
 
     enabled: bool = Field(..., description="Kill switch for memory injection (False = no memories)")
-    continuity_enabled: bool = Field(True, description="Include Recent Activity block")
+    continuity_enabled: bool = Field(False, description="Include Recent Activity block")
     continuity_max_sessions: int = Field(5, description="Max sessions in Recent Activity")
     active_variant: MemoryVariant | None = Field(
         None,

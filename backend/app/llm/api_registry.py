@@ -60,6 +60,8 @@ class ApiProvider(Protocol):
 class _RegisteredApiProvider:
     provider: ApiProvider
     source_id: str | None = None
+    # Set by a provider class that is a harness already telling its model who it is (Claude Code CLI): Agent Hub adds nothing.
+    states_own_model: bool = False
 
 
 _registry: dict[str, _RegisteredApiProvider] = {}
@@ -102,7 +104,14 @@ def register_api_provider(provider: ApiProvider, source_id: str | None = None) -
     _registry[provider.api] = _RegisteredApiProvider(
         provider=_wrap_for_api(provider.api, provider),
         source_id=source_id,
+        states_own_model=bool(getattr(provider, "states_own_model", False)),
     )
+
+
+def api_states_own_model(api: Api) -> bool:
+    """Whether the provider for ``api`` is a harness whose own system prompt names the model it serves."""
+    entry = _registry.get(api)
+    return bool(entry and entry.states_own_model)
 
 
 def get_api_provider(api: Api) -> ApiProvider | None:
@@ -126,6 +135,7 @@ def clear_api_providers() -> None:
 
 __all__ = [
     "ApiProvider",
+    "api_states_own_model",
     "clear_api_providers",
     "get_api_provider",
     "get_api_providers",

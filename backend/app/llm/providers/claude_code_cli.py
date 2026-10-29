@@ -399,6 +399,8 @@ def _effort(model: Model[Any], options: SimpleStreamOptions | None) -> str | Non
 
 class _ClaudeCodeCliProvider:
     api = API
+    # The CLI's own system prompt states the served model, so Agent Hub adds no identity line.
+    states_own_model = True
 
     def stream(
         self,

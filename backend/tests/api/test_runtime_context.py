@@ -59,7 +59,8 @@ async def test_optional_continuity_failure_preserves_required_context() -> None:
         patch("app.services.memory.continuity_injector.build_continuity_context", new=AsyncMock(side_effect=RuntimeError("continuity unavailable"))),
     ):
         response = await build_canonical_context_delivery(
-            AsyncMock(), CanonicalContextDeliveryRequest(consumer_surface="codex", project_id="agent-hub")
+            AsyncMock(),
+            CanonicalContextDeliveryRequest(consumer_surface="codex", project_id="agent-hub", include_continuity=True),
         )
     assert response.status == "ok"
     assert "Preserve native instructions." in response.rendered

@@ -40,7 +40,7 @@ def test_normalize_memory_config_materializes_core_fields_and_preserves_extensio
         "include_guardrails": True,
         "include_references": True,
         "reference_index_enabled": True,
-        "continuity_enabled": True,
+        "continuity_enabled": False,
         "continuity_max_sessions": 5,
         "audience_tags": ["finance-relevant"],
         "exclude_tags": ["draft"],

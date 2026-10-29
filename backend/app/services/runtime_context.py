@@ -214,7 +214,7 @@ class CanonicalContextDeliveryRequest(BaseModel):
     exclude_memory_uuids: list[str] = Field(default_factory=list)
     include_project_index: bool = True
     include_tool_capabilities: bool = True
-    include_continuity: bool = True
+    include_continuity: bool = False
     continuity_max_sessions: int | None = Field(None, ge=1)
     continuity_cross_project: bool = False
     continuity_live_sessions: bool = False
@@ -256,7 +256,7 @@ class CanonicalContextMetadata(BaseModel):
     exclude_memory_uuids: list[str] = Field(default_factory=list)
     include_project_index: bool = True
     include_tool_capabilities: bool = True
-    include_continuity: bool = True
+    include_continuity: bool = False
     continuity_max_sessions: int | None = None
     continuity_cross_project: bool = False
     continuity_live_sessions: bool = False
@@ -737,24 +737,25 @@ async def build_canonical_context_delivery(
                     build_continuity_context,
                 )
 
+                # The caller's include_continuity is the decision: an agent's own config, or the global setting for an
+                # agent without one (resolved before this point). A global "off" must not veto an agent that opted in.
                 settings = await get_memory_settings(db)
-                if settings.continuity_enabled:
-                    continuity_context = await build_continuity_context(
-                        project_id=effective_request.project_id,
-                        current_branch=effective_request.current_branch,
-                        max_sessions=(
-                            effective_request.continuity_max_sessions
-                            or settings.continuity_max_sessions
-                        ),
-                        include_cross_project=(
-                            effective_request.continuity_cross_project
-                        ),
-                        include_live_sessions=(
-                            effective_request.continuity_live_sessions
-                        ),
-                        exclude_session_id=effective_request.session_id,
-                    )
-                    continuity = continuity_context.markdown.strip()
+                continuity_context = await build_continuity_context(
+                    project_id=effective_request.project_id,
+                    current_branch=effective_request.current_branch,
+                    max_sessions=(
+                        effective_request.continuity_max_sessions
+                        or settings.continuity_max_sessions
+                    ),
+                    include_cross_project=(
+                        effective_request.continuity_cross_project
+                    ),
+                    include_live_sessions=(
+                        effective_request.continuity_live_sessions
+                    ),
+                    exclude_session_id=effective_request.session_id,
+                )
+                continuity = continuity_context.markdown.strip()
                 continuity_state = "included" if continuity else "inapplicable"
                 continuity_reason = "selected" if continuity else "no_sessions_or_disabled"
             except Exception:

@@ -108,7 +108,7 @@ class MemorySettings(Base):
     )
     # Continuity injection settings (Recent Activity block)
     continuity_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=True, server_default="true"
+        Boolean, default=False, server_default="false"
     )
 
     continuity_max_sessions: Mapped[int] = mapped_column(
