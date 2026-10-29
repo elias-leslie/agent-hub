@@ -33,7 +33,7 @@ the API response. After a `models` command change, regenerate
 `st workflow` drives Agent Hub's durable workflow runner (`/api/workflow-runs`):
 create a run from a step plan, `get`/`wait` on it with distinct exit codes,
 `add-step`/`revise`/`remove-step` while it runs, `cancel` and `resume`. Aico
-sessions fill `launched_by` and `coordinator`. The coordinator guide is
+sessions fill `launched_by` and `coordinator`; an Agent Hub chat session fills them from `AGENT_HUB_SESSION_ID` and `AGENT_HUB_AGENT_SLUG`. The coordinator guide is
 `st workflow guide`, kept out of the always-on manifest (one short usage line per command).
 After a command change, regenerate `st-extensions/workflow.json` with
 `describe_app` at `COLUMNS=80`; `tests/test_workflow.py` fails on drift.

@@ -47,9 +47,20 @@ def frontend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("AGENT_HUB_FRONTEND_PORT", raising=False)
     monkeypatch.delenv("AICO_SESSION_ID", raising=False)  # tests run inside Aico sessions
     monkeypatch.delenv("AICO_AGENT_SLUG", raising=False)
+    monkeypatch.delenv("AGENT_HUB_SESSION_ID", raising=False)
+    monkeypatch.delenv("AGENT_HUB_AGENT_SLUG", raising=False)
 
 
 # --- payloads -----------------------------------------------------------------------------------------------
+
+
+def test_create_payload_names_the_agent_hub_chat_that_launched_it() -> None:
+    chat_env = {"AGENT_HUB_SESSION_ID": "hub-chat-1", "AGENT_HUB_AGENT_SLUG": "coordinator"}
+    payload = workflow.build_create_payload({"goal": "g", "steps": []}, env=chat_env)
+    assert (payload["launched_by"], payload["coordinator"]) == ("hub-chat-1", "coordinator")
+    # An Aico session's own ids win when both are set.
+    both = workflow.build_create_payload({"goal": "g"}, env={**ENV, **chat_env})
+    assert (both["launched_by"], both["coordinator"]) == ("aico-widget-1", "claude-code")
 
 
 def test_create_payload_fills_launcher_from_aico_env_and_keeps_file_values() -> None:

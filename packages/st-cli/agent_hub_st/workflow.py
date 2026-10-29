@@ -38,6 +38,10 @@ _Opt, _Arg = typer.Option, typer.Argument
 
 SESSION_ENV = "AICO_SESSION_ID"
 AGENT_ENV = "AICO_AGENT_SLUG"
+# An Agent Hub chat session runs its shell with these instead (it is no Aico terminal): the chat's own session
+# and agent, so a run it launches is recorded as launched by that chat.
+HUB_SESSION_ENV = "AGENT_HUB_SESSION_ID"
+HUB_AGENT_ENV = "AGENT_HUB_AGENT_SLUG"
 FRONTEND_URL_ENV = "AGENT_HUB_FRONTEND_URL"
 FRONTEND_PORT_ENV = "AGENT_HUB_FRONTEND_PORT"
 # Host default for the page address, like the host default for the API address: the web app's port on the API's host.
@@ -111,9 +115,11 @@ def build_create_payload(
     """The run definition plus who launched it: launched_by and coordinator come from the Aico session unless set."""
     env = os.environ if env is None else env
     payload = dict(definition)
-    for field, name in (("launched_by", SESSION_ENV), ("coordinator", AGENT_ENV)):
-        if not payload.get(field) and env.get(name):
-            payload[field] = env[name]
+    for field, names in (("launched_by", (SESSION_ENV, HUB_SESSION_ENV)), ("coordinator", (AGENT_ENV, HUB_AGENT_ENV))):
+        if not payload.get(field):
+            found = next((env[name] for name in names if env.get(name)), None)
+            if found:
+                payload[field] = found
     if request_id:
         payload["request_id"] = request_id
     # RunDefinition accepts these settings only inside its policy; any policy in the file is kept.
@@ -123,8 +129,14 @@ def build_create_payload(
     return payload
 
 
+def _launcher_session(env: Mapping[str, str] | None = None) -> str | None:
+    """The session this shell belongs to: the Aico session, else the Agent Hub chat session."""
+    env = os.environ if env is None else env
+    return env.get(SESSION_ENV) or env.get(HUB_SESSION_ENV) or None
+
+
 def _changed_by(env: Mapping[str, str] | None = None) -> str | None:
-    return (os.environ if env is None else env).get(SESSION_ENV) or None
+    return _launcher_session(env)
 
 
 def _plan_change(reason: str | None, env: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -387,9 +399,9 @@ def list_runs(
     as_json: _AsJson = False,
 ) -> None:
     """Recent runs, newest first."""
-    session = os.environ.get(SESSION_ENV)
+    session = _launcher_session()
     if mine and not session:
-        raise _fail(f"--mine needs {SESSION_ENV}, which is not set in this shell")
+        raise _fail(f"--mine needs {SESSION_ENV} (or {HUB_SESSION_ENV}), which is not set in this shell")
     params: dict[str, Any] = {"limit": limit, "offset": offset}
     if mine:
         params["launched_by"] = session
