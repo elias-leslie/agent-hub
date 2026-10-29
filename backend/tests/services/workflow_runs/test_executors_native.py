@@ -524,6 +524,31 @@ def test_pi_tools_follow_the_runs_tool_level(tmp_path) -> None:
         assert "--tools" not in argv
 
 
+def test_pi_steps_load_only_the_shared_publication_guard_extension(tmp_path, monkeypatch) -> None:
+    from app.services.workflow_runs.executor_pi import guard_extension_args
+
+    settings = PiExecutor(load_defaults(), model_lookup=CATALOG.get).settings
+    extension = tmp_path / settings["guard_extension"]
+    extension.parent.mkdir(parents=True)
+    extension.write_text("export default function () {}\n")
+
+    assert guard_extension_args(settings, tmp_path) == ["--extension", str(extension)]
+    # Without SummitFlow's scripts the guard is not installed and does not apply, as for Agent Hub's own bash.
+    assert guard_extension_args(settings, tmp_path / "missing") == []
+
+    monkeypatch.setenv("SUMMITFLOW_SCRIPTS_DIR", str(tmp_path))
+    from app.core.project_roots import resolve_summitflow_scripts_dir
+
+    resolve_summitflow_scripts_dir.cache_clear()
+    try:
+        argv, _, _ = PiExecutor(load_defaults(), model_lookup=CATALOG.get).command(packet(), CODEX_MODEL, tmp_path)
+    finally:
+        monkeypatch.undo()
+        resolve_summitflow_scripts_dir.cache_clear()
+    assert argv.count("--no-extensions") == 1
+    assert argv[argv.index("--extension") + 1] == str(extension)
+
+
 def test_every_tool_level_is_mapped_by_every_executor() -> None:
     defaults = load_defaults()
     for level in defaults["tool_levels"]:

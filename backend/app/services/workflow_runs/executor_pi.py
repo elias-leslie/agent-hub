@@ -4,7 +4,8 @@ Pi's model is ``provider/id``; the provider comes from the catalog provider thro
 the id from the catalog's upstream id. The user's Agent Hub Pi extension is switched off for these runs
 (``--no-extensions``): the step's canonical context is already in the packet and goes in through
 ``--append-system-prompt``, and the extension would deliver a second, differently-scoped context and ingest the
-same transcript the engine ingests from ``transcript_path``. The packet's tool level (the run's, narrowed by the step)
+same transcript the engine ingests from ``transcript_path``. The one extension a step does load, explicitly, is
+the shared publication guard (``guard_extension``). The packet's tool level (the run's, narrowed by the step)
 picks the ``--tools`` flags in ``executor_defaults.json`` ``pi.levels`` (``read`` is Pi's read-only set). Pi has no
 access-program support, so a catalog model that needs one fails fast and the chain moves on.
 """
@@ -50,6 +51,23 @@ def message_text(message: Mapping[str, Any]) -> str:
         for block in content or []
         if isinstance(block, Mapping) and block.get("type") == "text"
     ).strip()
+
+
+def guard_extension_args(settings: Mapping[str, Any], scripts_dir: Path | None = None) -> list[str]:
+    """``--extension`` for the shared publication guard, the one extension a step loads next to ``--no-extensions``.
+
+    Pi has no hooks, so the guard every interactive session runs before shell and git tools is a Pi extension in
+    SummitFlow's scripts. Without SummitFlow's scripts the guard is not installed and does not apply, as for Agent
+    Hub's own bash tool.
+    """
+
+    from app.core.project_roots import resolve_summitflow_scripts_dir
+
+    relative = settings.get("guard_extension")
+    scripts = scripts_dir if scripts_dir is not None else resolve_summitflow_scripts_dir()
+    if relative and scripts is not None and (scripts / relative).is_file():
+        return ["--extension", str(scripts / relative)]
+    return []
 
 
 def pi_phase(record: Mapping[str, Any]) -> str | None:
@@ -129,6 +147,7 @@ class PiExecutor:
             "--thinking",
             thinking_level(packet, entry, self.defaults),
             *self.settings["flags"],
+            *guard_extension_args(self.settings),
         ]
         # The run's tool level picks Pi's tool flags; a level with none leaves Pi's own default set.
         argv += self.settings["levels"][packet.level or self.settings["default_level"]]

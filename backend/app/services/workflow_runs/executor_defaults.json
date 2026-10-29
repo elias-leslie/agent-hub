@@ -24,6 +24,7 @@
     "binary": "pi",
     "provider_for_catalog_provider": {"codex": "openai", "claude": "anthropic", "opencode-go": "opencode-go"},
     "flags": ["--no-extensions", "--approve"],
+    "guard_extension": "lib/pi-publication-guard-extension.ts",
     "default_level": "lean",
     "levels": {
       "read": ["--tools", "read,grep,find,ls"],
