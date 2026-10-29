@@ -39,7 +39,7 @@ for await (const event of hub.turns.stream(
 ```
 
 Events are a typed union (`connected`, `content`, `thinking`, `tool_use`, `tool_start`, `tool_result`, `turn_retry`,
-`cancel_acknowledged`, `done`, `error`), deduplicated by `seq`. The iterator ends after the first terminal event
+`context_compacted`, `cancel_acknowledged`, `done`, `error`), deduplicated by `seq`. The iterator ends after the first terminal event
 (`done`, `error`, `cancel_acknowledged`). Leaving the loop closes only this client's connection: the server owns the
 turn and keeps running it.
 

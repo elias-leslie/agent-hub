@@ -143,6 +143,26 @@ def build_message_response(
     return msg
 
 
+def compaction_message(evt: Any, names: dict[str, str]) -> MessageResponse:
+    """The line a reopened chat shows where the history was summarized: the stored record rides along as ``compaction``."""
+    from app.api.schemas.sessions import MessageResponse
+
+    record = evt.tool_output if isinstance(evt.tool_output, dict) else {}
+    return MessageResponse(
+        id=str(evt.id),
+        role="system",
+        content=evt.content,
+        tokens=0,
+        agent_id=evt.agent_id,
+        agent_name=evt.agent_name,
+        model_used=evt.model_used,
+        agent_display_name=names.get(evt.agent_id or "") or names.get(evt.agent_name or ""),
+        kind="compaction",
+        compaction=record,
+        created_at=evt.created_at,
+    )
+
+
 def _build_incomplete_turn_content(tool_executions: list[ToolExecutionResponse]) -> str:
     """Summarize turn that emitted tool activity but never persisted final assistant message."""
     if not tool_executions:
@@ -188,6 +208,7 @@ def build_incomplete_turn_response(
         model_display_name=resolve_model_display_name(source_evt.model_used),
         agent_display_name=names.get(source_evt.agent_id or "") or names.get(source_evt.agent_name or ""),
         created_at=source_evt.created_at,
+        kind="incomplete_turn",
     )
     if thinking_parts:
         msg.thinking = "\n".join(thinking_parts)
@@ -233,6 +254,9 @@ def _exchange_messages(turn_events: list[Any], names: dict[str, str]) -> list[Me
     )
     messages: list[MessageResponse] = []
     for evt in turn_events:
+        if evt.event_type == SessionEventType.COMPACTION:
+            messages.append(compaction_message(evt, names))
+            continue
         if evt.event_type not in _MESSAGE_TYPES:
             continue
         messages.append(

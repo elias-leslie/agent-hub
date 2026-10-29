@@ -48,11 +48,31 @@ export interface ChatContextHint {
   tone?: "default" | "warning" | "danger";
 }
 
+/** One compaction of the history: the older messages were summarized before a model call. */
+export interface ChatCompaction {
+  /** `ok`, or `failed` (the turn then ends with an error). */
+  status: string;
+  /** Estimated prompt size before and after; absent when the server did not say. */
+  tokensBefore?: number;
+  tokensAfter?: number;
+  messagesSummarized?: number;
+  summarizerModel?: string;
+  costUsd?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   timestamp: Date;
+  /** `compaction`: a system line where the history was summarized (`compaction` has the sizes). Not part of the conversation sent to the model. */
+  kind?: "compaction";
+  compaction?: ChatCompaction;
+  /**
+   * A stand-in answer the server wrote for a turn that has tool activity but no stored answer. Its `content` is the
+   * server's note, not the model's: while the turn still runs it is not shown.
+   */
+  incomplete?: boolean;
   cancelled?: boolean;
   inputTokens?: number;
   outputTokens?: number;
@@ -124,7 +144,8 @@ export interface StreamMessage {
   | "tool_use"
   | "tool_start"
   | "tool_result"
-  | "turn_retry";
+  | "turn_retry"
+  | "context_compacted";
   /** Monotonic sequence number for ordering and dedup on reconnect */
   seq?: number;
   content?: string;
@@ -154,6 +175,12 @@ export interface StreamMessage {
   attempt?: number;
   max_retries?: number;
   reason?: string;
+  // History summarized before a model call (on 'context_compacted'); `status` is "ok" or "failed"
+  status?: string;
+  tokens_before?: number;
+  tokens_after?: number;
+  messages_summarized?: number;
+  summarizer_model?: string | null;
   // Tool use fields (on 'tool_use')
   tool_name?: string;
   tool_input?: Record<string, unknown>;

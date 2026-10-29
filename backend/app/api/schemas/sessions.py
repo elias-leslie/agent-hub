@@ -1,7 +1,7 @@
 """Session API schemas - Request/Response models."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -84,6 +84,18 @@ class MessageResponse(BaseModel):
     )
     tool_executions: list[ToolExecutionResponse] = Field(
         default_factory=list, description="Tool executions in this turn"
+    )
+    kind: str | None = Field(
+        default=None,
+        description=(
+            "null for a message the session stored. 'compaction': a line noting the history was summarized "
+            "(see ``compaction``). 'incomplete_turn': a stand-in answer for a turn that has tool activity but no "
+            "stored answer (still running, or ended without one)"
+        ),
+    )
+    compaction: dict[str, Any] | None = Field(
+        default=None,
+        description="For kind 'compaction': status, tokens_before, tokens_after, summarizer_model, cost_usd and the rest of the record",
     )
     created_at: datetime
 

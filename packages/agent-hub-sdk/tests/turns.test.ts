@@ -18,6 +18,7 @@ import {
     ownedTurn,
     recordedPong,
     retryTurn,
+    compactedTurn,
     toolTurn,
 } from './fixtures/turns';
 import { byteSlices, collect, jsonResponse, mockFetch, slices, sseResponse } from './helpers';
@@ -309,6 +310,17 @@ describe('turn state', () => {
         expect(state.thinking).toBe('');
         expect(state.tools).toHaveLength(1);
         expect(state.retries).toBe(1);
+        expect(state.status).toBe('done');
+    });
+
+    it('context_compacted is a known event: it reaches the consumer and is listed, with the text left alone', async () => {
+        const onWarning = vi.fn();
+        const events = await collect(clientFor(mockFetch(sseResponse([compactedTurn]))).turns.stream(request, { onWarning }));
+        expect(types(events)).toEqual(['connected', 'content', 'context_compacted', 'content', 'done']);
+        expect(onWarning).not.toHaveBeenCalled();
+        const state = await assemble(compactedTurn);
+        expect(state.content).toBe('Reading. Done.');
+        expect(state.compactions).toMatchObject([{ tokens_before: 9200, tokens_after: 6400, status: 'ok' }]);
         expect(state.status).toBe('done');
     });
 

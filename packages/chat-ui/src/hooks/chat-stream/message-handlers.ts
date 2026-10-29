@@ -2,7 +2,7 @@
  * Message state update handlers for streaming events.
  */
 
-import type { ChatMessage, ToolExecution, StreamMessage } from "../../types/chat";
+import type { ChatCompaction, ChatMessage, ToolExecution, StreamMessage } from "../../types/chat";
 import type { StreamState } from "./types";
 
 /** Which model was asked for and which answered, once the event carries them. */
@@ -14,6 +14,26 @@ function routingFields(data: StreamMessage): Partial<ChatMessage> {
     ...(data.fallback_used !== undefined ? { fallbackUsed: data.fallback_used } : {}),
     ...(data.fallback_reason ? { fallbackReason: data.fallback_reason } : {}),
   };
+}
+
+const numberOrUndefined = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+/** The compaction a `context_compacted` event reports. A size the event lacks stays absent. */
+function compactionFromEvent(data: StreamMessage): ChatCompaction {
+  const model = data.summarizer_model;
+  return {
+    status: data.status === "failed" ? "failed" : "ok",
+    ...(numberOrUndefined(data.tokens_before) !== undefined ? { tokensBefore: data.tokens_before } : {}),
+    ...(numberOrUndefined(data.tokens_after) !== undefined ? { tokensAfter: data.tokens_after } : {}),
+    ...(numberOrUndefined(data.messages_summarized) !== undefined ? { messagesSummarized: data.messages_summarized } : {}),
+    ...(typeof model === "string" && model ? { summarizerModel: model } : {}),
+    ...(numberOrUndefined(data.cost_usd) !== undefined ? { costUsd: data.cost_usd as number } : {}),
+  };
+}
+
+function sameCompaction(a: ChatCompaction | undefined, b: ChatCompaction): boolean {
+  return a !== undefined && a.status === b.status && a.tokensBefore === b.tokensBefore && a.tokensAfter === b.tokensAfter;
 }
 
 /**
@@ -202,6 +222,26 @@ export function handleStreamEvent(
             : m,
         ),
       );
+      break;
+    }
+
+    case "context_compacted": {
+      // The history was summarized; the answer is not changed. The note goes just above the answer being written.
+      const compaction = compactionFromEvent(data);
+      setMessages((prev) => {
+        // A rejoined turn replays its events from the start, and the session read may already hold this note.
+        if (prev.some((m) => m.kind === "compaction" && sameCompaction(m.compaction, compaction))) return prev;
+        const note: ChatMessage = {
+          id: `compaction-${data.seq ?? prev.length}-${compaction.tokensBefore ?? ""}-${compaction.tokensAfter ?? ""}`,
+          role: "system",
+          kind: "compaction",
+          compaction,
+          content: "",
+          timestamp: new Date(),
+        };
+        const at = prev.findIndex((m) => m.id === assistantId);
+        return at < 0 ? [...prev, note] : [...prev.slice(0, at), note, ...prev.slice(at)];
+      });
       break;
     }
 

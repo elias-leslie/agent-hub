@@ -2,6 +2,7 @@ import type { ChatMessage, ToolExecution } from "../../types/chat";
 import { MarkdownContent } from "../MarkdownContent";
 import { TruncationIndicator } from "../truncation-indicator";
 import { ThinkingBlock } from "../ThinkingBlock";
+import { CompactionLine } from "./CompactionLine";
 import { ToolLine } from "./ToolLine";
 
 /** The answer's text and tool calls in the order they happened: text up to each call's offset, then the call. */
@@ -103,6 +104,7 @@ function AgentEntry({ message, isStreaming }: { message: ChatMessage; isStreamin
 
 export function TranscriptMessage({ message, isStreaming }: { message: ChatMessage; isStreaming: boolean }) {
   if (message.role === "user") return <UserEntry message={message} />;
+  if (message.kind === "compaction") return <CompactionLine message={message} />;
   if (message.role === "system") {
     return <div className="mb-4 text-xs text-muted-foreground whitespace-pre-wrap">{message.content}</div>;
   }

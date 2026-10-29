@@ -47,6 +47,16 @@ export const retryTurn = [
     'data: [DONE]\n\n',
 ].join('');
 
+/** The history is summarized before the second model call; the answer text is untouched. */
+export const compactedTurn = [
+    sse({ type: 'connected', seq: 1, session_id: 's-compact' }),
+    sse({ type: 'content', seq: 2, content: 'Reading. ', ...routing }),
+    sse({ type: 'context_compacted', seq: 3, status: 'ok', tokens_before: 9200, tokens_after: 6400, summarizer_model: 'm/small', messages_summarized: 12, messages_kept: 4, cost_usd: 0.002 }),
+    sse({ type: 'content', seq: 4, content: 'Done.', ...routing }),
+    sse({ type: 'done', seq: 5, session_id: 's-compact', ...routing }),
+    'data: [DONE]\n\n',
+].join('');
+
 export const errorTurn = [
     sse({ type: 'connected', seq: 1, session_id: 's-err' }),
     sse({ type: 'content', seq: 2, content: 'Partial', ...routing }),

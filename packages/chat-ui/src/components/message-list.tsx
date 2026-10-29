@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef } from "react";
 import type { ChatMessage } from "../types/chat";
 import { MessageBubble } from "./MessageBubble";
 import { groupMessages } from "./message-utils";
+import { CompactionLine } from "./transcript/CompactionLine";
 import { TranscriptMessage } from "./transcript/TranscriptMessage";
 
 interface MessageListProps {
@@ -123,6 +124,7 @@ function MessageListInner({
           }
           // Single message
           const message = item;
+          if (message.kind === "compaction") return <CompactionLine key={message.id} message={message} />;
           const isLastMessage = index === groupedMessages.length - 1;
           return (
             <MessageBubble

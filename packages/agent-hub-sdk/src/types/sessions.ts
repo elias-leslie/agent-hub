@@ -49,6 +49,14 @@ export interface SessionMessage {
     /** How long the model thought, in ms; absent when not recorded. */
     thinking_ms?: number | null;
     tool_executions?: SessionToolExecution[];
+    /**
+     * Absent for a message the session stored. `compaction`: a line where the history was summarized (`role` is
+     * `system`, `compaction` holds the record). `incomplete_turn`: a stand-in answer for a turn that has tool activity
+     * but no stored answer (the turn is still running, or ended without one); its `content` is not the model's.
+     */
+    kind?: 'compaction' | 'incomplete_turn' | (string & {}) | null;
+    /** For `kind: 'compaction'`: status, tokens_before, tokens_after, summarizer_model, cost_usd, error. */
+    compaction?: Record<string, unknown> | null;
 }
 
 export interface SessionSummary {

@@ -115,7 +115,7 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
   }
 
   // Build message history
-  const messageHistory: MessageHistoryEntry[] = messages.map((m) => {
+  const messageHistory: MessageHistoryEntry[] = messages.filter((m) => m.kind !== "compaction").map((m) => {
     if (m.role === "assistant" && m.agentModel) {
       const modelName = formatModelName(m.agentModel);
       return { role: m.role, content: `[${modelName}]: ${m.content}` };

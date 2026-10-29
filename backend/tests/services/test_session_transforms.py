@@ -323,6 +323,7 @@ def test_convert_messages_to_response_synthesizes_incomplete_tool_turn() -> None
     assert len(messages[0].tool_executions) == 1
     assert messages[0].tool_executions[0].name == "bash"
     assert messages[0].tool_executions[0].result == "Created checkout"
+    assert messages[0].kind == "incomplete_turn"
 
 
 def test_convert_messages_to_response_keeps_real_assistant_without_synthetic_duplicate() -> None:
@@ -673,3 +674,18 @@ def test_an_old_answer_without_recorded_offsets_or_thinking_time_says_so() -> No
 
     assert [t.content_offset for t in answer.tool_executions] == [None]
     assert answer.thinking_ms is None
+
+
+def test_a_compaction_comes_back_as_a_marked_line_between_the_messages_it_fell_among() -> None:
+    record = {"status": "ok", "tokens_before": 9200, "tokens_after": 6400, "summarizer_model": "m", "cost_usd": 0.01}
+    events = [
+        _event(1, SessionEventType.USER_MESSAGE, role="user", content="go"),
+        _event(2, SessionEventType.COMPACTION, content="Context compacted: 9200 -> 6400 tokens", tool_output=record),
+        _event(3, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="done"),
+    ]
+
+    messages = convert_messages_to_response(events)
+
+    assert [(m.role, m.kind) for m in messages] == [("user", None), ("system", "compaction"), ("assistant", None)]
+    assert messages[1].compaction == record
+    assert messages[1].tokens == 0

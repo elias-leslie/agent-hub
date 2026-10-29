@@ -57,11 +57,18 @@ interface ChatPanelProps {
   renderBanner?: () => React.ReactNode;
   renderDebugPanel?: (props: { messages: ChatMessage[] }) => React.ReactNode;
   onMessagesChange?: (messages: ChatMessage[]) => void;
+  /**
+   * The host knows a turn is running that this chat does not stream: a read-only view of a workflow step that is still
+   * working, reloaded every few seconds. The status then says "Running" instead of "Ready", and the server's note on
+   * a turn with tool activity but no answer yet is not shown. Leave it off for a chat that streams its own turns.
+   */
+  running?: boolean;
 }
 
 /** The transcript header pill's wording per state: plain phase names, no trailing dots. */
 const TRANSCRIPT_PILL: Record<ActivityState, string> = {
   idle: "Ready",
+  running: "Running",
   connecting: "Connecting",
   waiting: "Waiting for the model",
   working: "Working",
@@ -104,9 +111,10 @@ function ChatPanelBody({
   renderBanner,
   renderDebugPanel,
   onMessagesChange,
+  running = false,
 }: Omit<ChatPanelProps, "client">) {
   const {
-    messages,
+    messages: loadedMessages,
     status,
     error,
     currentSessionId,
@@ -123,6 +131,12 @@ function ChatPanelBody({
     forkSession,
     compactMessages,
   } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, config });
+
+  // A turn this chat does not stream has no answer yet: the server's stand-in note for it would be wrong.
+  const messages = useMemo(
+    () => (running ? loadedMessages.map((m) => (m.incomplete ? { ...m, content: "" } : m)) : loadedMessages),
+    [loadedMessages, running],
+  );
 
   const client = useRequiredChatClient();
   const transcript = layout === "transcript";
@@ -201,7 +215,9 @@ function ChatPanelBody({
   const [phaseName, phaseDetail] = (status === "streaming" ? turnPhase ?? "" : "").split(":", 2);
   const pillState: ActivityState =
     status !== "streaming"
-      ? (status as ActivityState)
+      ? status === "idle" && running
+        ? "running"
+        : (status as ActivityState)
       : phaseName === "waiting_for_model"
         ? "waiting"
         : phaseName === "thinking"

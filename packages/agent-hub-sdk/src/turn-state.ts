@@ -1,4 +1,5 @@
 import type {
+    ContextCompactedEvent,
     DoneEvent,
     ToolStatus,
     TurnErrorEvent,
@@ -28,6 +29,8 @@ export interface TurnState {
     tools: ToolCall[];
     /** How many `turn_retry` events arrived. */
     retries: number;
+    /** The `context_compacted` events so far, in order. */
+    compactions: ContextCompactedEvent[];
     /** The model that answered and whether a fallback served it, once known. */
     routing: TurnRouting;
     done?: DoneEvent;
@@ -43,6 +46,7 @@ export function createTurnState(): TurnState {
         thinking: '',
         tools: [],
         retries: 0,
+        compactions: [],
         routing: {},
         turnStart: { content: 0, thinking: 0, tools: 0 },
     };
@@ -116,6 +120,9 @@ export function applyTurnEvent(state: TurnState, event: TurnEvent): TurnState {
                 tools: state.tools.slice(0, state.turnStart.tools),
                 retries: state.retries + 1,
             };
+        case 'context_compacted':
+            // The history changed, not the answer: nothing to fold into the turn's text, tools or retries.
+            return { ...state, compactions: [...state.compactions, event] };
         case 'cancel_acknowledged':
             return { ...state, status: 'cancelled', sessionId: event.session_id || state.sessionId };
         case 'done':

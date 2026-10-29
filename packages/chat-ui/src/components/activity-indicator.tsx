@@ -15,6 +15,7 @@ import { cn } from "../lib/utils";
 
 export type ActivityState =
   | "idle"
+  | "running"
   | "connecting"
   | "waiting"
   | "working"
@@ -65,6 +66,13 @@ const stateConfig: Record<
     label: "Ready",
     color: "text-emerald-400",
     bgColor: "bg-emerald-900/30",
+  },
+  running: {
+    icon: Loader2,
+    label: "Running...",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
+    animate: true,
   },
   connecting: {
     icon: Loader2,

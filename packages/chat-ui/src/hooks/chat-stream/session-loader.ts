@@ -3,7 +3,7 @@
  */
 
 import type { ChatHubClient } from "../../client";
-import type { ChatMessage, ToolExecution } from "../../types/chat";
+import type { ChatCompaction, ChatMessage, ToolExecution } from "../../types/chat";
 import type { SessionToolExecution } from "./types";
 
 /**
@@ -43,6 +43,26 @@ function mapToolExecutions(
     completedAt: new Date(),
     ...(typeof t.content_offset === "number" ? { contentOffset: t.content_offset } : {}),
   }));
+}
+
+const num = (value: unknown): number | undefined => {
+  const n = typeof value === "number" ? value : Number.NaN;
+  return Number.isFinite(n) ? n : undefined;
+};
+
+/** The compaction record a stored `compaction` message carries (the server's field names); null when it carries none. */
+function readCompaction(record: unknown): ChatCompaction | null {
+  if (!record || typeof record !== "object") return null;
+  const r = record as Record<string, unknown>;
+  const model = r.summarizer_model;
+  return {
+    status: r.status === "failed" ? "failed" : "ok",
+    ...(num(r.tokens_before) !== undefined ? { tokensBefore: num(r.tokens_before) } : {}),
+    ...(num(r.tokens_after) !== undefined ? { tokensAfter: num(r.tokens_after) } : {}),
+    ...(num(r.messages_summarized) !== undefined ? { messagesSummarized: num(r.messages_summarized) } : {}),
+    ...(typeof model === "string" && model ? { summarizerModel: model } : {}),
+    ...(num(r.cost_usd) !== undefined ? { costUsd: num(r.cost_usd) } : {}),
+  };
 }
 
 /** The usage, context and branch a session read carries. Zero tokens mean no usage reported, not a free session. */
@@ -121,6 +141,10 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
       role: m.role as "user" | "assistant" | "system",
       content: m.content ?? "",
       timestamp: new Date(m.created_at),
+      ...(m.kind === "compaction" && readCompaction(m.compaction)
+        ? { kind: "compaction" as const, compaction: readCompaction(m.compaction) as ChatCompaction }
+        : {}),
+      ...(m.kind === "incomplete_turn" ? { incomplete: true } : {}),
       agentName: m.agent_display_name || m.agent_name || undefined,
       agentModel: m.model_display_name || m.model_used || undefined,
       ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),

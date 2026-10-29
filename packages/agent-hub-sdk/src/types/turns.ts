@@ -154,6 +154,25 @@ export interface TurnRetryEvent extends Seq {
     reason: string;
 }
 
+/**
+ * Before this model call the history was summarized (the turn goes on from the shorter context). `status` is `ok`, or
+ * `failed` (the turn then ends with an `error`). The record is also stored on the session as a `compaction` message.
+ */
+export interface ContextCompactedEvent extends Seq {
+    type: 'context_compacted';
+    status: 'ok' | 'failed' | (string & {});
+    /** Estimated prompt size before and after the summary. */
+    tokens_before: number;
+    tokens_after: number;
+    context_window?: number;
+    threshold?: number;
+    messages_summarized?: number;
+    messages_kept?: number;
+    summarizer_model?: string | null;
+    cost_usd?: number;
+    error?: string | null;
+}
+
 export interface CancelAcknowledgedEvent extends Seq {
     type: 'cancel_acknowledged';
     session_id: string;
@@ -209,6 +228,7 @@ export type TurnEvent =
     | ToolStartEvent
     | ToolResultEvent
     | TurnRetryEvent
+    | ContextCompactedEvent
     | CancelAcknowledgedEvent
     | DoneEvent
     | TurnErrorEvent;
