@@ -18,7 +18,7 @@ interface MessageListProps {
   emptyLabel?: string;
   /** Follow-ups the host holds until the running turn ends. Shown after the messages, marked "Queued". */
   queued?: string[];
-  /** `transcript` is one centred reading column: no bubbles, no cards, tool calls as lines. */
+  /** `transcript` runs the full width with a small even gutter: no bubbles, no cards, tool calls as lines. */
   variant?: "default" | "transcript";
 }
 
@@ -81,7 +81,7 @@ function MessageListInner({
   if (transcript) {
     return (
       <div ref={scrollRef} onScroll={onScroll} data-testid="transcript" className="min-h-0 flex-1 overflow-y-auto py-[18px]">
-        <div className="mx-auto w-full max-w-[860px] px-5">
+        <div className="w-full min-w-0 px-3.5">
           {messages.map((message, index) => (
             <TranscriptMessage
               key={message.id}

@@ -50,3 +50,28 @@ describe('MarkdownContent line breaks', () => {
     expect(root.querySelector('code')?.textContent).toBe('code')
   })
 })
+
+describe('transcript width', () => {
+  it('uses the full width with a small gutter, not a centred column', async () => {
+    const { MessageList } = await import(
+      '../../../packages/chat-ui/src/components/message-list'
+    )
+    const { findByTestId } = render(
+      <MessageList
+        variant="transcript"
+        isStreaming={false}
+        messages={[
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: 'hello',
+            timestamp: new Date(),
+          } as never,
+        ]}
+      />,
+    )
+    const inner = (await findByTestId('transcript')).firstElementChild
+    expect(inner?.className).not.toMatch(/max-w|mx-auto/)
+    expect(inner?.className).toContain('px-3.5')
+  })
+})

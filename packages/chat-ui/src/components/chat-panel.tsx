@@ -304,7 +304,7 @@ function ChatPanelBody({
         />
 
         <div className="border-t border-border px-3.5 pb-3 pt-2.5">
-          <div className="mx-auto w-full max-w-[860px]">
+          <div className="w-full min-w-0">
             <QueuedChips queued={queued} />
             <MessageInput
               variant="transcript"
