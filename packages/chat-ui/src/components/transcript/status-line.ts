@@ -30,6 +30,8 @@ export interface StatusLineFields {
   cost?: string;
   /** Whole percent, 0-100. */
   contextPercent?: number;
+  /** The context is used, but by less than one percent: shown as "<1%" rather than 0. */
+  contextUnderOne?: boolean;
   branch?: string;
 }
 
@@ -47,7 +49,11 @@ export function statusLineFields(input: StatusLineInput): StatusLineFields {
   if (known(input.inputTokens) && input.inputTokens > 0) out.inputTokens = compactCount(input.inputTokens);
   if (known(input.outputTokens) && input.outputTokens > 0) out.outputTokens = compactCount(input.outputTokens);
   if (known(input.costUsd) && input.costUsd > 0) out.cost = formatUsd(input.costUsd);
-  if (known(input.contextPercent)) out.contextPercent = Math.round(Math.min(100, Math.max(0, input.contextPercent)));
+  if (known(input.contextPercent)) {
+    const clamped = Math.min(100, Math.max(0, input.contextPercent));
+    out.contextPercent = Math.round(clamped);
+    if (clamped > 0 && out.contextPercent === 0) out.contextUnderOne = true;
+  }
   if (input.branch) out.branch = input.branch;
   return out;
 }

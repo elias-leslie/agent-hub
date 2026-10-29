@@ -58,10 +58,10 @@ export function StatusLine(props: StatusLineInput) {
           >
             <span
               className="block h-full"
-              style={{ width: `${used}%`, backgroundColor: used >= 90 ? BAD : used >= 70 ? WORK : OK }}
+              style={{ width: `${fields.contextUnderOne ? 1 : used}%`, backgroundColor: used >= 90 ? BAD : used >= 70 ? WORK : OK }}
             />
           </span>
-          <span className="text-muted-foreground">{used}%</span>
+          <span className="text-muted-foreground">{fields.contextUnderOne ? "<1" : used}%</span>
         </span>
       ) : null}
       {fields.branch ? (

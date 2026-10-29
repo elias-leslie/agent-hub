@@ -9,6 +9,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatHubClient } from '../../../packages/chat-ui/src/client'
 import { ChatPanel } from '../../../packages/chat-ui/src/components/chat-panel'
+import { thoughtLabel } from '../../../packages/chat-ui/src/components/ThinkingBlock'
 import {
   sessionCost,
   statusLineFields,
@@ -153,6 +154,14 @@ describe('transcript diffs', () => {
   })
 })
 
+describe('the thought label', () => {
+  it('names a duration only when it is a second or more', () => {
+    expect(thoughtLabel(8200, undefined)).toBe('Thought for 8s')
+    expect(thoughtLabel(700, 1200)).toBe('Thought (1,200 tokens)')
+    expect(thoughtLabel(undefined, undefined)).toBe('Thought')
+  })
+})
+
 describe('the status line', () => {
   it('leaves out every field the data does not have, and never shows 0 for unknown', () => {
     expect(statusLineFields({})).toEqual({})
@@ -179,6 +188,16 @@ describe('the status line', () => {
       cost: '$0.002',
       contextPercent: 23,
       branch: 'fix/x',
+    })
+  })
+
+  it('shows a used context below one percent as under one, not as zero', () => {
+    expect(statusLineFields({ contextPercent: 0.4 })).toEqual({
+      contextPercent: 0,
+      contextUnderOne: true,
+    })
+    expect(statusLineFields({ contextPercent: 0 })).toEqual({
+      contextPercent: 0,
     })
   })
 

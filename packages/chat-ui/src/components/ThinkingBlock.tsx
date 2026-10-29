@@ -27,7 +27,7 @@ interface ThinkingBlockProps {
 
 /** "Thought for 8s", else "Thought" with the token count when only that is known. */
 export function thoughtLabel(thinkingMs: number | undefined, thinkingTokens: number | undefined): string {
-  if (thinkingMs !== undefined && thinkingMs >= 500) return `Thought for ${formatSeconds(thinkingMs / 1000)}`;
+  if (thinkingMs !== undefined && thinkingMs >= 1000) return `Thought for ${formatSeconds(thinkingMs / 1000)}`;
   if (thinkingTokens) return `Thought (${thinkingTokens.toLocaleString()} tokens)`;
   return "Thought";
 }
