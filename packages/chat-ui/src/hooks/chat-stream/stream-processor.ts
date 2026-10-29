@@ -57,7 +57,11 @@ export async function consumeTurn(
       if (typeof event.seq === "number") sink.streamState.lastSeq = event.seq;
       // Backend "error" events throw here and must reach the caller.
       handleStreamEvent(event as unknown as StreamMessage, sink.assistantId, sink.streamState, sink.setMessages, sink.setCurrentSessionId);
-      if (event.type === "cancel_acknowledged") cancelled = true;
+      if (event.type === "cancel_acknowledged") {
+        // Stop means stop: whatever a stream still carries after the acknowledgement is not shown.
+        cancelled = true;
+        break;
+      }
     }
     return cancelled ? "cancelled" : "finished";
   } finally {

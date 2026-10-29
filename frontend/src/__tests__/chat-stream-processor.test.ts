@@ -123,6 +123,66 @@ describe('processStream', () => {
   })
 })
 
+describe('Stop', () => {
+  it('shows nothing that arrives after the cancel acknowledgement and leaves the phase idle', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      sse([
+        { type: 'connected', seq: 1, session_id: 's1' },
+        { type: 'content', seq: 2, content: 'before' },
+        { type: 'cancel_acknowledged', seq: 3, session_id: 's1' },
+        { type: 'content', seq: 4, content: ' late' },
+        { type: 'thinking', seq: 5, content: 'late thought' },
+      ]),
+    )
+    const { client, state, sink } = harness(fetchMock)
+
+    const outcome = await processStream(
+      client,
+      request,
+      sink,
+      new AbortController().signal,
+    )
+
+    expect(outcome).toBe('cancelled')
+    expect(state.content).toBe('before')
+    expect(state.thinking).toBe('')
+    expect(sink.setTurnPhase.mock.calls.map((c) => c[0])).toEqual([
+      'waiting_for_model',
+      'responding',
+      null,
+      null,
+    ])
+  })
+})
+
+describe('the status phase follows the events', () => {
+  it('says thinking only while reasoning streams, then responding once text does', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      sse([
+        { type: 'connected', seq: 1, session_id: 's1' },
+        { type: 'thinking', seq: 2, content: 'a' },
+        { type: 'thinking', seq: 3, content: 'b' },
+        { type: 'content', seq: 4, content: 'x' },
+        { type: 'content', seq: 5, content: 'y' },
+        { type: 'done', seq: 6, session_id: 's1' },
+      ]),
+    )
+    const { client, sink } = harness(fetchMock)
+
+    await processStream(client, request, sink, new AbortController().signal)
+
+    expect(sink.setTurnPhase.mock.calls.map((c) => c[0])).toEqual([
+      'waiting_for_model',
+      'thinking',
+      'thinking',
+      'responding',
+      'responding',
+      null,
+      null,
+    ])
+  })
+})
+
 describe('attachToTurn', () => {
   it('replays a running turn from the start and tracks its phase', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
