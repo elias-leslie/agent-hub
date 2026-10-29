@@ -280,6 +280,37 @@ async def test_agent_stream_aborts_before_response_without_verified_context() ->
 
 
 @pytest.mark.asyncio
+async def test_a_streaming_turn_does_not_hold_the_request_connection() -> None:
+    """The turn runs for minutes on its own sessions; the request's pooled connection goes back before it starts."""
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="hi")], project_id="agent-hub", prompt_mode="none", max_turns=1, use_memory=False
+    )
+    raw_messages = [Message(role="user", content="hi")]
+    db = AsyncMock()
+    order: list[str] = []
+    db.rollback.side_effect = lambda: order.append("rollback")
+
+    def build(*_args: object, **_kwargs: object) -> str:
+        order.append("turn started")
+        return "response"
+
+    with (
+        patch("app.api.complete.streaming_handlers._setup_streaming_session", new=AsyncMock(return_value=("s", [], True))),
+        patch("app.api.complete.streaming_handlers._inject_streaming_memory", new=AsyncMock(return_value=raw_messages)),
+        patch("app.api.complete.streaming_handlers._compact_streaming_context", new=AsyncMock(return_value=raw_messages)),
+        patch("app.api.complete.streaming_handlers._build_sse_response", new=build),
+    ):
+        result = await handle_streaming_request(
+            request=request, resolved_model="local/x", provider="local", resolved_agent=None,
+            agent_mandate_injection=None, agent_used=None, model_used=None, fallback_used=False,
+            db=db, client_id=None, request_source="pytest",
+        )
+
+    assert result == "response"
+    assert order == ["rollback", "turn started"]
+
+
+@pytest.mark.asyncio
 async def test_a_session_runs_one_turn_at_a_time_and_a_cancelled_turn_is_waited_out() -> None:
     import asyncio
 

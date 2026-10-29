@@ -359,6 +359,10 @@ async def handle_streaming_request(
         if escalation_model and escalation_model not in fallback_models:
             fallback_models.append(escalation_model)
 
+    if db is not None:
+        # The turn outlives this request and writes through its own sessions. Holding the request's connection
+        # (idle in a transaction) for the whole turn would cost the pool one connection per running chat.
+        await db.rollback()
     return _build_sse_response(
         messages, resolved_model, provider, request, session_id, thinking_level,
         agent_used, model_used, fallback_used,
