@@ -25,7 +25,7 @@ from app.llm.types import (
 from app.llm.utils.request_metrics import request_metrics_of
 from app.models import SessionEventType
 from app.services.context_tracker import log_token_usage
-from app.services.event_storage import lock_session_event_ingestion, store_event
+from app.services.event_storage import lock_session_event_ingestion, store_event, storing_history
 from app.services.token_counter import estimate_usage_cost
 
 from .executor_common import Usage, clip
@@ -74,8 +74,18 @@ def _text(result: ToolResultMessage) -> str:
 
 
 async def record_transcript(db: AsyncSession, transcript: Transcript) -> None:
-    """Write the transcript as session events and cost rows; the caller commits."""
+    """Write the transcript as session events and cost rows; the caller commits.
 
+    History, not activity (as for a native transcript): nothing is touched on the attempt session and nothing is copied
+    onto the run session. That also keeps this write off the run's row and event-ingestion locks, which the engine takes
+    in the other order when it settles a step, so two steps finishing together cannot deadlock.
+    """
+
+    with storing_history():
+        await _write_events(db, transcript)
+
+
+async def _write_events(db: AsyncSession, transcript: Transcript) -> None:
     # Imported here: app.api's package init imports the workflow routes, which import the engine and its executors.
     from app.api.complete.helpers import normalize_content_for_storage
     from app.api.complete.request_metrics import store_model_requests

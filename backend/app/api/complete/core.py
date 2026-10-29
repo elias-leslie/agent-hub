@@ -12,6 +12,7 @@ tool loop runs server-side via ``app.llm.tool_loop`` with
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from collections.abc import Callable
@@ -147,6 +148,7 @@ async def complete_internal(
     canonical_context_preinjected: bool = False,
     on_loop_event: Callable[[Any], None] | None = None,
     permitted_tools: frozenset[str] | None = None,
+    signal: asyncio.Event | None = None,
 ) -> CompletionInternalResult:
     """Run a completion via the unified ``app.llm`` pipeline.
 
@@ -158,7 +160,9 @@ async def complete_internal(
 
     The model is shown its agent's registry tools. ``permitted_tools`` names the
     tools the caller allows (a workflow run's tool level); then calls outside
-    that set are denied.
+    that set are denied. Setting ``signal`` aborts the provider request in
+    flight (its HTTP stream or CLI process); without one a cancelled caller
+    leaves the request running.
     """
 
     if not is_workload_provider(provider):
@@ -226,7 +230,7 @@ async def complete_internal(
     result = await run_completion(
         llm_model,
         context,
-        options=completion_options(temperature, thinking_level, session_id=session_id),
+        options=completion_options(temperature, thinking_level, signal=signal, session_id=session_id),
         execute_tools=execute_tools,
         run_tool=run_tool,
         max_turns=tool_loop_turns(execute_tools, max_turns),

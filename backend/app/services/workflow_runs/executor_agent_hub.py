@@ -24,6 +24,7 @@ provider reports them) per turn, plus cost rows. The run view's per-attempt ``se
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -249,6 +250,7 @@ class AgentHubExecutor:
         await on_event({"type": "agent_hub_started", "model": model, "at": time.time()})
         loop_log = LoopLog()
         transcript = Transcript(attempt.session_id, attempt.agent_slug, model, input_messages=tuple(messages))
+        abort = asyncio.Event()  # set when this coroutine is cancelled: the provider request in flight stops with it
         try:
             result = await complete(
                 messages=messages,
@@ -268,7 +270,13 @@ class AgentHubExecutor:
                 execute_tools=True,
                 working_dir=str(worktree),
                 on_loop_event=loop_log,
+                signal=abort,
             )
+        except asyncio.CancelledError:
+            # A cancel (owner, worker stop) ends the provider request too, and what the attempt did is still saved.
+            abort.set()
+            await self._record(self._partial(transcript, loop_log, "cancelled"))
+            raise
         except Exception as exc:  # provider, credential and context failures end the attempt, not the engine
             error = clip(f"agent_hub_error: {exc!r}", 1000)
             await self._record(self._partial(transcript, loop_log, error))

@@ -1987,6 +1987,24 @@ async def test_request_id_with_a_different_definition_is_refused_and_the_same_on
     assert await pg_db.scalar(select(WorkflowStep.id).where(WorkflowStep.step_key == "x")) is None
 
 
+async def test_creating_with_a_request_id_serializes_on_that_id(pg_db, repo, world_factory) -> None:
+    """The run-level id is not under a unique key (only "<id>:<step key>" is), so two creates with disjoint step keys
+    would both pass the existing-run check: creation takes an advisory lock keyed by the request id first."""
+
+    world = world_factory({})
+    chains(world)
+    async def held() -> int:
+        return await pg_db.scalar(
+            text("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()")
+        )
+
+    before = await held()
+    await create_run(pg_db, graph(repo, {"key": "a"}, request_id="lock-1"), deps=world.deps)
+    assert await held() == before + 1
+    await create_run(pg_db, graph(repo, {"key": "q"}), deps=world.deps)  # no request id, no lock
+    assert await held() == before + 1
+
+
 async def test_the_run_records_who_launched_it(pg_db, repo, world_factory) -> None:
     world = world_factory({})
     chains(world)

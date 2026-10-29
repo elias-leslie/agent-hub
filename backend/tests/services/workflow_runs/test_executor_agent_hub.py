@@ -542,6 +542,41 @@ async def test_a_run_past_the_old_hour_limit_is_not_ended(worktree, tmp_path) ->
     assert result.status == "completed" and result.error is None
 
 
+async def test_a_cancelled_attempt_aborts_its_provider_request_and_keeps_its_transcript(worktree, tmp_path) -> None:
+    """Cancelling the step sets the abort signal handed to the provider (else the request keeps running and billing)."""
+
+    seen: dict[str, Any] = {}
+    transcripts: list[Transcript] = []
+    started = asyncio.Event()
+
+    async def hang(**kw: Any) -> Any:
+        seen["signal"] = kw["signal"]
+        started.set()
+        await asyncio.Event().wait()
+
+    async def write(transcript: Transcript) -> None:
+        transcripts.append(transcript)
+
+    async def agent(_slug: str) -> Agent:
+        return Agent()
+
+    async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
+        return PROVISIONED
+
+    async def on_event(_event: Any) -> None:
+        return None
+
+    executor = AgentHubExecutor(complete=hang, agent_loader=agent, tool_provisioner=tools, transcript_writer=write)
+    task = asyncio.create_task(executor.run(packet(), MODEL, worktree, tmp_path, on_event))
+    await started.wait()
+    assert not seen["signal"].is_set()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert seen["signal"].is_set()
+    assert [t.error for t in transcripts] == ["cancelled"]
+
+
 async def test_loop_events_become_phases_for_the_run_view(worktree, tmp_path) -> None:
     from .support import recording_live
 
@@ -576,6 +611,35 @@ def metric_turn(retries: list[dict[str, Any]]) -> AssistantMessage:
         message, max_gap_s=41.5, keepalives=3, total_s=95.0, outcome="ok", retries=len(retries), retry_log=retries
     )
     return message
+
+
+async def test_record_transcript_is_history_not_activity(monkeypatch) -> None:
+    """Like a native transcript, it must not touch the sessions or copy events onto the run (that reverses the
+    engine's lock order against a step settling, and moves last-active time on a finished attempt)."""
+
+    from app.services.event_storage import _history_only
+
+    stored: list[bool] = []
+
+    async def store_event(_db, _session_id, _event_type, **_kw):
+        stored.append(_history_only.get())
+
+    async def log_usage(*_a, **_kw):
+        return None
+
+    async def lock(_db, _session_id):
+        return None
+
+    monkeypatch.setattr(agent_hub_transcript, "store_event", store_event)
+    monkeypatch.setattr(agent_hub_transcript, "log_token_usage", log_usage)
+    monkeypatch.setattr(agent_hub_transcript, "lock_session_event_ingestion", lock)
+    transcript = Transcript(
+        "attempt-1", "coder", MODEL, input_messages=[{"role": "user", "content": "goal"}],
+        turns=[assistant([TextContent(text="done")])],
+    )
+    await record_transcript(FakeDb(), transcript)
+    assert stored and all(stored)
+    assert _history_only.get() is False  # and only for the write
 
 
 async def test_record_transcript_saves_each_turns_request_record_once(monkeypatch) -> None:

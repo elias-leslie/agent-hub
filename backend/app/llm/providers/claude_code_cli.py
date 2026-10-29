@@ -356,11 +356,11 @@ async def _run(
         assert process.stdin is not None
         process.stdin.write(turn.encode("utf-8"))
         await process.stdin.drain()
-        timeout = options.timeout_ms / 1000 if options and options.timeout_ms else None
-        async with asyncio.timeout(timeout):
-            await _read_turn(session, state, options.signal if options else None)
-            if state.result is None:
-                await process.wait()
+        # No deadline on the turn: the CLI ends it by its own result, a real error, or the abort signal. A request's
+        # ``timeout_ms`` bounds a wire read elsewhere; a total time limit here would kill a model still working.
+        await _read_turn(session, state, options.signal if options else None)
+        if state.result is None:
+            await process.wait()
         typed = state.outcome(model.id)
         if typed is not None:
             raise _TurnFailure(typed[1], typed[0])
@@ -375,9 +375,6 @@ async def _run(
         stream.push(ErrorEvent(reason="aborted", error=replace(
             output, stop_reason="aborted", error_message="Request was aborted"
         )))
-    except TimeoutError:
-        error = replace(output, stop_reason="error", error_message="Claude Code CLI turn timed out")
-        stream.push(ErrorEvent(reason="error", error=error))
     except Exception as exc:
         error = replace(output, stop_reason="error", error_message=str(exc))
         if isinstance(exc, _TurnFailure):

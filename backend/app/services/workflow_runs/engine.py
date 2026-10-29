@@ -26,7 +26,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -484,6 +484,11 @@ async def create_run(
     deps = deps or EngineDeps()
     fingerprint = definition_fingerprint(definition)
     if definition.request_id:
+        # The run's request id lives in JSON, not under a unique key (only "<request_id>:<step key>" is), so two creates
+        # with the same id and different step keys would both pass the check below. One at a time per id, until commit.
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"workflow-run-request:{definition.request_id}"}
+        )
         existing = await _run_for_request(db, definition, fingerprint)
         if existing:
             return existing, False

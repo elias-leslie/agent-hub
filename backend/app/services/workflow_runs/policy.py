@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
-from app.llm.utils.outcomes import ProviderOutcome
+from app.llm.utils.outcomes import ProviderOutcome, is_model_switch
 
 DEFAULTS_FILE = Path(__file__).with_name("policy_defaults.json")
 
@@ -408,8 +408,9 @@ def _decide(
                     refusals=refusals,
                 )
         upcoming = choose_attempt_model(replace_tried(step, model), unavailable, now).model
-        if finished and upcoming and outcome.served_model == upcoming:
-            # The provider already ran the model the takeover would use.
+        if finished and upcoming and outcome.served_model and not is_model_switch(upcoming, outcome.served_model):
+            # The provider already ran the model the takeover would use (a harness reports it bare, ``gpt-6``, where
+            # the catalog id is ``codex/gpt-6``: provider prefix, case and snapshot suffix are the same model).
             if acceptance_failed:
                 return _acceptance_decision(model, step, policy, refusals, outcome, unavailable, now)
             return Decision(

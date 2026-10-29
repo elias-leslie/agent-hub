@@ -98,6 +98,9 @@ def test_substitution_retries_on_next_chain_model_unless_it_already_answered_the
     served_next = ProviderOutcome("substituted", OPUS, served_model=CODEX, category="cyber")
     accepted = decide(OPUS, AttemptResult("completed", served_next, True))
     assert (accepted.action, accepted.reason) == ("complete", "substituted_to_chain_model")
+    # Codex reports the rerouted model without the catalog's provider prefix: still the model the takeover would use.
+    bare = ProviderOutcome("substituted", OPUS, served_model=CODEX.removeprefix("codex/"), category="cyber")
+    assert decide(OPUS, AttemptResult("completed", bare, True)).reason == "substituted_to_chain_model"
 
 
 def test_usage_limit_skips_the_provider_and_waits_when_nothing_else_is_left() -> None:

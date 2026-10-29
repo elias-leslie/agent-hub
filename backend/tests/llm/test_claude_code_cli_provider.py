@@ -348,6 +348,23 @@ async def test_abort_kills_and_evicts_the_process(cli_world) -> None:
     assert claude_sessions.claude_pool._sessions == {}
 
 
+@pytest.mark.asyncio
+async def test_a_request_timeout_does_not_end_a_turn_the_cli_is_still_working_on(cli_world) -> None:
+    """The owner rule: model work is never ended for elapsed time, so ``timeout_ms`` is no total deadline here."""
+
+    spawn, _ = cli_world
+    process = spawn([])
+    signal = asyncio.Event()
+    model = resolve_llm_model("claude-haiku-5-5", "claude")
+    options = SimpleStreamOptions(session_id="s1", signal=signal, timeout_ms=20)
+    stream = cli.claude_code_cli_provider.stream(model, Context(messages=[_user("hi")], system_prompt="sys"), options)
+    task = asyncio.create_task(stream.result())
+    await asyncio.sleep(0.3)  # many times the 20 ms limit, the CLI has said nothing
+    assert not task.done() and process.returncode is None
+    signal.set()
+    assert (await task).stop_reason == "aborted"
+
+
 def test_child_env_disables_refusal_fallback() -> None:
     assert child_env()["CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK"] == "1"
 
