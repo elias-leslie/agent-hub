@@ -213,7 +213,8 @@ class TestGetSession:
         #   (7) query_project_active_specialists — .all() → list[Row]
         #   (8) fetch_session_titles            — .all() → list[Row]
         #   (9) fetch_session_usage_rollups     — .all() → list[Row]
-        #  (10) usage ledger / cost-log fallback — .all() → list[Row] (no native usage)
+        #  (10) session cost                    — scalar() → float | None
+        #  (11) usage ledger / cost-log fallback — .all() → list[Row] (no native usage)
         #
         # Using a deque-based dispatcher keeps the ordered responses explicit and avoids
         # StopIteration when _resolve_agent_display_names is invoked more than once — any
@@ -256,8 +257,8 @@ class TestGetSession:
         assert data["context_usage"]["limit_tokens"] == 272000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
-        assert mock_session.execute.call_count == 10, (
-            f"Expected 10 DB queries, got {mock_session.execute.call_count} "
+        assert mock_session.execute.call_count == 11, (
+            f"Expected 11 DB queries, got {mock_session.execute.call_count} "
             "— update this test if a query was added or removed"
         )
 

@@ -27,6 +27,7 @@ from app.services.session_queries import (
     AgentTokenAggregate,
     SessionUsageRollup,
     fetch_session_agent_token_aggregates,
+    fetch_session_cost_usd,
     fetch_session_event_type_counts,
     fetch_session_titles,
     fetch_session_usage_rollups,
@@ -228,6 +229,7 @@ async def build_full_session_response(
     )
     titles = await fetch_session_titles(db, [session.id])
     usage = await fetch_session_usage_rollups(db, [session.id])
+    response.total_cost_usd = await fetch_session_cost_usd(db, session.id)
     apply_session_rollups(
         response,
         session,
@@ -256,6 +258,7 @@ def build_event_responses(events: list[SessionEvent]) -> list[SessionEventRespon
             tool_output=e.tool_output,
             tokens=e.tokens,
             duration_ms=e.duration_ms,
+            content_offset=e.content_offset,
             model_used=known_model(e.model_used),
             agent_id=e.agent_id,
             agent_name=e.agent_name,

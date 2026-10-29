@@ -644,3 +644,32 @@ def test_results_without_call_ids_pair_with_the_first_unanswered_call_of_that_na
     tools = convert_messages_to_response(events)[0].tool_executions or []
 
     assert [t.result for t in tools] == ["/srv", "a b"]
+
+
+def test_a_reopened_answer_carries_where_each_tool_call_happened_and_how_long_it_thought() -> None:
+    events = [
+        _event(1, SessionEventType.USER_MESSAGE, role="user", content="fix"),
+        _event(2, SessionEventType.THINKING, content="plan", duration_ms=2500),
+        _event(3, SessionEventType.TOOL_USE, tool_name="read", call_id="c1", content_offset=11),
+        _event(4, SessionEventType.TOOL_RESULT, tool_name="read", call_id="c1", content="alpha"),
+        _event(5, SessionEventType.TOOL_USE, tool_name="edit", call_id="c2", content_offset=19),
+        _event(6, SessionEventType.TOOL_RESULT, tool_name="edit", call_id="c2", content="done"),
+        _event(7, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="Looking... Fixing. Fixed."),
+    ]
+
+    answer = convert_messages_to_response(events)[1]
+
+    assert [(t.name, t.content_offset) for t in answer.tool_executions] == [("read", 11), ("edit", 19)]
+    assert answer.thinking_ms == 2500
+
+
+def test_an_old_answer_without_recorded_offsets_or_thinking_time_says_so() -> None:
+    events = [
+        _event(1, SessionEventType.TOOL_USE, tool_name="read", call_id="c1"),
+        _event(2, SessionEventType.ASSISTANT_MESSAGE, role="assistant", content="ok"),
+    ]
+
+    answer = convert_messages_to_response(events)[0]
+
+    assert [t.content_offset for t in answer.tool_executions] == [None]
+    assert answer.thinking_ms is None

@@ -150,6 +150,7 @@ def _build_session_event(
     source_event_id: str | None = None,
     source_timestamp: datetime | None = None,
     usage: dict[str, Any] | None = None,
+    content_offset: int | None = None,
 ) -> SessionEvent:
     """Sanitize fields and construct a SessionEvent (no DB I/O)."""
     s = _sanitize_event_value
@@ -162,6 +163,7 @@ def _build_session_event(
         transport=s(transport), surface=s(surface), chat_id=s(chat_id),
         message_id=s(message_id), pane_id=s(pane_id), source_client=s(source_client),
         source_event_id=s(source_event_id), source_timestamp=source_timestamp, usage=s(usage),
+        content_offset=content_offset,
     )
     # Redact before narration and live activity read the event, not only at flush.
     event.redact_secrets()
@@ -402,6 +404,7 @@ async def store_event(
     source_timestamp: datetime | None = None,
     usage: dict[str, Any] | None = None,
     session: Session | None = None,
+    content_offset: int | None = None,
 ) -> SessionEvent:
     """Store a single event to the database.
 
@@ -419,6 +422,7 @@ async def store_event(
         transport=transport, surface=surface, chat_id=chat_id,
         message_id=message_id, pane_id=pane_id, source_client=source_client,
         source_event_id=source_event_id, source_timestamp=source_timestamp, usage=usage,
+        content_offset=content_offset,
     )
     db.add(event)
 
@@ -482,11 +486,12 @@ async def store_thinking_event(
     message_id: str | None = None,
     pane_id: str | None = None,
     source_client: str | None = None,
+    duration_ms: int | None = None,
 ) -> SessionEvent:
-    """Store a thinking/reasoning event."""
+    """Store a thinking/reasoning event; ``duration_ms`` is how long the model thought."""
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.THINKING,
-        content=thinking_content, tokens=tokens,
+        content=thinking_content, tokens=tokens, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,
         message_id=message_id, pane_id=pane_id, source_client=source_client,
@@ -509,11 +514,12 @@ async def store_tool_use_event(
     pane_id: str | None = None,
     source_client: str | None = None,
     call_id: str | None = None,
+    content_offset: int | None = None,
 ) -> SessionEvent:
-    """Store a tool use event."""
+    """Store a tool use event; ``content_offset`` is how much of the answer had streamed when it started."""
     return await store_event(
         db=db, session_id=session_id, event_type=SessionEventType.TOOL_USE,
-        tool_name=tool_name, call_id=call_id, tool_input=tool_input, duration_ms=duration_ms,
+        tool_name=tool_name, call_id=call_id, content_offset=content_offset, tool_input=tool_input, duration_ms=duration_ms,
         model_used=model_used, agent_id=agent_id, agent_name=agent_name,
         transport=transport, surface=surface, chat_id=chat_id,
         message_id=message_id, pane_id=pane_id, source_client=source_client,

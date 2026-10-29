@@ -36,6 +36,7 @@ def tool_execution_from_event(evt: Any) -> ToolExecutionResponse:
         input=evt.tool_input,
         status="complete",
         duration_ms=evt.duration_ms,
+        content_offset=getattr(evt, "content_offset", None),
     )
 
 
@@ -113,6 +114,7 @@ def build_message_response(
     thinking_parts: list[str],
     thinking_tokens: int,
     tool_executions: list[ToolExecutionResponse],
+    thinking_ms: int | None = None,
 ) -> MessageResponse:
     from app.api.schemas.sessions import MessageResponse
 
@@ -134,6 +136,8 @@ def build_message_response(
         msg.thinking = "\n".join(thinking_parts)
     if thinking_tokens:
         msg.thinking_tokens = thinking_tokens
+    if thinking_ms:
+        msg.thinking_ms = thinking_ms
     if tool_executions:
         msg.tool_executions = tool_executions
     return msg
@@ -158,6 +162,7 @@ def build_incomplete_turn_response(
     thinking_parts: list[str],
     thinking_tokens: int,
     tool_executions: list[ToolExecutionResponse],
+    thinking_ms: int | None = None,
 ) -> MessageResponse | None:
     """Build synthetic assistant message for turns missing persisted assistant event."""
     if not turn_events or not (thinking_parts or tool_executions):
@@ -188,6 +193,8 @@ def build_incomplete_turn_response(
         msg.thinking = "\n".join(thinking_parts)
     if thinking_tokens:
         msg.thinking_tokens = thinking_tokens
+    if thinking_ms:
+        msg.thinking_ms = thinking_ms
     if tool_executions:
         msg.tool_executions = tool_executions
     return msg
@@ -221,12 +228,15 @@ def turn_messages(turn_events: list[Any], names: dict[str, str]) -> list[Message
 
 def _exchange_messages(turn_events: list[Any], names: dict[str, str]) -> list[MessageResponse]:
     thinking_parts, thinking_tokens, tool_executions = collect_turn_data(turn_events)
+    thinking_ms = sum(
+        evt.duration_ms or 0 for evt in turn_events if evt.event_type == SessionEventType.THINKING
+    )
     messages: list[MessageResponse] = []
     for evt in turn_events:
         if evt.event_type not in _MESSAGE_TYPES:
             continue
         messages.append(
-            build_message_response(evt, names, thinking_parts, thinking_tokens, tool_executions)
+            build_message_response(evt, names, thinking_parts, thinking_tokens, tool_executions, thinking_ms)
         )
     has_assistant_message = any(message.role == "assistant" for message in messages)
     if not has_assistant_message:
@@ -236,6 +246,7 @@ def _exchange_messages(turn_events: list[Any], names: dict[str, str]) -> list[Me
             thinking_parts,
             thinking_tokens,
             tool_executions,
+            thinking_ms,
         )
         if synthetic is not None:
             messages.append(synthetic)

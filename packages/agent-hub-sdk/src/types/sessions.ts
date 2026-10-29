@@ -28,6 +28,8 @@ export interface SessionToolExecution {
     input?: Record<string, unknown> | null;
     status?: string | null;
     result?: string | null;
+    /** How much of the message text (UTF-16 units) had streamed when the call started; absent for turns stored before this was recorded. */
+    content_offset?: number | null;
     [key: string]: unknown;
 }
 
@@ -44,6 +46,8 @@ export interface SessionMessage {
     agent_display_name?: string | null;
     thinking?: string | null;
     thinking_tokens?: number | null;
+    /** How long the model thought, in ms; absent when not recorded. */
+    thinking_ms?: number | null;
     tool_executions?: SessionToolExecution[];
 }
 
@@ -70,6 +74,8 @@ export interface SessionSummary {
     event_count?: number | null;
     total_input_tokens?: number;
     total_output_tokens?: number;
+    /** Cost of the session's logged model calls in USD; null when none were logged. */
+    total_cost_usd?: number | null;
     last_active_at?: string | null;
     created_at: string;
     updated_at: string;

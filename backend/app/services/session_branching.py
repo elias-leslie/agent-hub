@@ -84,6 +84,7 @@ def copy_events_to_forked_session(db: Any, events_to_copy: list[Any], new_sessio
             tool_output=orig_event.tool_output,
             tokens=orig_event.tokens,
             duration_ms=orig_event.duration_ms,
+            content_offset=orig_event.content_offset,
             model_used=orig_event.model_used,
             agent_id=orig_event.agent_id,
             agent_name=orig_event.agent_name,

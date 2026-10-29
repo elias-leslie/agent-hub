@@ -273,6 +273,8 @@ class TestGetSession:
         mock_title_result.all.return_value = []
         mock_usage_result = MagicMock()
         mock_usage_result.all.return_value = []
+        mock_cost_result = MagicMock()
+        mock_cost_result.scalar.return_value = None
 
         mock_session.execute.side_effect = [
             mock_session_result,
@@ -284,6 +286,7 @@ class TestGetSession:
             mock_title_result,          # fetch_session_titles
             mock_usage_result,          # fetch_session_usage_rollups (native events)
             mock_usage_result,          # fetch_session_usage_rollups (ledger / cost-log fallback)
+            mock_cost_result,           # fetch_session_cost_usd (nothing logged)
         ]
 
         response = client.get("/api/sessions/session-portfolio-123")
@@ -294,7 +297,8 @@ class TestGetSession:
         assert data["agent_slug"] == "strategy_generation"
         assert data["title"] is None
         assert data["usage_known"] is False
-        assert mock_session.execute.call_count == 9
+        assert data["total_cost_usd"] is None
+        assert mock_session.execute.call_count == 10
 
 
 class TestMultiProjectScenario:

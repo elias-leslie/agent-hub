@@ -38,6 +38,8 @@ class TurnTraceStep:
     tool_input: dict[str, object] | None = None
     is_error: bool = False
     duration_ms: int | None = None
+    #: tool_use: how much of the answer (UTF-16 units) had streamed when the call started.
+    content_offset: int | None = None
 
 
 async def _save_turn_trace(
@@ -64,11 +66,13 @@ async def _save_turn_trace(
                 session_id=session_id,
                 thinking_content=step.text,
                 tokens=thinking_tokens if index == last_thinking else None,
+                duration_ms=step.duration_ms,
                 **common,
             )
         elif step.kind == "tool_use":
             await store_tool_use_event(
-                db, session_id, step.tool_name or "unknown", step.tool_input or {}, call_id=step.call_id, **common
+                db, session_id, step.tool_name or "unknown", step.tool_input or {}, call_id=step.call_id,
+                content_offset=step.content_offset, **common
             )
         else:
             text = step.text

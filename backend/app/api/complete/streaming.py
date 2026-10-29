@@ -218,6 +218,11 @@ def _attach_routing(writer: SseWriter, ctx: StreamContext) -> None:
     )
 
 
+def utf16_length(text: str) -> int:
+    """Length the way a browser counts it, so a stored offset slices the same text there."""
+    return len(text.encode("utf-16-le")) // 2
+
+
 def _tool_result_step(
     event: ToolRunComplete | ToolRunError,
     text: str,
@@ -261,10 +266,26 @@ async def _emit_events(
     turn_trace_start = 0
     tool_started_at: dict[str, float] = {}
 
+    # How long the model thought: a stretch opens at its first thinking delta and closes at the next event of
+    # another kind, the way a watching client counts it.
+    thinking_since: list[float | None] = [None]
+    thinking_spent_ms = [0]
+
+    def close_thinking() -> None:
+        if thinking_since[0] is not None:
+            thinking_spent_ms[0] += int((time.monotonic() - thinking_since[0]) * 1000)
+            thinking_since[0] = None
+
     def flush_thinking() -> None:
+        close_thinking()
         if thinking_buf:
-            trace.append(TurnTraceStep(kind="thinking", text="".join(thinking_buf)))
+            trace.append(
+                TurnTraceStep(
+                    kind="thinking", text="".join(thinking_buf), duration_ms=thinking_spent_ms[0] or None
+                )
+            )
             thinking_buf.clear()
+        thinking_spent_ms[0] = 0
 
     async for event in events:
         if cancel_event is not None and cancel_event.is_set():
@@ -279,12 +300,15 @@ async def _emit_events(
             content_buf[0] = content_buf[0][:turn_text_start]
             del trace[turn_trace_start:]
             thinking_buf.clear()
+            thinking_since[0] = None
+            thinking_spent_ms[0] = 0
             yield writer.turn_retry(event.attempt, event.max_retries, event.reason)
             continue
         if isinstance(event, TextDeltaEvent):
             if event.delta:
                 if attempt_output_started is not None:
                     attempt_output_started[0] = True
+                close_thinking()
                 content_buf[0] += event.delta
                 yield writer.content(event.delta)
             continue
@@ -292,6 +316,8 @@ async def _emit_events(
             if event.delta:
                 if attempt_output_started is not None:
                     attempt_output_started[0] = True
+                if thinking_since[0] is None:
+                    thinking_since[0] = time.monotonic()
                 thinking_buf.append(event.delta)
                 yield writer.thinking(event.delta)
             continue
@@ -305,6 +331,7 @@ async def _emit_events(
                     tool_name=event.tool_call.name,
                     call_id=event.tool_call.id,
                     tool_input=event.tool_call.arguments,
+                    content_offset=utf16_length(content_buf[0]),
                 )
             )
             yield writer.tool_use(
@@ -316,6 +343,7 @@ async def _emit_events(
         if isinstance(event, ToolRunStart):
             if attempt_output_started is not None:
                 attempt_output_started[0] = True
+            close_thinking()
             tool_started_at[event.tool_call.id] = time.monotonic()
             yield writer.tool_start(event.tool_call.id, event.tool_call.name)
             continue

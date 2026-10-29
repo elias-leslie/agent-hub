@@ -47,6 +47,10 @@ class ToolExecutionResponse(BaseModel):
     status: str = Field(default="complete", description="Execution status")
     result: str | None = Field(default=None, description="Tool output summary")
     duration_ms: int | None = Field(default=None, description="Execution duration in ms")
+    content_offset: int | None = Field(
+        default=None,
+        description="How much of the message text (UTF-16 units) had streamed when the call started; null when not recorded",
+    )
 
 
 class MessageResponse(BaseModel):
@@ -74,6 +78,9 @@ class MessageResponse(BaseModel):
     )
     thinking_tokens: int | None = Field(
         default=None, description="Token count for thinking"
+    )
+    thinking_ms: int | None = Field(
+        default=None, description="How long the model thought, in ms; null when not recorded"
     )
     tool_executions: list[ToolExecutionResponse] = Field(
         default_factory=list, description="Tool executions in this turn"
@@ -318,6 +325,9 @@ class SessionSummaryFields(BaseModel):
     )
     total_input_tokens: int = Field(default=0, description="Total input tokens")
     total_output_tokens: int = Field(default=0, description="Total output tokens")
+    total_cost_usd: float | None = Field(
+        default=None, description="Cost of the session's logged model calls in USD; null when none were logged"
+    )
     title: str | None = Field(
         default=None,
         description="First user message, whitespace-collapsed, at most 160 characters",
@@ -464,6 +474,7 @@ class SessionEventResponse(BaseModel):
     tool_output: dict[str, object] | None = Field(default=None, description="Tool execution result")
     tokens: int | None = Field(default=None, description="Token count")
     duration_ms: int | None = Field(default=None, description="Execution duration in ms")
+    content_offset: int | None = Field(default=None, description="tool_use: answer text streamed when the call started")
     model_used: str | None = Field(default=None, description="Model that generated this event")
     agent_id: str | None = Field(default=None, description="Agent identifier")
     agent_name: str | None = Field(default=None, description="Agent display name")

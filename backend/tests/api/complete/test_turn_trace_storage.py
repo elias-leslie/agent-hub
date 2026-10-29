@@ -55,3 +55,28 @@ async def test_save_events_stores_the_trace_in_order_before_the_answer() -> None
     assert output["is_error"] is False
     assert len(str(output["content"])) == TOOL_RESULT_SUMMARY_CHARS + 1
     assert str(output["content"]).endswith("…")
+
+
+@pytest.mark.asyncio
+async def test_save_events_stores_each_tool_calls_place_in_the_answer_and_the_thinking_time() -> None:
+    seen: dict[str, dict[str, object]] = {}
+
+    def recorder(name: str) -> AsyncMock:
+        async def record(*_args: object, **kwargs: object) -> None:
+            seen[name] = kwargs
+
+        return AsyncMock(side_effect=record)
+
+    trace = [
+        TurnTraceStep(kind="thinking", text="hm", duration_ms=2500),
+        TurnTraceStep(kind="tool_use", tool_name="read", call_id="c1", tool_input={}, content_offset=14),
+    ]
+    with (
+        patch("app.api.complete.event_helpers.store_message_event", new=recorder("message")),
+        patch("app.api.complete.event_helpers.store_thinking_event", new=recorder("thinking")),
+        patch("app.api.complete.event_helpers.store_tool_use_event", new=recorder("tool_use")),
+    ):
+        await save_events(AsyncMock(), "s1", [], "answer", 1, 1, model_used="m", agent_id="chat", trace=trace)
+
+    assert seen["thinking"]["duration_ms"] == 2500
+    assert seen["tool_use"]["content_offset"] == 14

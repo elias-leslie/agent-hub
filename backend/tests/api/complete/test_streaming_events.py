@@ -231,3 +231,60 @@ async def test_emit_events_hands_the_turns_thinking_and_tool_calls_to_the_save()
     ]
     assert trace[1].tool_input == {"path": "a.txt"}
     assert trace[2].duration_ms is not None
+
+
+@pytest.mark.asyncio
+async def test_emit_events_records_where_in_the_answer_each_tool_call_started_and_how_long_it_thought() -> None:
+    """text, tool, text, tool, text: each call remembers how much of the answer preceded it (UTF-16 units)."""
+    import asyncio
+
+    from app.llm.types import ThinkingDeltaEvent
+
+    first = ToolCall(id="t1", name="read", arguments={})
+    second = ToolCall(id="t2", name="edit", arguments={})
+    msg = _message([first], "toolUse", Usage(input=1, output=1, total_tokens=2))
+    msg_done = _message([TextContent(text="x")], "stop", Usage(input=1, output=1, total_tokens=2))
+
+    def result(call: ToolCall) -> tool_loop.ToolRunComplete:
+        return tool_loop.ToolRunComplete(
+            tool_call=call,
+            result=ToolResultMessage(
+                tool_call_id=call.id, tool_name=call.name, content=[TextContent(text="ok")],
+                is_error=False, timestamp=0,
+            ),
+        )
+
+    async def events() -> AsyncIterator[ToolLoopEvent]:
+        yield StartEvent(partial=msg)
+        yield ThinkingDeltaEvent(content_index=0, delta="hmm", partial=msg)
+        await asyncio.sleep(0.05)
+        yield TextDeltaEvent(content_index=1, delta="Let me \U0001F600 look.", partial=msg)
+        yield ToolCallEndEvent(content_index=2, tool_call=first, partial=msg)
+        yield tool_loop.ToolRunStart(tool_call=first)
+        yield result(first)
+        yield DoneEvent(reason="toolUse", message=msg)
+        yield StartEvent(partial=msg)
+        yield TextDeltaEvent(content_index=0, delta=" Fixing.", partial=msg)
+        yield ToolCallEndEvent(content_index=1, tool_call=second, partial=msg)
+        yield tool_loop.ToolRunStart(tool_call=second)
+        yield result(second)
+        yield DoneEvent(reason="toolUse", message=msg)
+        yield StartEvent(partial=msg_done)
+        yield TextDeltaEvent(content_index=0, delta=" Fixed.", partial=msg_done)
+        yield DoneEvent(reason="stop", message=msg_done)
+
+    ctx = make_stream_ctx("sess-offsets")
+    writer = SseWriter(session_id="sess-offsets")
+    _attach_routing(writer, ctx)
+    buf = [""]
+    with patched_done_persistence() as mocks:
+        async for _ in _emit_events(events(), writer, ctx, buf, tool_loop_active=True):
+            pass
+
+    trace = mocks.save_messages_to_db.await_args.kwargs["trace"]
+    offsets = [step.content_offset for step in trace if step.kind == "tool_use"]
+    # "Let me \U0001F600 look." is 14 characters but 15 UTF-16 units (the emoji counts as 2); " Fixing." adds 8.
+    assert len("Let me \U0001F600 look.") == 14
+    assert offsets == [15, 23]
+    thinking = next(step for step in trace if step.kind == "thinking")
+    assert thinking.duration_ms is not None and 40 <= thinking.duration_ms < 2000

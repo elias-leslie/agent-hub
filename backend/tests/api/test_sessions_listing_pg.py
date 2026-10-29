@@ -710,3 +710,29 @@ async def test_pi_tool_result_text_counts_without_returning_its_body(
     assert activity.status_code == 200, activity.text
     assert activity.json()["context_split"] == context
     assert "private-fixture" not in response.text + activity.text
+
+
+async def test_detail_carries_the_session_cost_tool_places_and_thinking_time(
+    api: httpx.AsyncClient, pg_db: AsyncSession
+) -> None:
+    await add_session(pg_db, "chat", minutes=1, session_type="completion")
+    await add_session(pg_db, "free", minutes=2, session_type="completion")
+    await add_event(pg_db, "chat", 1, 1, "user_message", role="user", content="fix")
+    await add_event(pg_db, "chat", 1, 2, "thinking", content="plan", duration_ms=2500)
+    await add_event(pg_db, "chat", 1, 3, "tool_use", tool_name="read", call_id="c1", content_offset=11)
+    await add_event(pg_db, "chat", 1, 4, "assistant_message", role="assistant", content="Looking... Fixed.")
+    pg_db.add_all([
+        CostLog(session_id="chat", model="m", input_tokens=10, output_tokens=5, cost_usd=0.004),
+        CostLog(session_id="chat", model="m", input_tokens=10, output_tokens=5, cost_usd=0.0, api_equiv_usd=0.006),
+    ])
+    await pg_db.flush()
+
+    chat = (await api.get("/api/sessions/chat")).json()
+    answer = chat["messages"][1]
+    assert chat["total_cost_usd"] == pytest.approx(0.01)
+    assert [(t["name"], t["content_offset"]) for t in answer["tool_executions"]] == [("read", 11)]
+    assert answer["thinking_ms"] == 2500
+    # Nothing logged is unknown, not free.
+    assert (await api.get("/api/sessions/free")).json()["total_cost_usd"] is None
+    events = (await api.get("/api/sessions/chat/events")).json()["events"]
+    assert [e["content_offset"] for e in events if e["event_type"] == "tool_use"] == [11]

@@ -640,6 +640,24 @@ async def fetch_session_usage_rollups(
     return rollups
 
 
+_SESSION_COST_SQL = text(
+    """
+    SELECT sum(greatest(coalesce(cost_usd, 0), coalesce(api_equiv_usd, 0)))
+    FROM cost_logs WHERE session_id = :session_id
+    """
+)
+
+
+async def fetch_session_cost_usd(db: AsyncSession, session_id: str) -> float | None:
+    """What the session's logged model calls cost at list price, or None when none were logged.
+
+    A subscription call logs $0 cash with its list-price value beside it; the chat shows the same list-price
+    figure it showed live, so the larger of the two counts.
+    """
+    total = (await db.execute(_SESSION_COST_SQL, {"session_id": session_id})).scalar()
+    return None if total is None else float(total)
+
+
 async def fetch_session_event_type_counts(db: AsyncSession, session_id: str) -> dict[str, int]:
     rows = (
         await db.execute(

@@ -397,6 +397,8 @@ class SessionEvent(Base):
 
     tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # tool_use only: how much of the turn's answer (UTF-16 units) had streamed when the call started.
+    content_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
     model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
