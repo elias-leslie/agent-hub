@@ -113,3 +113,21 @@ def test_default_accounting_window_ends_on_a_bucket_boundary(monkeypatch) -> Non
     monkeypatch.setattr(settings, "session_accounting_cache_seconds", 0)
     _, exact, _ = session_accounting.accounting_window(None, None, None)
     assert abs((datetime.now(UTC) - exact).total_seconds()) < 5
+
+
+async def test_scope_events_are_read_as_three_light_columns_not_whole_orm_events() -> None:
+    seen = []
+
+    class Rows:
+        def all(self):
+            return [SimpleNamespace(session_id="s1", tool_name="Read", tool_input={"file_path": "/a"})]
+
+    class FakeDb:
+        async def execute(self, statement):
+            seen.append(statement)
+            return Rows()
+
+    grouped = await ownership_inventory._fetch_scope_events(FakeDb(), ["s1", "s2"])
+
+    assert [column["name"] for column in seen[0].column_descriptions] == ["session_id", "tool_name", "tool_input"]
+    assert grouped["s1"][0].tool_name == "Read" and grouped["s2"] == []

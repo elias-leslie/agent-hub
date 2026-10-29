@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,7 +102,7 @@ def _should_skip_owner_session(
     )
 
 
-def _extract_scope_paths(events: list[SessionEvent], working_dir: str | None) -> tuple[list[str], list[str]]:
+def _extract_scope_paths(events: list[Any], working_dir: str | None) -> tuple[list[str], list[str]]:
     observed_reads: list[str] = []
     observed_writes: list[str] = []
     for event in events:
@@ -147,12 +148,16 @@ async def _fetch_candidate_sessions(db: AsyncSession, project_id: str) -> list[S
     return list((await db.execute(query)).scalars().all())
 
 
-async def _fetch_scope_events(db: AsyncSession, session_ids: list[str]) -> dict[str, list[SessionEvent]]:
+async def _fetch_scope_events(db: AsyncSession, session_ids: list[str]) -> dict[str, list[Any]]:
+    """Tool calls per session, as light rows: only what scope extraction reads, not whole ORM events.
+
+    Loading every field of thousands of tool events as ORM objects blocked the event loop for 100+ ms at a time.
+    """
     if not session_ids:
         return {}
     rows = (
         await db.execute(
-            select(SessionEvent)
+            select(SessionEvent.session_id, SessionEvent.tool_name, SessionEvent.tool_input)
             .where(
                 and_(
                     SessionEvent.session_id.in_(session_ids),
@@ -161,8 +166,8 @@ async def _fetch_scope_events(db: AsyncSession, session_ids: list[str]) -> dict[
             )
             .order_by(SessionEvent.created_at.desc())
         )
-    ).scalars().all()
-    grouped: dict[str, list[SessionEvent]] = {sid: [] for sid in session_ids}
+    ).all()
+    grouped: dict[str, list[Any]] = {sid: [] for sid in session_ids}
     for row in rows:
         grouped.setdefault(row.session_id, []).append(row)
     return grouped
@@ -216,7 +221,7 @@ def _working_dir_from_metadata(metadata: dict) -> str | None:
     return None
 
 
-def _build_scope_paths(session: Session, events: list[SessionEvent], working_dir: str | None) -> tuple[
+def _build_scope_paths(session: Session, events: list[Any], working_dir: str | None) -> tuple[
     list[str], list[str], list[str], list[str]
 ]:
     write_event_paths, read_event_paths = _extract_scope_paths(events, working_dir)
@@ -235,7 +240,7 @@ def _build_scope_paths(session: Session, events: list[SessionEvent], working_dir
 
 def _build_owner(
     session: Session,
-    events: list[SessionEvent],
+    events: list[Any],
     working_dir: str | None,
     lane_paths: list[str],
 ) -> OwnershipOwner | None:
@@ -284,7 +289,7 @@ def _build_owner(
     )
 
 
-def _build_owners(sessions: list[Session], scope_events: dict[str, list[SessionEvent]]) -> list[OwnershipOwner]:
+def _build_owners(sessions: list[Session], scope_events: dict[str, list[Any]]) -> list[OwnershipOwner]:
     """Pure CPU and file-system work (shlex, path resolution) over rows already loaded; run it off the event loop."""
     owners: list[OwnershipOwner] = []
     for session in sessions:
