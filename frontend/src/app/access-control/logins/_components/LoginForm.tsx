@@ -227,7 +227,7 @@ export function LoginForm({
               <p
                 className={
                   urlMovedWithoutPassword
-                    ? 'text-xs text-amber-400'
+                    ? 'text-xs text-amber-700 dark:text-amber-400'
                     : 'text-xs text-slate-500'
                 }
               >
@@ -257,7 +257,7 @@ export function LoginForm({
         )}
       </div>
       {error && (
-        <p role="alert" className="mt-3 text-sm text-red-400">
+        <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-400">
           {error}
         </p>
       )}

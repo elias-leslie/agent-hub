@@ -67,9 +67,9 @@ function StatusChip({ login }: { login: AgentLogin }) {
   const status = loginStatus(login)
   const tone =
     status.state === 'unreadable' || status.state === 'expired'
-      ? 'border-red-800/60 bg-red-900/20 text-red-300'
+      ? 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300'
       : status.state === 'expires'
-        ? 'border-amber-700/50 bg-amber-900/20 text-amber-300'
+        ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300'
         : 'border-slate-700 bg-slate-800/60 text-slate-300'
   const text =
     status.state === 'unreadable'
@@ -126,7 +126,7 @@ function LoginRow({
             target="_blank"
             rel="noreferrer noopener"
             title={url.href}
-            className="block truncate text-amber-300 hover:underline"
+            className="block truncate text-amber-700 hover:underline dark:text-amber-300"
           >
             {url.host}
           </a>
@@ -158,7 +158,7 @@ function LoginRow({
               disabled={busy}
               onClick={() => onAction('confirm')}
               aria-label={`Confirm remove ${name}`}
-              className="rounded bg-red-900/40 px-2 py-1 text-xs text-red-200 hover:bg-red-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
+              className="rounded bg-red-500/15 px-2 py-1 text-xs text-red-700 hover:bg-red-500/25 dark:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
             >
               Remove
             </button>
@@ -196,7 +196,10 @@ function LoginRow({
               type="button"
               onClick={() => onAction('remove')}
               aria-label={`Remove ${name}`}
-              className={cn(buttonClass, 'hover:text-red-300')}
+              className={cn(
+                buttonClass,
+                'hover:text-red-700 dark:hover:text-red-300',
+              )}
             >
               Remove
             </button>
@@ -371,7 +374,7 @@ export default function AgentLoginsPage() {
           {error && data && (
             <div
               role="alert"
-              className="mb-4 rounded-lg border border-amber-800/50 bg-amber-900/20 p-3 text-sm text-amber-300"
+              className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300"
             >
               Could not refresh. Showing the list from{' '}
               {formatDate(new Date(dataUpdatedAt).toISOString())}.{' '}
@@ -387,7 +390,7 @@ export default function AgentLoginsPage() {
           {unreadable > 0 && (
             <div
               role="status"
-              className="mb-4 rounded-lg border border-amber-800/50 bg-amber-900/20 p-3 text-sm text-amber-300"
+              className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300"
             >
               {unreadable === 1
                 ? "1 login can't be read, so its type and fields are unknown."
@@ -396,7 +399,10 @@ export default function AgentLoginsPage() {
             </div>
           )}
           {removeError && (
-            <p role="alert" className="mb-4 text-sm text-red-400">
+            <p
+              role="alert"
+              className="mb-4 text-sm text-red-700 dark:text-red-400"
+            >
               {removeError}
             </p>
           )}
@@ -414,9 +420,9 @@ export default function AgentLoginsPage() {
           ) : error && !data ? (
             <div
               role="alert"
-              className="rounded-lg border border-red-800/50 bg-red-900/20 p-4"
+              className="rounded-lg border border-red-500/40 bg-red-500/10 p-4"
             >
-              <p className="text-sm text-red-400">
+              <p className="text-sm text-red-700 dark:text-red-400">
                 Could not load agent logins.
               </p>
               <p className="mt-1 text-xs text-slate-400">{error.message}</p>
