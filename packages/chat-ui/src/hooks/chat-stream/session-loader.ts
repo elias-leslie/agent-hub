@@ -6,7 +6,19 @@ import type { ChatHubClient } from "../../client";
 import type { ChatMessage, ToolExecution } from "../../types/chat";
 import type { SessionToolExecution } from "./types";
 
+/**
+ * What the session read says about the whole conversation. A field the server did not report is absent: never 0.
+ */
+export interface SessionStats {
+  inputTokens?: number;
+  outputTokens?: number;
+  /** 0-100, only when the server measured it for the latest request. */
+  contextPercent?: number;
+  branch?: string;
+}
+
 export interface LoadedSession {
+  stats: SessionStats;
   messages: ChatMessage[];
   projectId: string | null;
   /** `running` when the server is still working on a turn for this session. */
@@ -30,6 +42,22 @@ function mapToolExecutions(
   }));
 }
 
+/** The usage, context and branch a session read carries. Zero tokens mean no usage reported, not a free session. */
+export function readSessionStats(session: Awaited<ReturnType<ChatHubClient["sessions"]["get"]>>): SessionStats {
+  const input = Number(session.total_input_tokens);
+  const output = Number(session.total_output_tokens);
+  const usage = (session as { context_usage?: { percent_used?: unknown; measured?: unknown } | null }).context_usage;
+  const percent = Number(usage?.percent_used);
+  const branch = (session as { current_branch?: unknown }).current_branch;
+  const hasTokens = (Number.isFinite(input) && input > 0) || (Number.isFinite(output) && output > 0);
+  return {
+    ...(hasTokens && Number.isFinite(input) && input > 0 ? { inputTokens: input } : {}),
+    ...(hasTokens && Number.isFinite(output) && output > 0 ? { outputTokens: output } : {}),
+    ...(usage && usage.measured !== false && Number.isFinite(percent) ? { contextPercent: Math.min(100, Math.max(0, percent)) } : {}),
+    ...(typeof branch === "string" && branch ? { branch } : {}),
+  };
+}
+
 /**
  * Loads an existing chat session through the client.
  */
@@ -38,8 +66,11 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
   const turnState = session.turn_state === "running" ? "running" : "idle";
   const turnPhase = turnState === "running" ? (session.turn_phase ?? null) : null;
 
+  const stats = readSessionStats(session);
+
   if (!session.messages || session.messages.length === 0) {
     return {
+      stats,
       messages: [],
       projectId: session.project_id ?? null,
       turnState,
@@ -79,6 +110,7 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
   };
 
   return {
+    stats,
     messages: deduped.map((m) => ({
       id: `loaded-${m.id}`,
       role: m.role as "user" | "assistant" | "system",

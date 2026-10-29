@@ -30,6 +30,10 @@ export interface MessageInputProps {
   allowModelMentions?: boolean;
   /** The host queues a message sent during a turn: the input stays enabled while the turn streams and Send sits next to Stop. */
   allowQueue?: boolean;
+  /** `transcript` is the bordered composer with a bar for controls, Stop and Send. */
+  variant?: "default" | "transcript";
+  /** Controls for the transcript composer's bar (the model select), left of Stop and Send. */
+  controls?: React.ReactNode;
 }
 
 export function useMessageInput(props: MessageInputProps) {

@@ -28,6 +28,16 @@ export function handleStreamEvent(
 ): void {
   const provider = data.provider as ChatMessage["agentProvider"];
 
+  // Time the model spends thinking: a stretch opens at its first thinking event and closes at the next event of another kind.
+  const now = Date.now();
+  if (data.type === "thinking") {
+    state.thinkingSince ??= now;
+  } else if (state.thinkingSince != null && data.type !== "connected") {
+    state.thinkingMs = (state.thinkingMs ?? 0) + (now - state.thinkingSince);
+    state.thinkingSince = null;
+  }
+  const thinkingMs = state.thinkingMs !== undefined && state.thinkingMs > 0 ? state.thinkingMs : undefined;
+
   switch (data.type) {
     case "connected":
       if (data.session_id) {
@@ -49,7 +59,9 @@ export function handleStreamEvent(
       state.content += data.content || "";
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, ...routingFields(data), content: state.content, statusLabel: "Responding" } : m,
+          m.id === assistantId
+            ? { ...m, ...routingFields(data), content: state.content, thinkingMs, statusLabel: "Responding" }
+            : m,
         ),
       );
       break;
@@ -63,8 +75,10 @@ export function handleStreamEvent(
               ...routingFields(data),
               content: state.content,
               thinking: state.thinking || undefined,
+              thinkingMs,
               agentProvider: provider,
               agentModel: data.model_display_name || data.model,
+              ...(typeof data.cost_usd === "number" ? { costUsd: data.cost_usd } : {}),
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
               thinkingTokens: data.thinking_tokens,
@@ -109,12 +123,13 @@ export function handleStreamEvent(
           input: data.tool_input || {},
           status: "running",
           startedAt: new Date(),
+          contentOffset: state.content.length,
         };
         state.tools = [...state.tools, newTool];
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, toolExecutions: [...state.tools], statusLabel: `Running ${data.tool_name}` }
+              ? { ...m, toolExecutions: [...state.tools], thinkingMs, statusLabel: `Running ${data.tool_name}` }
               : m,
           ),
         );

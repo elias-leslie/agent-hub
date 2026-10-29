@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRequiredChatClient, type ChatHubClient } from "../client";
 import type { ChatMessage, StreamStatus } from "../types/chat";
 import type { CompletionRequest, StreamState } from "./chat-stream/types";
-import { loadSession, type LoadedSession } from "./chat-stream/session-loader";
+import { loadSession, readSessionStats, type LoadedSession, type SessionStats } from "./chat-stream/session-loader";
 import { sendMessage as sendMessageImpl } from "./chat-stream/send-message";
 import { attachToTurn } from "./chat-stream/stream-processor";
 import { generateId } from "./chat-stream/utils";
@@ -54,6 +54,8 @@ interface UseChatStreamReturn {
   turnPhase: string | null;
   /** Follow-ups the host holds until the running turn ends, oldest first. Only a client with `followUps` has any. */
   queued: string[];
+  /** Usage, context and branch the server reports for the whole session; a field it does not report is absent. */
+  sessionStats: SessionStats;
   sendMessage: (content: string, targetAgents?: string[], sessionIdOverride?: string) => void;
   cancelStream: () => void;
   clearMessages: () => void;
@@ -123,6 +125,7 @@ export function useChatStream(
   const [sessionLoadEpoch, setSessionLoadEpoch] = useState(0);
   const [turnPhase, setTurnPhase] = useState<string | null>(null);
   const [queued, setQueued] = useState<string[]>([]);
+  const [sessionStats, setSessionStats] = useState<SessionStats>({});
   const queuedRef = useRef<string[]>([]);
   queuedRef.current = queued;
   const hasFollowUps = Boolean(client.followUps);
@@ -153,6 +156,7 @@ export function useChatStream(
 
       setCurrentSessionId(targetSessionId);
       setLoadedSessionProjectId(loaded.projectId);
+      setSessionStats(loaded.stats);
       setMessages([
         ...loaded.messages,
         { id: assistantId, role: "assistant", content: "", timestamp: new Date(), agentModel: agentSlug, toolExecutions: [] },
@@ -177,6 +181,7 @@ export function useChatStream(
             if (isStale() || abortControllersRef.current !== mine) return;
             setMessages(fresh.messages);
             setLoadedSessionProjectId(fresh.projectId);
+            setSessionStats(fresh.stats);
           }
           setStatus("idle");
         } catch (err) {
@@ -212,6 +217,7 @@ export function useChatStream(
         }
         setCurrentSessionId(targetSessionId);
         setLoadedSessionProjectId(loadedSession.projectId);
+        setSessionStats(loadedSession.stats);
         setMessages(loadedSession.messages);
         setError(null);
         setStatus("idle");
@@ -271,6 +277,7 @@ export function useChatStream(
         setCurrentSessionId(sessionId);
         setMessages(loadedSession.messages);
         setLoadedSessionProjectId(loadedSession.projectId);
+        setSessionStats(loadedSession.stats);
         setStatus("idle");
       } catch (err) {
         if (cancelled) return;
@@ -286,6 +293,26 @@ export function useChatStream(
       controller.abort();
     };
   }, [sessionId, loadInitialSession, sessionLoadEpoch, followRunningTurn]);
+
+  // A turn that just ended changed the session's usage and context: read them again. A failed read keeps what is shown.
+  const prevStatusRef = useRef<StreamStatus>("idle");
+  useEffect(() => {
+    const was = prevStatusRef.current;
+    prevStatusRef.current = status;
+    const wasBusy = was === "streaming" || was === "reconnecting" || was === "cancelling";
+    const target = currentSessionId ?? sessionId;
+    if (!wasBusy || status !== "idle" || !target) return;
+    let cancelled = false;
+    void clientRef.current.sessions.get(target, { includeMessages: false }).then(
+      (session) => {
+        if (!cancelled) setSessionStats(readSessionStats(session));
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [status, currentSessionId, sessionId]);
 
   // Leaving the page drops the connections; running turns carry on server-side.
   useEffect(() => {
@@ -381,6 +408,7 @@ export function useChatStream(
           effectiveSessionId = requestedSessionId;
           setCurrentSessionId(requestedSessionId);
           setLoadedSessionProjectId(loadedSession.projectId);
+          setSessionStats(loadedSession.stats);
           setMessages(loadedSession.messages);
         } catch (err) {
           preloadedSessionOverrideRef.current = null;
@@ -474,6 +502,7 @@ export function useChatStream(
     setLoadedSessionProjectId(null);
     setMessages([]);
     setQueued([]);
+    setSessionStats({});
     setError(null);
     setStatus("idle");
     setTurnPhase(null);
@@ -636,6 +665,7 @@ export function useChatStream(
     currentSessionId,
     turnPhase,
     queued,
+    sessionStats,
     sendMessage,
     cancelStream,
     clearMessages,

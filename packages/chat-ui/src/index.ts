@@ -16,6 +16,13 @@ export { ActivityIndicator, ActivityIndicatorInline } from './components/activit
 export { MentionChip } from './components/mention-chip';
 export { MentionPopup } from './components/mention-popup';
 export { ModelTriggerButton, MicButton, StopButton, SendButton } from './components/input-buttons';
+export { ToolLine } from './components/transcript/ToolLine';
+export { DiffBlock } from './components/transcript/DiffBlock';
+export { StatusLine } from './components/transcript/StatusLine';
+export { QueuedChips } from './components/transcript/QueuedChips';
+export { TranscriptMessage } from './components/transcript/TranscriptMessage';
+export { describeTool, diffForTool, diffLines } from './components/transcript/tool-format';
+export { statusLineFields } from './components/transcript/status-line';
 export { SpeakerButton } from './components/speaker-button';
 
 export { useChatStream } from './hooks/use-chat-stream';
@@ -29,6 +36,9 @@ export { getProviderBubbleStyle, getProviderIconColor, getProviderTextColor } fr
 export { describePhase } from './hooks/chat-stream/turn-phase';
 export { cn } from './lib/utils';
 
+export type { ToolLabel, ToolDiff, DiffLine, ToolKind } from './components/transcript/tool-format';
+export type { StatusLineInput, StatusLineFields } from './components/transcript/status-line';
+export type { SessionStats } from './hooks/chat-stream/session-loader';
 export type { ChatMessage, StreamMessage, StreamRequest, StreamStatus, ToolExecution } from './types/chat';
 export type { ChatStreamConfig } from './hooks/use-chat-stream';
 export type { ChatHubClient, ChatFollowUps } from './client';

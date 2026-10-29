@@ -13,6 +13,8 @@ export interface ToolExecution {
   result?: string;
   startedAt: Date;
   completedAt?: Date;
+  /** How much of the answer text had streamed when the call started; the transcript layout puts the call there. Absent for a reloaded session. */
+  contentOffset?: number;
 }
 
 export interface ChatArtifact {
@@ -81,6 +83,8 @@ export interface ChatMessage {
   // Extended thinking
   thinking?: string;
   thinkingTokens?: number;
+  /** How long the model spent thinking, in ms, when this view watched it happen. Absent for a reloaded session. */
+  thinkingMs?: number;
   // Output usage / truncation
   truncated?: boolean;
   maxTokensRequested?: number;
@@ -157,6 +161,8 @@ export interface StreamMessage {
   // Tool result fields (on 'tool_result')
   tool_result?: string;
   tool_status?: "running" | "complete" | "error";
+  // Cost of the turn (on 'done')
+  cost_usd?: number | null;
 }
 
 export type StreamStatus =

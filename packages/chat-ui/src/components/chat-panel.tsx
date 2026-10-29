@@ -19,6 +19,10 @@ import { MessageList } from "./message-list";
 import { routeText } from "./MessageRuntimeDetails";
 import { MessageInput } from "./message-input";
 import { ActivityIndicator, type ActivityState } from "./activity-indicator";
+import { QueuedChips } from "./transcript/QueuedChips";
+import { StatusLine } from "./transcript/StatusLine";
+import { sessionCost } from "./transcript/status-line";
+import { describeTool } from "./transcript/tool-format";
 
 interface ChatPanelProps {
   agentSlug: string;
@@ -34,8 +38,16 @@ interface ChatPanelProps {
   /** The Agent Hub client (`createClient` from `@agent-hub/sdk`); falls back to a `ChatClientProvider` above the panel. */
   client?: ChatHubClient | null;
   config?: ChatStreamConfig;
-  /** `page` is the full chat page. `compact` drops the title header and toolbar for a small window: one status row (activity, phase, model route, tokens) above the messages. */
-  layout?: "page" | "compact";
+  /**
+   * `page` is the full chat page. `compact` drops the title header and toolbar for a small window: one status row
+   * (activity, phase, model route, tokens) above the messages. `transcript` is the coding-chat look: one reading
+   * column with no bubbles or cards, tool calls as lines, a bordered composer and a status line under it.
+   */
+  layout?: "page" | "compact" | "transcript";
+  /** Transcript layout: controls for the composer's bar, left of Stop and Send (a model select). */
+  renderComposerControls?: () => React.ReactNode;
+  /** Transcript layout: the git branch for the status line, when the host knows it. Else the session's own, if it has one. */
+  branch?: string | null;
   /** Offer @model mentions in the input. Default true. */
   allowModelMentions?: boolean;
   /** Voice input and output from `useChatVoice` (`@agent-hub/chat-ui/voice`). Omit for a chat without voice. */
@@ -46,6 +58,21 @@ interface ChatPanelProps {
   renderDebugPanel?: (props: { messages: ChatMessage[] }) => React.ReactNode;
   onMessagesChange?: (messages: ChatMessage[]) => void;
 }
+
+/** The transcript header pill's wording per state: plain phase names, no trailing dots. */
+const TRANSCRIPT_PILL: Record<ActivityState, string> = {
+  idle: "Ready",
+  connecting: "Connecting",
+  waiting: "Waiting for the model",
+  working: "Working",
+  retrying: "Retrying",
+  thinking: "Thinking",
+  calling_tool: "Running a tool",
+  streaming: "Responding",
+  reconnecting: "Reconnecting",
+  cancelling: "Stopping",
+  error: "Error",
+};
 
 export function ChatPanel({ client: clientProp, ...props }: ChatPanelProps) {
   const client = useRequiredChatClient(clientProp);
@@ -69,6 +96,8 @@ function ChatPanelBody({
   title = "Agent Hub",
   config,
   layout = "page",
+  renderComposerControls,
+  branch,
   allowModelMentions = true,
   voice,
   alwaysSpeak = false,
@@ -83,6 +112,7 @@ function ChatPanelBody({
     currentSessionId,
     turnPhase,
     queued,
+    sessionStats,
     sendMessage,
     cancelStream,
     clearMessages,
@@ -95,6 +125,7 @@ function ChatPanelBody({
   } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, config });
 
   const client = useRequiredChatClient();
+  const transcript = layout === "transcript";
   const compact = layout === "compact";
   const allowQueue = Boolean(client.followUps);
   const [showDebug, setShowDebug] = useState(false);
@@ -215,6 +246,78 @@ function ChatPanelBody({
     lastAutoSendKey.current = autoSendKey;
     sendMessage(autoSendPrompt);
   }, [autoSendKey, autoSendPrompt, isBusy, sendMessage]);
+
+  if (transcript) {
+    const turns = messages.filter((m) => m.role === "user").length;
+    const headerModel = lastAssistantMessage?.servedModel ?? lastAssistantMessage?.requestedModel;
+    const transcriptPill =
+      pillState === "calling_tool" && phaseDetail
+        ? `Running ${describeTool({ name: phaseDetail, input: {} }).name}`
+        : TRANSCRIPT_PILL[pillState];
+    return (
+      <div className="flex h-full min-w-0 flex-col">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border px-3.5 py-2 text-xs text-muted-foreground">
+          <ActivityIndicator state={pillState} label={transcriptPill} decorative={!!phaseLabel} size="sm" />
+          {phaseLabel ? (
+            <span data-testid="turn-phase" className="sr-only" aria-live="polite">
+              {phaseLabel}
+            </span>
+          ) : null}
+          {headerModel ? (
+            <span data-testid="header-model" className="min-w-0 truncate font-mono text-[12.5px]">
+              {headerModel}
+            </span>
+          ) : null}
+          <span className="flex-1" />
+          {turns > 0 ? <span className="font-mono">turn {turns}</span> : null}
+        </div>
+
+        {renderBanner?.()}
+
+        {error && (
+          <div role="alert" className="border-b border-destructive/30 bg-destructive/10 px-4 py-2">
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+
+        <MessageList
+          variant="transcript"
+          messages={messages}
+          isStreaming={isStreaming}
+          emptyLabel={error ? "No messages loaded" : undefined}
+        />
+
+        <div className="border-t border-border px-3.5 pb-3 pt-2.5">
+          <div className="mx-auto w-full max-w-[860px]">
+            <QueuedChips queued={queued} />
+            <MessageInput
+              variant="transcript"
+              controls={renderComposerControls?.()}
+              agentSlug={agentSlug}
+              onSend={sendMessage}
+              onCancel={cancelStream}
+              status={status}
+              voice={voice}
+              onVoiceSend={handleVoiceSend}
+              initialPrompt={initialPrompt}
+              allowModelMentions={allowModelMentions}
+              allowQueue={allowQueue}
+            />
+            <StatusLine
+              requestedModel={lastAssistantMessage?.requestedModel}
+              servedModel={lastAssistantMessage?.servedModel}
+              busy={isBusy}
+              inputTokens={sessionStats.inputTokens}
+              outputTokens={sessionStats.outputTokens}
+              costUsd={sessionCost(messages)}
+              contextPercent={sessionStats.contextPercent}
+              branch={branch ?? sessionStats.branch}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-row h-full">

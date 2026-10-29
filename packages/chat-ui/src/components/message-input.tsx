@@ -11,6 +11,7 @@ import {
   SendButton,
 } from "./input-buttons";
 import { useMessageInput } from "./use-message-input";
+import { TranscriptComposer } from "./transcript/TranscriptComposer";
 export type { MessageInputProps } from "./use-message-input";
 
 export function MessageInput(props: import("./use-message-input").MessageInputProps) {
@@ -55,6 +56,44 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
     allowQueue = false,
   } = props;
   const inputLocked = isStreaming && !allowQueue;
+
+  if (props.variant === "transcript") {
+    return (
+      <TranscriptComposer
+        input={input}
+        textareaRef={textareaRef}
+        inputWrapperRef={inputWrapperRef}
+        showMentionPopup={allowModelMentions && showMentionPopup}
+        mentionFilter={mentionFilter}
+        mentionSelectedIndex={mentionSelectedIndex}
+        filteredModels={filteredModels}
+        selectedModels={selectedModels}
+        isStreaming={isStreaming}
+        isCancelling={isCancelling}
+        canSend={canSend}
+        canCancel={canCancel}
+        locked={inputLocked || disabled}
+        allowQueue={allowQueue}
+        recording={isRecording}
+        voice={voice}
+        canRecord={canRecord}
+        isSpeaking={isSpeaking}
+        editing={Boolean(editingMessage)}
+        controls={props.controls}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={() => setIsInputFocused(true)}
+        onBlur={() => setIsInputFocused(false)}
+        onSend={handleSend}
+        onCancel={onCancel}
+        onSelectModel={selectModel}
+        onRemoveModel={removeModel}
+        onMic={handleMicClick}
+        stopSpeaking={stopSpeaking}
+        onEditCancel={onEditCancel ? cancelEditing : undefined}
+      />
+    );
+  }
 
   return (
     <div className={cn("border-t border-border bg-card/35", compact ? "p-2.5" : "p-4")}>

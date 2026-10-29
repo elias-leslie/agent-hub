@@ -45,6 +45,8 @@ export interface ActivityIndicatorProps {
   label?: string;
   /** The host announces the status to screen readers elsewhere (a live region); hide the pill from them. */
   decorative?: boolean;
+  /** `sm` is the transcript header's pill: small text and a dot in place of the icon. */
+  size?: "md" | "sm";
   className?: string;
 }
 
@@ -146,6 +148,7 @@ export function ActivityIndicator({
   stepProgress,
   label,
   decorative,
+  size = "md",
   className,
 }: ActivityIndicatorProps) {
   const [thinkingExpanded, setThinkingExpanded] = useState(false);
@@ -167,19 +170,27 @@ export function ActivityIndicator({
         data-state={state}
         aria-hidden={decorative ? true : undefined}
         className={cn(
-          "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium",
+          "inline-flex items-center rounded-full font-medium",
+          size === "sm" ? "gap-1.5 px-2.5 py-0.5 text-xs" : "gap-2 px-3 py-1.5 text-sm",
           config.bgColor,
           config.color
         )}
       >
-        <Icon
-          className={cn("h-4 w-4", config.animate && "animate-spin")}
-          style={
-            state === "thinking" && config.animate
-              ? { animation: "pulse 1.5s ease-in-out infinite" }
-              : undefined
-          }
-        />
+        {size === "sm" ? (
+          <span
+            aria-hidden
+            className={cn("inline-block h-[7px] w-[7px] rounded-full bg-current", config.animate && "animate-pulse motion-reduce:animate-none")}
+          />
+        ) : (
+          <Icon
+            className={cn("h-4 w-4", config.animate && "animate-spin")}
+            style={
+              state === "thinking" && config.animate
+                ? { animation: "pulse 1.5s ease-in-out infinite" }
+                : undefined
+            }
+          />
+        )}
         <span>{displayLabel}</span>
 
         {/* Step progress bar */}

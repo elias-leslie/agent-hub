@@ -15,6 +15,9 @@ export interface StreamState {
   lastSeq: number;
   /** Where the current model turn began; a turn_retry drops everything after it */
   turnStart?: { content: number; thinking: number; tools: number };
+  /** Time spent thinking so far, and when the open thinking stretch began (null between stretches). */
+  thinkingMs?: number;
+  thinkingSince?: number | null;
 }
 
 /**

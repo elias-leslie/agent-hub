@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useCallback, useEffect, useRef } from "react";
 import type { ChatMessage } from "../types/chat";
 import { MessageBubble } from "./MessageBubble";
 import { groupMessages } from "./message-utils";
+import { TranscriptMessage } from "./transcript/TranscriptMessage";
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -16,6 +17,8 @@ interface MessageListProps {
   emptyLabel?: string;
   /** Follow-ups the host holds until the running turn ends. Shown after the messages, marked "Queued". */
   queued?: string[];
+  /** `transcript` is one centred reading column: no bubbles, no cards, tool calls as lines. */
+  variant?: "default" | "transcript";
 }
 
 export function MessageList(props: MessageListProps) {
@@ -43,17 +46,49 @@ function MessageListInner({
   onContinueAs,
   emptyLabel = "Start a conversation",
   queued = [],
+  variant = "default",
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stuck = useRef(true);
+  const transcript = variant === "transcript";
 
   useEffect(() => {
+    if (transcript) {
+      // Follow the newest line only while the reader is at the bottom; scrolling up to read stays put.
+      const el = scrollRef.current;
+      if (messages[messages.length - 1]?.role === "user") stuck.current = true;
+      if (el && stuck.current) el.scrollTop = el.scrollHeight;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, queued.length]);
+  }, [messages, queued.length, transcript]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }, []);
 
   if (messages.length === 0 && queued.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
         <p>{emptyLabel}</p>
+      </div>
+    );
+  }
+
+  if (transcript) {
+    return (
+      <div ref={scrollRef} onScroll={onScroll} data-testid="transcript" className="min-h-0 flex-1 overflow-y-auto py-[18px]">
+        <div className="mx-auto w-full max-w-[860px] px-5">
+          {messages.map((message, index) => (
+            <TranscriptMessage
+              key={message.id}
+              message={message}
+              isStreaming={isStreaming && message.role === "assistant" && index === messages.length - 1}
+            />
+          ))}
+        </div>
       </div>
     );
   }
