@@ -14,6 +14,7 @@ from app.llm.types import AssistantMessage, Usage, UsageCost
 from app.llm.utils.outcomes import is_model_switch, outcome_details, outcome_of
 
 if TYPE_CHECKING:
+    from .streaming_context import StreamContext
     from .types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,14 @@ def outcome_usage(message: AssistantMessage | None) -> dict[str, object] | None:
     """Session-event ``usage`` payload carrying the message's typed provider outcome, if any."""
     outcome = outcome_of(message) if message is not None else None
     return {"provider_outcome": outcome_details(outcome)} if outcome else None
+
+
+def turn_usage(message: AssistantMessage | None, ctx: StreamContext) -> dict[str, object] | None:
+    """The answer event's ``usage``: the provider outcome plus the thinking level asked for and sent."""
+    usage = outcome_usage(message) or {}
+    if ctx.thinking:
+        usage["thinking"] = dict(ctx.thinking)
+    return usage or None
 
 
 async def persist_failed_attempt_usage(

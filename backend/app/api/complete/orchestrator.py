@@ -63,6 +63,23 @@ class OrchestratorResult:
     usage_messages: list[AssistantMessage] = field(default_factory=list)
 
 
+def _reasoning_level(thinking_level: str | None) -> ThinkingLevel | None:
+    """The pi-mono reasoning level a request's thinking level means (``None`` = reasoning off)."""
+    # Agent rows store "none" for reasoning off (app/models/agent.py).
+    reasoning = {"ultrathink": "xhigh", "none": None}.get(thinking_level or "", thinking_level)
+    if reasoning not in {None, "minimal", "low", "medium", "high", "xhigh"}:
+        raise ValueError(f"Unsupported thinking level: {thinking_level}")
+    return cast(ThinkingLevel | None, reasoning)
+
+
+def sent_thinking_level(model: Model[Any], thinking_level: str | None) -> str:
+    """The level the provider adapter is given for this model: catalog-mapped, or ``none`` without reasoning."""
+    reasoning = _reasoning_level(thinking_level)
+    if reasoning is None or not model.reasoning:
+        return "none"
+    return (model.thinking_level_map or {}).get(reasoning) or reasoning
+
+
 def completion_options(
     temperature: float,
     thinking_level: str | None,
@@ -71,13 +88,9 @@ def completion_options(
     session_id: str | None = None,
 ) -> SimpleStreamOptions:
     """One options mapping for HTTP streaming, single-turn and tool execution."""
-    # Agent rows store "none" for reasoning off (app/models/agent.py).
-    reasoning = {"ultrathink": "xhigh", "none": None}.get(thinking_level or "", thinking_level)
-    if reasoning not in {None, "minimal", "low", "medium", "high", "xhigh"}:
-        raise ValueError(f"Unsupported thinking level: {thinking_level}")
     return SimpleStreamOptions(
         temperature=temperature,
-        reasoning=cast(ThinkingLevel | None, reasoning),
+        reasoning=_reasoning_level(thinking_level),
         max_tokens=max_tokens,
         signal=signal,
         # Providers key prompt caches and persistent sessions on this.

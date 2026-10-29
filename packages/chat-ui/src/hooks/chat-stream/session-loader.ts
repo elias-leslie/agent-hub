@@ -85,13 +85,13 @@ export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessi
 
   const provider = session.provider as ChatMessage["agentProvider"];
 
-  // Deduplicate messages — backend may have stored full history on each turn.
-  // Keep first occurrence of each role+content pair to preserve chronological order.
-  const seen = new Set<string>();
+  // The same stored message listed twice is shown once. Two messages with identical text are different turns
+  // (different ids) and both stay: never match on role or text.
+  const seenMessageIds = new Set<string>();
   const deduped = session.messages.filter((m) => {
-    const key = `${m.role}:${m.content}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
+    const key = String(m.id);
+    if (seenMessageIds.has(key)) return false;
+    seenMessageIds.add(key);
     return true;
   });
   const seenToolExecutionIds = new Set<string>();

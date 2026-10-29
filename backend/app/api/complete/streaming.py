@@ -50,8 +50,19 @@ from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message, messages_to_dicts
 
 from .event_helpers import TurnTraceStep
-from .orchestrator import build_context_from_messages, completion_options, run_completion_stream
-from .runtime_usage import accounting_model, aggregate_message_usage, outcome_usage, served_model
+from .orchestrator import (
+    build_context_from_messages,
+    completion_options,
+    run_completion_stream,
+    sent_thinking_level,
+)
+from .runtime_usage import (
+    accounting_model,
+    aggregate_message_usage,
+    outcome_usage,
+    served_model,
+    turn_usage,
+)
 from .schemas import MessageInput
 from .sse_writer import SseWriter, tool_result_text
 from .streaming_context import StreamContext
@@ -171,7 +182,7 @@ async def _persist_and_build_done_sse(
         agent_used=ctx.agent_used,
         stream_start=ctx.stream_start,
         source_metadata=ctx.source_metadata,
-        usage=outcome_usage(message),
+        usage=turn_usage(message, ctx),
         trace=trace,
         thinking_tokens=thinking_tokens,
         prompt_event_id=ctx.prompt_event_id,
@@ -601,6 +612,10 @@ async def stream_completion(
                         await turn_db.commit()
             try:
                 llm_model = resolve_llm_model(candidate_model, candidate_provider)
+                ctx.thinking = {
+                    "requested": thinking_level or "none",
+                    "sent": sent_thinking_level(llm_model, thinking_level),
+                }
                 events = run_completion_stream(
                     llm_model,
                     context,

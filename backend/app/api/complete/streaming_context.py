@@ -30,6 +30,7 @@ class StreamContext:
         "session_id",
         "source_metadata",
         "stream_start",
+        "thinking",
         "user_messages",
     )
 
@@ -67,6 +68,8 @@ class StreamContext:
         self.source_metadata = source_metadata
         self.last_progress_at = 0.0
         self.last_progress_chars = 0
+        # {"requested": level asked for, "sent": level given to the provider adapter}; set per model attempt.
+        self.thinking: dict[str, str] | None = None
 
     @classmethod
     def open(
