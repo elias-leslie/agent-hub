@@ -40,6 +40,23 @@ async def test_lane_ids_are_computed_once_for_concurrent_and_repeated_reads(lane
     assert lanes["specialists"].await_count == 1
 
 
+async def test_stale_lane_ids_are_served_at_once_while_one_refresh_runs_behind(lanes, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "session_lane_cache_seconds", 0.01)
+    await session_responses.build_project_lane_session_ids(None, {"p"})
+    lanes["ownership"].side_effect = None
+    lanes["ownership"].return_value = [SimpleNamespace(session_id="owner-2")]
+    await asyncio.sleep(0.03)
+
+    started = asyncio.get_running_loop().time()
+    stale = await asyncio.gather(*(session_responses.build_project_lane_session_ids(None, {"p"}) for _ in range(5)))
+    assert asyncio.get_running_loop().time() - started < 0.04
+    assert all(result == ({"owner-1"}, {"spec-1"}) for result in stale)
+
+    await asyncio.gather(*list(session_responses._LANE_REFRESHES.values()))
+    assert lanes["ownership"].await_count == 2  # first read + a single background refresh
+    assert await session_responses.build_project_lane_session_ids(None, {"p"}) == ({"owner-2"}, {"spec-1"})
+
+
 async def test_lane_ids_are_recomputed_when_the_cache_is_off(lanes, monkeypatch) -> None:
     monkeypatch.setattr(settings, "session_lane_cache_seconds", 0.0)
     await session_responses.build_project_lane_session_ids(None, {"p"})
