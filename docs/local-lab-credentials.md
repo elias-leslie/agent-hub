@@ -46,8 +46,10 @@ omitting `--expires-at` makes the new synthetic bundle non-expiring. Refresh
 requires exactly one existing, valid synthetic payload; its old expiry may have
 passed. Missing, duplicate, malformed, foreign or temporary entries fail without
 replacement. Renew the target credential/session first: refresh updates storage,
-never resets a target account or creates a browser session. Both writes hold the
-existing PostgreSQL table writer lock through validation and commit.
+never resets a target account or creates a browser session. Delete removes exactly
+one row at the reference without decrypting it, so an undecodable row can go; a
+missing or duplicate reference changes nothing. All three writes hold the existing
+PostgreSQL table writer lock through validation and commit.
 
 ## Owner accounts
 
@@ -56,6 +58,21 @@ platform account). Only the owner enrolls or classifies one; `st browser login
 add TARGET` prompts them at a terminal and pipes the bundle here. Agents use it
 only through `st browser login TARGET`, whose trusted adapter fills the page; the
 values never reach the agent. Refresh keeps the account kind.
+
+## Owner screen
+
+The dashboard's Agent logins page (`/access-control/logins`) lists every lab row and
+lets the owner add an account login, replace or edit a synthetic or account bundle and
+remove a row. It uses an owner-only API, `GET|POST /api/lab-credentials` and
+`PUT|PATCH|DELETE /api/lab-credentials/TARGET/ACTOR`. PATCH merges
+`{"set": {FIELD: VALUE}, "remove": [FIELD], "expires_at": ISO|null}` into the bundle
+under the writer lock, keeping its kind, other fields and (when omitted) expiry; an
+account keeps its username and password. The list returns identity, kind,
+expiry, field names, timestamps, whether the row failed to decode and the one value
+`login_url`; nothing else about a value is ever returned. Values arrive only in
+request bodies. An `otpauth://` URI is stored as its base32 secret; non-default
+digits, period or algorithm are refused. Accounts need a username, password and
+https login URL (plain http only for localhost).
 
 ## Use and browser sessions
 

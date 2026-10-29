@@ -1,15 +1,19 @@
 """Scoped lab references in the existing encrypted credential store.
 
-The caller must supply a trusted target scope. This module authenticates no caller,
-exposes no endpoint and never falls back to host/provider sources.
+The caller must supply a trusted target scope. This module authenticates no caller
+and never falls back to host/provider sources; the owner-gated API in
+app.api.lab_credentials is its only HTTP surface.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +29,14 @@ _FIELD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 class LabCredentialError(ValueError):
     """A fixed diagnostic that never includes credential contents."""
+
+
+class LabCredentialMissing(LabCredentialError):
+    """No row exists at the reference."""
+
+
+class LabCredentialExists(LabCredentialError):
+    """A row already exists at the reference."""
 
 
 def decode_lab_json(value: str | bytes) -> object:
@@ -113,6 +125,22 @@ def _validate_payload(
     return validated
 
 
+def _origin(url: str) -> tuple[str, str, int | None] | None:
+    try:
+        parts = urlsplit(url)
+        return (parts.scheme.lower(), (parts.hostname or "").lower(),
+                parts.port or {"https": 443, "http": 80}.get(parts.scheme.lower()))
+    except ValueError:
+        return None
+
+
+def _require_password_for_new_site(old: dict[str, str], new: dict[str, str], password_sent: bool) -> None:
+    """A saved password belongs to its login URL's origin; moving it needs the password again."""
+    before, after = old.get("login_url"), new.get("login_url")
+    if before and after and not password_sent and _origin(before) != _origin(after):
+        raise LabCredentialError("Changing the site needs the password again")
+
+
 def prepare_lab_credential(
     reference: str,
     values: dict[str, str],
@@ -161,7 +189,7 @@ async def enroll_lab_credential(
             Credential.provider == _provider(target), Credential.credential_type == actor,
         ))
         if existing.all():
-            raise LabCredentialError("Lab credential reference already exists or is ambiguous")
+            raise LabCredentialExists("Lab credential reference already exists or is ambiguous")
         # Validate expiry after acquiring the lock, which may have waited.
         credential = prepare_lab_credential(reference, values, kind=kind, expires_at=expires_at)
         db.add(credential)
@@ -188,6 +216,8 @@ async def refresh_lab_credential(
             Credential.provider == _provider(target), Credential.credential_type == actor,
         ))
         rows = result.scalars().all()
+        if not rows:
+            raise LabCredentialMissing("Lab credential unavailable or ambiguous")
         if (len(rows) != 1 or rows[0].provider != _provider(target)
                 or rows[0].credential_type != actor):
             raise LabCredentialError("Lab credential unavailable or ambiguous")
@@ -197,15 +227,147 @@ async def refresh_lab_credential(
             payload = decode_lab_json(decrypt_value(rows[0].value_encrypted))
         except (EncryptionError, ValueError, UnicodeError):
             raise LabCredentialError("Lab credential could not be decoded") from None
-        _validate_payload(payload, reference, datetime.now(UTC), allow_expired=True)
+        old_values = _validate_payload(payload, reference, datetime.now(UTC), allow_expired=True)
         if not isinstance(payload, dict) or payload["kind"] not in ("synthetic", "account"):
             raise LabCredentialError("Only known synthetic or account lab credentials can be refreshed")
+        _require_password_for_new_site(old_values, values, "password" in values)
         replacement = prepare_lab_credential(
             reference, values, kind=payload["kind"], expires_at=expires_at,
         )
         rows[0].value_encrypted = replacement.value_encrypted
         await db.flush()
     return reference
+
+
+UNCHANGED: Any = object()  # update_lab_credential: keep the stored expiry
+
+
+async def update_lab_credential(
+    db: AsyncSession,
+    reference: str,
+    *,
+    set_values: dict[str, str],
+    remove: Iterable[str] = (),
+    expires_at: datetime | None | Any = UNCHANGED,
+) -> str:
+    """Merge into one synthetic or account bundle under the writer lock, keeping its kind.
+
+    Sets the given fields, drops the named ones, and replaces the expiry only when
+    one is passed (None clears it). An account keeps its username and password.
+    """
+    target, actor = _identity(reference)
+    drop = set(remove)
+    if drop & set_values.keys():
+        raise LabCredentialError("A field cannot be both set and removed")
+    async with db.begin():
+        await db.execute(text("LOCK TABLE credentials IN SHARE ROW EXCLUSIVE MODE"))
+        result = await db.execute(select(Credential).where(
+            Credential.provider == _provider(target), Credential.credential_type == actor,
+        ))
+        rows = result.scalars().all()
+        if not rows:
+            raise LabCredentialMissing("Lab credential unavailable or ambiguous")
+        if (len(rows) != 1 or rows[0].provider != _provider(target)
+                or rows[0].credential_type != actor):
+            raise LabCredentialError("Lab credential unavailable or ambiguous")
+        from app.storage.credentials import EncryptionError, decrypt_value
+
+        try:
+            payload = decode_lab_json(decrypt_value(rows[0].value_encrypted))
+        except (EncryptionError, ValueError, UnicodeError):
+            raise LabCredentialError("Lab credential could not be decoded") from None
+        values = _validate_payload(payload, reference, datetime.now(UTC), allow_expired=True)
+        assert isinstance(payload, dict)  # validated above
+        if payload["kind"] not in ("synthetic", "account"):
+            raise LabCredentialError("Only known synthetic or account lab credentials can be edited")
+        if not drop <= values.keys():
+            raise LabCredentialError("A field to remove is not in this lab credential")
+        merged = {**{name: item for name, item in values.items() if name not in drop}, **set_values}
+        if payload["kind"] == "account" and not {"username", "password"} <= merged.keys():
+            raise LabCredentialError("An account login keeps its username and password")
+        if expires_at is UNCHANGED:
+            expires_at = datetime.fromisoformat(payload["expires_at"]) if payload["expires_at"] else None
+        _require_password_for_new_site(values, merged, "password" in set_values)
+        replacement = prepare_lab_credential(reference, merged, kind=payload["kind"], expires_at=expires_at)
+        rows[0].value_encrypted = replacement.value_encrypted
+        await db.flush()
+    return reference
+
+
+async def delete_lab_credential(db: AsyncSession, reference: str) -> str:
+    """Delete exactly one row at the reference under the writer lock; never decrypts.
+
+    An undecodable row can be removed. A missing or duplicate reference changes nothing.
+    """
+    target, actor = _identity(reference)
+    async with db.begin():
+        await db.execute(text("LOCK TABLE credentials IN SHARE ROW EXCLUSIVE MODE"))
+        result = await db.execute(select(Credential).where(
+            Credential.provider == _provider(target), Credential.credential_type == actor,
+        ))
+        rows = result.scalars().all()
+        if not rows:
+            raise LabCredentialMissing("Lab credential unavailable or ambiguous")
+        if (len(rows) != 1 or rows[0].provider != _provider(target)
+                or rows[0].credential_type != actor):
+            raise LabCredentialError("Lab credential unavailable or ambiguous")
+        await db.delete(rows[0])
+        await db.flush()
+    return reference
+
+
+@dataclass(frozen=True)
+class LabCredentialSummary:
+    """Metadata for the owner's list. Field names and login_url only, never other values."""
+
+    reference: str
+    target: str
+    actor: str
+    kind: str | None
+    expires_at: datetime | None
+    expired: bool
+    fields: tuple[str, ...]
+    login_url: str | None
+    created_at: datetime | None
+    updated_at: datetime | None
+    undecodable: bool
+
+
+async def list_lab_credentials(
+    db: AsyncSession, *, now: datetime | None = None,
+) -> list[LabCredentialSummary]:
+    """Every lab row for the owner view; a row that fails to decode is flagged, not fatal."""
+    from app.storage.credentials import EncryptionError, decrypt_value
+
+    current = _timestamp(now or datetime.now(UTC))
+    result = await db.execute(select(Credential).where(
+        Credential.provider.startswith(LAB_PROVIDER_PREFIX, autoescape=True),
+    ).order_by(Credential.provider, Credential.credential_type, Credential.id))
+    summaries: list[LabCredentialSummary] = []
+    for row in result.scalars().all():
+        target = row.provider[len(LAB_PROVIDER_PREFIX):]
+        reference = f"secret://lab/{target}/{row.credential_type}"
+        base = {
+            "reference": reference, "target": target, "actor": row.credential_type,
+            "created_at": getattr(row, "created_at", None), "updated_at": getattr(row, "updated_at", None),
+        }
+        try:
+            _identity(reference)
+            payload = decode_lab_json(decrypt_value(row.value_encrypted))
+            values = _validate_payload(payload, reference, current, allow_expired=True)
+            assert isinstance(payload, dict)  # validated above
+            expires_at = _timestamp(datetime.fromisoformat(payload["expires_at"])) if payload["expires_at"] else None
+        except (LabCredentialError, EncryptionError, ValueError, UnicodeError):
+            summaries.append(LabCredentialSummary(
+                **base, kind=None, expires_at=None, expired=False, fields=(), login_url=None, undecodable=True,
+            ))
+            continue
+        summaries.append(LabCredentialSummary(
+            **base, kind=payload["kind"], expires_at=expires_at,
+            expired=expires_at is not None and expires_at <= current,
+            fields=tuple(sorted(values)), login_url=values.get("login_url"), undecodable=False,
+        ))
+    return summaries
 
 
 async def list_lab_credential_refs(db: AsyncSession, target: str) -> list[str]:

@@ -20,6 +20,7 @@ from app.api.endpoints.voice import router as voice_router
 from app.api.events import router as events_router
 from app.api.health import router as health_router
 from app.api.image import router as image_router
+from app.api.lab_credentials import router as lab_credentials_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
 from app.api.narration import router as narration_router
@@ -53,6 +54,7 @@ router.include_router(automations_router)
 router.include_router(db_router)  # Has its own prefix /admin/db and tags
 router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
+router.include_router(lab_credentials_router, tags=["lab-credentials"])  # Owner-only agent logins
 router.include_router(session_close_settings_router)  # before /sessions/{id}
 router.include_router(sessions_router, tags=["sessions"])
 router.include_router(session_stream_router, tags=["sessions"])

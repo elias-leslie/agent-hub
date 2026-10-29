@@ -18,6 +18,11 @@ HTTP_ROUTES = [
     ("POST", "/api/api-keys"),
     ("PUT", "/api/credentials/1"),
     ("GET", "/api/credentials"),
+    ("GET", "/api/lab-credentials"),
+    ("POST", "/api/lab-credentials"),
+    ("PUT", "/api/lab-credentials/neri-local/viewer"),
+    ("PATCH", "/api/lab-credentials/neri-local/viewer"),
+    ("DELETE", "/api/lab-credentials/neri-local/viewer"),
     ("GET", "/api/memory/capture/stream"),
 ]
 
