@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -33,7 +33,7 @@ from .executor_common import (
 )
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
-from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, tool_phase
+from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, note_native, tool_phase
 from .packet import HandoffPacket
 from .usage import finish_usage, harness_basis
 
@@ -53,6 +53,16 @@ def transcript_path(session_id: str | None, worktree: Path, home: Path | None = 
         return expected
     found = sorted(projects.glob(f"*/{session_id}.jsonl"))
     return found[-1] if found else None
+
+
+def _locator(find: Callable[..., Path | None], *args: Any) -> Callable[[], str | None]:
+    """A lookup of the transcript file for the live follower (None until the harness has created it)."""
+
+    def locate() -> str | None:
+        found = find(*args)
+        return str(found) if found else None
+
+    return locate
 
 
 def claude_phase(event: Mapping[str, Any]) -> str | None:
@@ -176,16 +186,21 @@ class ClaudeCodeExecutor:
         try:
             turn = {"type": "user", "message": {"role": "user", "content": [{"type": "text", "text": packet.render()}]}}
             await harness.write(json.dumps(turn).encode() + b"\n", close=True)
-            await self._consume(harness, state, on_event)
+            await self._consume(harness, state, on_event, worktree)
         finally:
             state.returncode = await harness.stop(self.defaults["terminate_grace_seconds"])
         return replace(await self._result(state, harness, worktree), tools=argv_tools(argv))
 
-    async def _consume(self, harness: HarnessProcess, state: _Attempt, on_event: OnEvent) -> None:
+    async def _consume(
+        self, harness: HarnessProcess, state: _Attempt, on_event: OnEvent, worktree: Path | None = None
+    ) -> None:
         async for event in harness.records():
             note_live(claude_phase(event))
             await on_event({"type": "claude_code_event", "event": event.get("type"), "at": time.time()})
             state.handle(event)
+            if worktree is not None and state.session_id:
+                # The file appears once Claude Code writes its first entry: the follower looks for it each tick.
+                note_native(state.session_id, locate=_locator(transcript_path, state.session_id, worktree))
             if state.injected or event.get("type") == "result":
                 return
 

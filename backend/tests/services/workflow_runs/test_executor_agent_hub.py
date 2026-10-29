@@ -423,6 +423,9 @@ async def test_a_transcript_that_cannot_be_written_does_not_fail_the_step(worktr
 class FakeDb:
     """Stands in for the session: the event and cost writers are patched, so only the ordering is exercised."""
 
+    async def execute(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+        return []  # no events stored yet: the lookup of already-saved source identities finds nothing
+
 
 async def test_record_transcript_writes_ordered_events_with_usage_once_per_turn(monkeypatch) -> None:
     events: list[dict[str, Any]] = []
@@ -574,7 +577,8 @@ async def test_a_cancelled_attempt_aborts_its_provider_request_and_keeps_its_tra
     with pytest.raises(asyncio.CancelledError):
         await task
     assert seen["signal"].is_set()
-    assert [t.error for t in transcripts] == ["cancelled"]
+    # The prompt was saved as soon as the step started; the cancel adds the final save.
+    assert [t.error for t in transcripts] == [None, "cancelled"]
 
 
 async def test_loop_events_become_phases_for_the_run_view(worktree, tmp_path) -> None:
@@ -701,3 +705,55 @@ async def test_the_cost_basis_follows_the_models_provider_for_agent_hub_as_for_p
     assert result.usage["cost_basis"] == pi_basis == "subscription_equiv"
     # The adapter's spelling of the served model is the catalog id, so it is not shown as a switch.
     assert result.served_models == [model]
+
+
+async def test_each_turn_and_tool_result_is_saved_while_the_attempt_is_still_running(worktree, tmp_path) -> None:
+    """The step's chat fills in live: the prompt first, then every finished turn, then every tool result."""
+
+    call = ToolCall(id="t1", name="write_file", arguments={"path": "hello.txt"})
+    first = assistant([call], "toolUse")
+    saved: list[Transcript] = []
+    seen = asyncio.Event()
+    release = asyncio.Event()
+    state = {"returned": False}
+
+    async def write(transcript: Transcript) -> None:
+        saved.append(transcript)
+        seen.set()
+
+    async def complete(**kw: Any) -> Any:
+        await seen.wait()  # the prompt is saved before the first model turn is even finished
+        assert [len(t.turns) for t in saved] == [0] and saved[0].input_messages
+        seen.clear()
+        kw["on_loop_event"](Event("done", message=first))
+        await seen.wait()
+        assert list(saved[-1].turns) == [first] and not saved[-1].tool_results  # the call is visible before it ran
+        seen.clear()
+        kw["on_loop_event"](Event("tool_run_complete", tool_call=call, result=tool_result(call, "wrote 3 bytes")))
+        await seen.wait()
+        assert tool_text(saved[-1].tool_results["t1"]) == "wrote 3 bytes"
+        assert not state["returned"]  # all of it while the loop is still running
+        await release.wait()
+        state["returned"] = True
+        return internal([first, assistant([TextContent(text=HANDOFF)])])
+
+    async def agent(_slug: str) -> Agent:
+        return Agent()
+
+    async def tools(_slug: str, _project: str) -> list[dict[str, Any]]:
+        return PROVISIONED
+
+    async def on_event(_event: Any) -> None:
+        return None
+
+    executor = AgentHubExecutor(complete=complete, agent_loader=agent, tool_provisioner=tools, transcript_writer=write)
+    task = asyncio.create_task(executor.run(packet(), MODEL, worktree, tmp_path, on_event))
+    for _ in range(200):
+        await asyncio.sleep(0.01)
+        if len(saved) >= 3:
+            break
+    assert len(saved) >= 3 and not task.done()
+    release.set()
+    result = await task
+    assert result.status == "completed"
+    assert len(saved[-1].turns) == 2  # the final save carries the closing turn too

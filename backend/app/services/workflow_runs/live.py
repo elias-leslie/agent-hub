@@ -9,6 +9,7 @@ retries or judges an attempt: it only shows liveness. A harness that goes quiet 
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -30,6 +31,11 @@ class LiveStatus:
 
     phase: str = WAITING
     last_event_at: float | None = None
+    # The harness's own session id and transcript file, as soon as the executor learns them (``note_native``). A
+    # transcript that is not located yet comes from ``locate``, which the transcript follower calls off the event loop.
+    native_session_id: str | None = None
+    transcript_path: str | None = None
+    locate: Callable[[], str | None] | None = None
 
     def note(self, phase: str | None = None, *, at: float | None = None) -> None:
         """Any event is activity; one that also says what the model is doing sets the phase."""
@@ -37,6 +43,22 @@ class LiveStatus:
         self.last_event_at = time.time() if at is None else at
         if phase:
             self.phase = phase
+
+    def note_native(
+        self,
+        session_id: str | None = None,
+        transcript_path: str | None = None,
+        locate: Callable[[], str | None] | None = None,
+    ) -> None:
+        """Remember what the harness has said about its own session (a later value replaces an earlier one)."""
+
+        if session_id and session_id != self.native_session_id:
+            self.native_session_id = session_id
+            if transcript_path is None:
+                self.transcript_path = None  # a different session has a different file
+            self.locate = locate
+        if transcript_path:
+            self.transcript_path = transcript_path
 
     def snapshot(self) -> dict[str, object]:
         return {"phase": self.phase, "last_event_at": self.last_event_at}
@@ -52,3 +74,15 @@ def note_live(phase: str | None = None) -> None:
     live = current_live.get()
     if live is not None:
         live.note(phase)
+
+
+def note_native(
+    session_id: str | None = None,
+    transcript_path: str | None = None,
+    locate: Callable[[], str | None] | None = None,
+) -> None:
+    """Record the harness's native session id and where its transcript is (no-op outside an attempt)."""
+
+    live = current_live.get()
+    if live is not None:
+        live.note_native(session_id, transcript_path, locate)

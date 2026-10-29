@@ -17,9 +17,11 @@ tools the attempt got are recorded on the result. A step that needs a shell and 
 level that lists them) and does not have them ends at once with ``tools_unavailable`` and no model call; the engine
 treats it like an unavailable model (next chain entry, else the owner).
 
-The loop runs with no database open. Afterwards the executor writes the attempt's transcript onto its child session
-(``agent_hub_transcript``): the session's events, with the served model and token usage (reasoning tokens when the
-provider reports them) per turn, plus cost rows. The run view's per-attempt ``session_id`` is the way to read it.
+The loop runs with no database open, but the executor writes the attempt's transcript onto its child session while it
+runs (``agent_hub_transcript``): the session's events, with the served model and token usage (reasoning tokens when the
+provider reports them) per turn, plus cost rows. Each finished turn and each tool result is saved as it happens, so the
+step's chat is live and a worker crash keeps the completed turns; the save at the end only adds what is missing. The run
+view's per-attempt ``session_id`` is the way to read it.
 """
 
 from __future__ import annotations
@@ -36,11 +38,11 @@ from typing import Any
 from app.llm.types import AssistantMessage, TextContent, ToolCall
 from app.llm.utils.outcomes import ProviderOutcome, outcome_of
 
-from .agent_hub_transcript import Transcript, persist_transcript
+from .agent_hub_transcript import Transcript, TranscriptFlusher, persist_transcript
 from .executor_common import Progress, Usage, build_handoff, clip, load_defaults
 from .executors import OnEvent, StepResult, register_executor
 from .hooks import refusal_hook
-from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, tool_phase
+from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, note_native, tool_phase
 from .packet import HandoffPacket
 from .usage import agent_hub_basis, finish_usage
 
@@ -87,6 +89,7 @@ class LoopLog:
         self.retries: list[tuple[int, str]] = []
         self.messages: list[AssistantMessage] = []
         self.budget_exhausted: int | None = None  # the finite turn budget the loop ran into, if it did
+        self.on_change: Callable[[], None] | None = None  # called when a turn finishes or a tool result arrives
 
     @property
     def turns(self) -> int:
@@ -97,6 +100,7 @@ class LoopLog:
         note_live(loop_phase(event))
         if kind in ("tool_run_complete", "tool_run_error"):
             self.tool_results[event.tool_call.id] = event.result
+            self._changed()
         elif kind == "turn_retry":
             self.retries.append((self.turns, event.reason))
         elif kind == "turn_budget_exhausted":
@@ -105,6 +109,11 @@ class LoopLog:
             message = getattr(event, "message", None) if kind == "done" else getattr(event, "error", None)
             if message is not None:
                 self.messages.append(message)
+                self._changed()
+
+    def _changed(self) -> None:
+        if self.on_change is not None:
+            self.on_change()
 
 
 async def load_agent(slug: str) -> Any:
@@ -186,13 +195,13 @@ class AgentHubExecutor:
         self._write_transcript = transcript_writer
 
     @staticmethod
-    def _partial(transcript: Transcript, loop_log: LoopLog, error: str) -> Transcript:
+    def _partial(transcript: Transcript, loop_log: LoopLog, error: str | None) -> Transcript:
         """What the model did before the run died: the turns and tool results collected so far, then the error."""
 
         return replace(
             transcript,
             turns=list(loop_log.messages),
-            tool_results=loop_log.tool_results,
+            tool_results=dict(loop_log.tool_results),
             retries=tuple(loop_log.retries),
             error=error,
         )
@@ -250,6 +259,14 @@ class AgentHubExecutor:
         await on_event({"type": "agent_hub_started", "model": model, "at": time.time()})
         loop_log = LoopLog()
         transcript = Transcript(attempt.session_id, attempt.agent_slug, model, input_messages=tuple(messages))
+        # The step's conversation is saved as it happens (the prompt now, each turn and tool result as it finishes).
+        flusher = TranscriptFlusher(
+            self._write_transcript, lambda: self._partial(transcript, loop_log, None)
+        )
+        loop_log.on_change = flusher.poke
+        flusher.start()
+        flusher.poke()
+        note_native(attempt.session_id)  # an Agent Hub step's own session is the one its conversation is kept on
         abort = asyncio.Event()  # set when this coroutine is cancelled: the provider request in flight stops with it
         try:
             result = await complete(
@@ -275,12 +292,15 @@ class AgentHubExecutor:
         except asyncio.CancelledError:
             # A cancel (owner, worker stop) ends the provider request too, and what the attempt did is still saved.
             abort.set()
+            await flusher.stop()
             await self._record(self._partial(transcript, loop_log, "cancelled"))
             raise
         except Exception as exc:  # provider, credential and context failures end the attempt, not the engine
             error = clip(f"agent_hub_error: {exc!r}", 1000)
+            await flusher.stop()
             await self._record(self._partial(transcript, loop_log, error))
             return StepResult("failed", error=error, tools=names)
+        await flusher.stop()
         await on_event({"type": "agent_hub_finished", "at": time.time()})
         turns = list(result.usage_messages or [result.message])
         await self._record(

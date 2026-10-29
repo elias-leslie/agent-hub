@@ -43,21 +43,28 @@ async def store_model_requests(
     *,
     model_used: str | None,
     agent_id: str | None,
+    source_prefix: str | None = None,
 ) -> None:
-    """Add the retry and ``model_request`` events for ``messages``; the caller commits."""
-    for message in messages:
+    """Add the retry and ``model_request`` events for ``messages``; the caller commits.
+
+    ``source_prefix`` gives each event a stable source identity (``<prefix>:<message index>:...``), for a writer that
+    may save the same messages again and must not duplicate them (a workflow attempt saved turn by turn).
+    """
+    for index, message in enumerate(messages):
         record = model_request_record(message)
         if record is None:
             continue
         common: dict[str, Any] = {"model_used": model_used, "agent_id": agent_id, "agent_name": agent_id}
-        for retry in (request_metrics_of(message) or {}).get("retry_log") or []:
+        for number, retry in enumerate((request_metrics_of(message) or {}).get("retry_log") or []):
             await store_event(
                 db, session_id, SessionEventType.ERROR, content=f"turn_retry: {retry.get('reason', 'interrupted')}",
-                tool_output=retry, **common,
+                tool_output=retry, source_event_id=f"{source_prefix}:{index}:retry:{number}" if source_prefix else None,
+                **common,
             )
         await store_event(
             db, session_id, SessionEventType.TOOL_AUDIT, tool_name=MODEL_REQUEST_TOOL,
-            content=json.dumps(record, sort_keys=True), tool_output=record, **common,
+            content=json.dumps(record, sort_keys=True), tool_output=record,
+            source_event_id=f"{source_prefix}:{index}:request" if source_prefix else None, **common,
         )
 
 

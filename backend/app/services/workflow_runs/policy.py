@@ -38,6 +38,9 @@ class RunPolicy:
     restart_limit: int
     stale_after_seconds: int
     heartbeat_interval_seconds: float
+    # How often a running step's conversation is copied onto its attempt session, so a viewer sees it while the step
+    # works (the native transcript of a Pi, Codex or Claude Code step; the harness's session id is noted on the same tick).
+    live_transcript_interval_seconds: float
     # Refused/substituted attempts per category across a run before it pauses for the owner. Every refusal
     # that hops to the next chain model counts, so the default is far above a normal takeover.
     refusal_pause_threshold: int

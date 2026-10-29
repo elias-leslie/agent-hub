@@ -38,7 +38,7 @@ from .executor_common import (
     thinking_level,
 )
 from .executors import OnEvent, StepResult, register_executor
-from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, tool_phase
+from .live import PROVIDER_RETRY, THINKING, WAITING, WRITING, note_live, note_native, tool_phase
 from .packet import HandoffPacket
 from .usage import finish_usage, harness_basis
 
@@ -185,7 +185,9 @@ class PiExecutor:
         async for record in harness.records():
             note_live(pi_phase(record))
             await on_event({"type": "pi_event", "event": record.get("type"), "at": time.time()})
-            if state.handle(record):
+            settled = state.handle(record)
+            note_native(state.session_id, state.session_file)
+            if settled:
                 break
         await harness.write(b"", close=True)  # closing stdin is Pi's orderly shutdown
 

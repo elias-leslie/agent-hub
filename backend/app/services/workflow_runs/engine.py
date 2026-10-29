@@ -39,6 +39,7 @@ from . import acceptance as acceptance_runner
 from .executor_common import catalog_served
 from .executors import Executor, ExecutorUnavailable, StepResult, get_executor
 from .live import LiveStatus, current_live
+from .live_transcript import TranscriptFollower
 from .native_transcript import ingest_attempt_in_own_session
 from .packet import (
     AttemptRef,
@@ -1257,6 +1258,14 @@ class _Attempt:
             intent.attempt_id, lambda entry: _record_process(deps, intent.attempt_id, entry)
         )
         self.live = LiveStatus()
+        self.follower = TranscriptFollower(
+            deps.factory(),
+            intent.attempt_id,
+            executor=intent.executor,
+            agent_slug=intent.definition.get("agent_slug"),
+            live=self.live,
+            interval=policy.live_transcript_interval_seconds,
+        )
         self.work: asyncio.Task[StepResult] | None = None
         self.heartbeat = _Heartbeat(
             deps,
@@ -1468,14 +1477,14 @@ async def _advance(run_id: str, deps: EngineDeps) -> dict[str, Any]:
     # pre-flight and the commit. A slow one of these is not a stale step, and recovery never sees a gap.
     current_tracker.set(attempt.tracker)  # every process from here on is the attempt's (see _git_rc, start_tracked)
     try:
-        async with attempt.heartbeat:
+        async with attempt.heartbeat, attempt.follower:
             if intent.more:  # a ready step has a free slot: it gets an advance of its own and runs beside this one
                 try:
                     await deps.enqueue(run_id)
                 except Exception:
                     logger.warning("could not queue a parallel advance for run %s", run_id, exc_info=True)
             result, info = await _run_effect(intent, deps, attempt)
-            outcome = await _settle_attempt(run_id, intent, result, info, policy, deps)
+            outcome = await _settle_attempt(run_id, intent, result, info, policy, deps, attempt.follower)
     finally:
         # Whatever the attempt's commands left running goes with it, grandchildren that left the group included.
         await attempt.tracker.stop_all(attempt.grace)
@@ -1486,7 +1495,13 @@ async def _advance(run_id: str, deps: EngineDeps) -> dict[str, Any]:
 
 
 async def _settle_attempt(
-    run_id: str, intent: _Intent, result: StepResult, info: dict[str, Any], policy: RunPolicy, deps: EngineDeps
+    run_id: str,
+    intent: _Intent,
+    result: StepResult,
+    info: dict[str, Any],
+    policy: RunPolicy,
+    deps: EngineDeps,
+    follower: TranscriptFollower,
 ) -> dict[str, Any]:
     """Everything after the executor: served ids, checkpoint, availability, and the committed decision."""
 
@@ -1533,13 +1548,8 @@ async def _settle_attempt(
         )
     # The harness's own transcript becomes the attempt session's events (success, failure or cancel alike); a missing
     # one is a note on the attempt, never a failed step.
-    info["transcript"] = await ingest_attempt_in_own_session(
-        deps.factory(),
-        intent.attempt_id,
-        executor=intent.executor,
-        transcript_path=result.transcript_path,
-        native_session_id=result.native_session_id,
-        agent_slug=intent.definition.get("agent_slug"),
+    info["transcript"] = await follower.finish(
+        transcript_path=result.transcript_path, native_session_id=result.native_session_id
     )
     now = deps.clock()
     if result.outcome is not None and result.outcome.kind == "usage_limit":
@@ -1975,8 +1985,22 @@ async def _recover_one(step_id: str, run_id: str, deps: EngineDeps, now: float) 
         else:
             step.status = "failed"
         step.outcome = scratch
+        left = dict((attempt.provider_metadata or {}).get("workflow_attempt") or {}) if attempt is not None else {}
+        agent_slug = (step.definition or {}).get("agent_slug")
+        attempt_id = attempt.id if attempt is not None else None
         await db.commit()
-        return _meta(run)["state"] == "running"
+        running = _meta(run)["state"] == "running"
+    if attempt_id is not None and left.get("transcript_path"):
+        # What the dead worker's harness wrote after its last live pass: the file is complete now that nothing writes it.
+        await ingest_attempt_in_own_session(
+            deps.factory(),
+            attempt_id,
+            executor=left.get("executor"),
+            transcript_path=left["transcript_path"],
+            native_session_id=left.get("native_session_id"),
+            agent_slug=agent_slug,
+        )
+    return running
 
 
 async def _resume_if_due(run_id: str, deps: EngineDeps, now: float) -> bool:

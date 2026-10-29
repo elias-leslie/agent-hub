@@ -19,7 +19,7 @@ import os
 import shutil
 import time
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
@@ -41,7 +41,7 @@ from .executor_common import (
     thinking_level,
 )
 from .executors import OnEvent, StepResult, register_executor
-from .live import PROVIDER_RETRY, THINKING, WRITING, note_live, tool_phase
+from .live import PROVIDER_RETRY, THINKING, WRITING, note_live, note_native, tool_phase
 from .packet import HandoffPacket
 from .usage import codex_windows, finish_usage, harness_basis
 
@@ -108,6 +108,16 @@ def read_rollout(path: Path | None) -> Rollout:
                     found.rate_limits = dict(limits)
                     found.observed_at = _epoch_of(record.get("timestamp")) or found.observed_at
     return found
+
+
+def _locator(find: Callable[..., Path | None], *args: Any) -> Callable[[], str | None]:
+    """A lookup of the rollout file for the live follower (None until Codex has created it)."""
+
+    def locate() -> str | None:
+        found = find(*args)
+        return str(found) if found else None
+
+    return locate
 
 
 def _find_rollout(thread_id: str | None) -> tuple[Path | None, Rollout]:
@@ -256,6 +266,8 @@ class CodexExecutor:
             note_live(codex_phase(event))
             await on_event({"type": "codex_event", "event": event.get("type"), "at": time.time()})
             state.handle(event)
+            if state.thread_id:
+                note_native(state.thread_id, locate=_locator(rollout_path, state.thread_id))
 
     async def _result(self, state: _Attempt, harness: HarnessProcess, worktree: Path) -> StepResult:
         # The rollout is found and read off the event loop: it can be many megabytes.

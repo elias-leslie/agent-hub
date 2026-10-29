@@ -4,6 +4,7 @@
   "restart_limit": 2,
   "stale_after_seconds": 300,
   "heartbeat_interval_seconds": 30,
+  "live_transcript_interval_seconds": 3,
   "refusal_pause_threshold": 12,
   "max_total_attempts": 12,
   "max_unproductive_usage_limit_resumes": 3,
