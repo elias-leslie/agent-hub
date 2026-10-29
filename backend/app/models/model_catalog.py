@@ -59,6 +59,9 @@ class ModelCatalogEntry(Base):
     max_output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     thinking_level_map: Mapped[dict[str, str | None] | None] = mapped_column(JSONB, nullable=True)
     upstream_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Wire API this model is called through when its provider serves more than one (e.g. OpenCode Go);
+    # NULL means the provider's own API.
+    api: Mapped[str | None] = mapped_column(String(50), nullable=True)
     access_programs: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
 
     release_date: Mapped[str | None] = mapped_column(String(40), nullable=True)

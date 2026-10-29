@@ -105,3 +105,25 @@ def test_opencode_go_non_deepseek_models_keep_default_thinking_format() -> None:
     assert model.compat.thinking_format is None
     assert model.compat.requires_reasoning_content_on_assistant_messages is None
     assert model.compat.max_tokens_field == "max_tokens"
+
+
+def test_a_catalog_models_api_overrides_its_providers_api_and_endpoint(monkeypatch) -> None:
+    """OpenCode Go serves its Qwen models on an Anthropic-style endpoint; the catalog row says so."""
+    from dataclasses import replace
+
+    from app.constants.catalog import MODEL_CATALOG_BY_ID
+
+    openai_style = MODEL_CATALOG_BY_ID["opencode-go/glm-5.3-flash"]
+    qwen = replace(openai_style, id="opencode-go/qwen3.8-flash", alias="go-qwen-flash",
+                   upstream_id="qwen3.8-flash", family="qwen", api="anthropic-messages")
+    monkeypatch.setitem(MODEL_CATALOG_BY_ID, qwen.id, qwen)
+
+    model = resolve_llm_model(qwen.id, "opencode-go")
+    assert (model.api, model.id) == ("anthropic-messages", "qwen3.8-flash")
+    assert model.base_url == "https://opencode.ai/inference/go/anthropic"
+    assert model.compat is None
+    assert set(model.headers or {}) == {"x-opencode-session"}
+
+    # A row without an api keeps the provider's own API and endpoint.
+    other = resolve_llm_model("opencode-go/glm-5.3-flash", "opencode-go")
+    assert (other.api, other.base_url) == ("openai-completions", "https://opencode.ai/inference/go/openai/v1")

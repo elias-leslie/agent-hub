@@ -156,6 +156,7 @@ def _build_model_info(
             thinking_level_map=e.capabilities.thinking_level_map,
         ),
         upstream_id=e.upstream_id,
+        api=e.api,
         access_programs=e.access_programs,
         release_date=e.release_date,
         knowledge_cutoff=e.knowledge_cutoff,

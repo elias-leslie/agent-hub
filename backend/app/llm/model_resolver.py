@@ -78,6 +78,11 @@ _PROVIDER_BASE_URL: dict[str, str] = {
     "claude": "",
 }
 
+# (provider, api) → base URL for a provider that serves more than one API; a model's catalog ``api`` picks the row.
+_PROVIDER_API_BASE_URL: dict[tuple[str, str], str] = {
+    ("opencode-go", "anthropic-messages"): "https://opencode.ai/inference/go/anthropic",
+}
+
 
 def resolve_llm_model(
     model_id: str,
@@ -93,8 +98,8 @@ def resolve_llm_model(
     entry = _catalog_entry(resolved_id, model_id, provider)
     if entry is not None and entry.upstream_id:
         upstream_id = entry.upstream_id
-    api = _PROVIDER_API.get(provider, "openai-completions")
-    base_url = _resolve_base_url(provider)
+    api = (entry.api if entry is not None else None) or _PROVIDER_API.get(provider, "openai-completions")
+    base_url = _PROVIDER_API_BASE_URL.get((provider, api)) or _resolve_base_url(provider)
     headers = _provider_headers(provider)
 
     if entry is None:
@@ -142,7 +147,7 @@ def resolve_llm_model(
         thinking_level_map=cast(ThinkingLevelMap | None, caps.thinking_level_map),
         headers=headers,
         access_programs=entry.access_programs,
-        compat=_provider_compat(provider, entry.family, base_url),
+        compat=_provider_compat(provider, entry.family, base_url, api),
     )
 
 
@@ -169,10 +174,10 @@ def _provider_headers(provider: str) -> dict[str, str] | None:
     return None
 
 
-def _provider_compat(provider: str, family: str | None, base_url: str) -> OpenAICompletionsCompat | None:
+def _provider_compat(provider: str, family: str | None, base_url: str, api: str) -> OpenAICompletionsCompat | None:
     if provider == "local" and family == "qwen":
         return _local_qwen_compat(base_url)
-    if provider == "opencode-go":
+    if provider == "opencode-go" and api == "openai-completions":
         return _opencode_go_compat(family)
     return None
 

@@ -106,6 +106,8 @@ class ModelEntry:
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     # Provider-side model id when it differs from the id minus its provider prefix.
     upstream_id: str | None = None
+    # Wire API the model is called through when the provider serves several; None is the provider's own.
+    api: str | None = None
     # Provider access programs the model requires on every request,
     # e.g. Codex {"cyber": "daybreak_blue"}.
     access_programs: dict[str, str] | None = field(default=None, hash=False)

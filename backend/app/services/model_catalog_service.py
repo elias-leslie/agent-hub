@@ -71,6 +71,7 @@ def row_to_model_entry(row: ModelCatalogEntry) -> ModelEntry:
             thinking_level_map=getattr(row, "thinking_level_map", None),
         ),
         upstream_id=getattr(row, "upstream_id", None),
+        api=getattr(row, "api", None),
         access_programs=getattr(row, "access_programs", None),
         release_date=row.release_date,
         knowledge_cutoff=row.knowledge_cutoff,
