@@ -4,6 +4,7 @@ import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "../lib/utils";
 import { Check, Copy } from "lucide-react";
+import { remarkSoftBreaks } from "./remark-soft-breaks";
 
 /**
  * A simple code block with copy button for fenced code in markdown.
@@ -68,7 +69,7 @@ function MarkdownCodeBlock({
   );
 }
 
-const remarkPlugins = [remarkGfm];
+const remarkPlugins = [remarkGfm, remarkSoftBreaks];
 
 interface MarkdownContentProps {
   content: string;
