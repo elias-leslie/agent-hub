@@ -20,6 +20,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.event_storage import storing_history
 from app.services.session_ingestion._events import _adapter_for_provider
 from app.services.session_ingestion.adapters.base import ProviderSessionRef
 from app.services.session_ingestion.adapters.transcript_parsers import contained_transcript_path
@@ -84,7 +85,9 @@ async def ingest_attempt_transcript(
             )
             for event in events
         ]
-        result = await append_normalized_events(db, session_id, AppendNormalizedEventsRequest(events=events))
+        # History, not activity: the attempt's activity times, live state and the run session stay as they are.
+        with storing_history():
+            result = await append_normalized_events(db, session_id, AppendNormalizedEventsRequest(events=events))
         return _note(result.events_appended, result.events_skipped, None)
     except Exception as exc:
         logger.warning("attempt %s: transcript %s not ingested", session_id, transcript_path, exc_info=True)

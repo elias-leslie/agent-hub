@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
@@ -21,6 +24,24 @@ from app.services.session_scope import (
 )
 
 logger = logging.getLogger(__name__)
+
+_history_only: ContextVar[bool] = ContextVar("event_storage_history_only", default=False)
+
+
+@contextmanager
+def storing_history() -> Iterator[None]:
+    """Events stored inside are history: they are written, but the session is not touched.
+
+    ``store_event`` normally marks the session active (``last_activity_at``, ``updated_at``, live activity, scope
+    state), mirrors tool and answer events to the parent supervisor and extracts narration. A transcript replayed
+    after the fact (a finished workflow attempt) is none of that: nothing is running, so none of it happens.
+    """
+
+    token = _history_only.set(True)
+    try:
+        yield
+    finally:
+        _history_only.reset(token)
 
 
 class EventSequencer:
@@ -400,6 +421,9 @@ async def store_event(
         source_event_id=source_event_id, source_timestamp=source_timestamp, usage=usage,
     )
     db.add(event)
+
+    if _history_only.get():
+        return event
 
     parent_session = session or await db.get(Session, session_id)
     if parent_session is not None:

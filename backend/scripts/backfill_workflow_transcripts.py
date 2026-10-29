@@ -1,7 +1,7 @@
 """Ingest finished Pi, Codex and Claude Code workflow attempts' native transcripts as session events.
 
 New attempts are ingested by the engine when they end (``workflow_runs.native_transcript``); this catches up the
-attempts that finished before that. Safe to run again: events already stored are skipped, and an attempt whose
+attempts that finished before that. Ingested events are history: no session's activity time moves. Safe to run again: events already stored are skipped, and an attempt whose
 transcript file is gone gets a plain note instead.
 Run with: python -m scripts.backfill_workflow_transcripts [--dry-run] [--run RUN_ID_PREFIX]
 """
@@ -12,7 +12,7 @@ import logging
 from collections import Counter
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db import async_session
 from app.models import Session
@@ -50,12 +50,12 @@ async def backfill(dry_run: bool, run_prefix: str | None) -> Counter[str]:
                 agent_slug=agent_slug,
             )
             assert done is not None
-            attempt = await db.get(Session, attempt_id)
-            if attempt is not None:
-                meta = dict(attempt.provider_metadata or {})
-                meta["workflow_attempt"] = {**(meta.get("workflow_attempt") or {}), "transcript": done}
-                attempt.provider_metadata = meta
-                await db.commit()
+            # The note is history too: updated_at is named in the statement so the column's on-update stamp stays off.
+            meta = {**(metadata or {}), "workflow_attempt": {**detail, "transcript": done}}
+            await db.execute(
+                update(Session).where(Session.id == attempt_id).values(provider_metadata=meta, updated_at=Session.updated_at)
+            )
+            await db.commit()
         totals["events_appended"] += done["events"]
         totals["events_already_there"] += done["skipped"]
         totals["with_events" if done["events"] or done["skipped"] else "with_note_only"] += 1

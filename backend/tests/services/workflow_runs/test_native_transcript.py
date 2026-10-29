@@ -194,3 +194,45 @@ async def test_executors_with_their_own_transcript_are_left_alone(pg_db) -> None
             )
             is None
         )
+
+
+async def test_ingesting_history_moves_no_session_activity_and_adds_nothing_to_the_run(pg_db, tmp_path) -> None:
+    """Replayed events are history: the attempt's and run's activity times and live state stay, the run gets no copies."""
+
+    from datetime import UTC, datetime
+
+    then = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+    run_id = str(uuid4())
+    pg_db.add(
+        Session(
+            id=run_id, project_id="agent-hub", provider="workflow", model="workflow", status="completed",
+            session_type="agent", request_source="workflow_run", last_activity_at=then, updated_at=then,
+            provider_metadata={"live_activity": {"phase": "completed", "last_event_type": "child_session_result"}},
+        )
+    )
+    await pg_db.commit()
+    attempt_id = str(uuid4())
+    live = {"workflow": {"phase": "waiting"}, "phase": "completed", "status": "completed"}
+    pg_db.add(
+        Session(
+            id=attempt_id, project_id="agent-hub", provider="opencode-go", model="m", status="completed",
+            session_type="agent", request_source="workflow_run", parent_session_id=run_id,
+            last_activity_at=then, updated_at=then, models_used=["m"],
+            provider_metadata={"live_activity": live, "workflow_attempt": {"run_id": run_id}},
+        )
+    )
+    await pg_db.commit()
+    path, native_id = stage(tmp_path, "pi")
+    done = await ingest_attempt_transcript(
+        pg_db, attempt_id, executor="pi", transcript_path=path, native_session_id=native_id
+    )
+    assert done is not None and done["events"] > 0
+
+    await pg_db.rollback()  # read what is stored, not what the session objects remember
+    for session_id in (attempt_id, run_id):
+        row = (await pg_db.execute(select(Session).where(Session.id == session_id))).scalar_one()
+        await pg_db.refresh(row)
+        assert (row.last_activity_at, row.updated_at) == (then, then)
+    attempt = await pg_db.get(Session, attempt_id)
+    assert attempt.provider_metadata["live_activity"] == live and attempt.models_used == ["m"]
+    assert await count(pg_db, SessionEvent, run_id) == 0
