@@ -81,3 +81,17 @@ def test_refresh_cli_routes_private_input_and_sanitizes_errors(tmp_path, monkeyp
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 1
     assert "private-error-must-not-escape" not in result.output
+
+
+@pytest.mark.asyncio
+async def test_owner_account_refresh_keeps_the_account_kind():
+    row = storage.prepare_lab_credential(REF, {"password": os.urandom(16).hex()}, kind="account")
+    db = database([row])
+    values = {"username": "viewer", "password": os.urandom(16).hex()}
+    assert await storage.refresh_lab_credential(db, REF, values) == REF
+    from app.storage.credentials import decrypt_value
+
+    payload = storage.decode_lab_json(decrypt_value(row.value_encrypted))
+    assert isinstance(payload, dict)
+    assert payload["kind"] == "account"
+    assert payload["values"] == values

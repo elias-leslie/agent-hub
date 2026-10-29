@@ -89,7 +89,7 @@ def _validate_payload(
         raise LabCredentialError("Invalid lab credential payload")
     if type(payload["schema_version"]) is not int or payload["schema_version"] != 1 or payload["reference"] != reference:
         raise LabCredentialError("Lab credential identity mismatch")
-    if payload["kind"] not in ("synthetic", "temporary"):
+    if payload["kind"] not in ("synthetic", "temporary", "account"):
         raise LabCredentialError("Unsupported lab credential kind")
     expiry = payload["expires_at"]
     if expiry is not None:
@@ -176,10 +176,10 @@ async def refresh_lab_credential(
     *,
     expires_at: datetime | None = None,
 ) -> str:
-    """Replace one known synthetic bundle, including an expired one, in place.
+    """Replace one known synthetic or owner account bundle, including an expired one, in place.
 
     The trusted local operator supplies authority; neither a reference nor the
-    synthetic label grants permission to change an account on a target.
+    kind label grants permission to change an account on a target.
     """
     target, actor = _identity(reference)
     async with db.begin():
@@ -198,10 +198,10 @@ async def refresh_lab_credential(
         except (EncryptionError, ValueError, UnicodeError):
             raise LabCredentialError("Lab credential could not be decoded") from None
         _validate_payload(payload, reference, datetime.now(UTC), allow_expired=True)
-        if not isinstance(payload, dict) or payload["kind"] != "synthetic":
-            raise LabCredentialError("Only known synthetic lab credentials can be refreshed")
+        if not isinstance(payload, dict) or payload["kind"] not in ("synthetic", "account"):
+            raise LabCredentialError("Only known synthetic or account lab credentials can be refreshed")
         replacement = prepare_lab_credential(
-            reference, values, kind="synthetic", expires_at=expires_at,
+            reference, values, kind=payload["kind"], expires_at=expires_at,
         )
         rows[0].value_encrypted = replacement.value_encrypted
         await db.flush()

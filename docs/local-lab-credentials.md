@@ -6,7 +6,7 @@ These commands neither grant target authority nor authenticate the human owner.
 
 ```text
 st agents credentials refs --target TARGET
-st agents credentials enroll --target TARGET --actor ACTOR --kind synthetic|temporary --input FILE|- [--expires-at ISO]
+st agents credentials enroll --target TARGET --actor ACTOR --kind synthetic|temporary|account --input FILE|- [--expires-at ISO]
 st agents credentials run --target TARGET --request selections.json -- /absolute/trusted-child [NONSECRET_ARGS]
 st agents credentials refresh --target TARGET --actor ACTOR --input FILE|- [--expires-at ISO]
 ```
@@ -48,6 +48,14 @@ passed. Missing, duplicate, malformed, foreign or temporary entries fail without
 replacement. Renew the target credential/session first: refresh updates storage,
 never resets a target account or creates a browser session. Both writes hold the
 existing PostgreSQL table writer lock through validation and commit.
+
+## Owner accounts
+
+Kind `account` is a real login the owner lends agents (for example a bug bounty
+platform account). Only the owner enrolls or classifies one; `st browser login
+add TARGET` prompts them at a terminal and pipes the bundle here. Agents use it
+only through `st browser login TARGET`, whose trusted adapter fills the page; the
+values never reach the agent. Refresh keeps the account kind.
 
 ## Use and browser sessions
 
