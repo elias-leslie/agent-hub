@@ -90,18 +90,20 @@ async def handle_auth_bypass(
     if not should_log_request(path, response.status_code):
         return response
     latency_ms = int((time.time() - start_time) * 1000)
-    await log_request(
-        client_id=client_id,
-        request_source=request_source,
-        endpoint=path,
-        method=method,
-        status_code=response.status_code,
-        rejection_reason=None,
-        latency_ms=latency_ms,
-        session_id=request_session_id(request),
-        tool_type=tool_type,
-        tool_name=tool_name,
-        source_path=source_path,
+    schedule_request_log(
+        log_request(
+            client_id=client_id,
+            request_source=request_source,
+            endpoint=path,
+            method=method,
+            status_code=response.status_code,
+            rejection_reason=None,
+            latency_ms=latency_ms,
+            session_id=request_session_id(request),
+            tool_type=tool_type,
+            tool_name=tool_name,
+            source_path=source_path,
+        )
     )
     return response
 
@@ -139,7 +141,7 @@ async def handle_identified_request(
     if not should_log_request(path, response.status_code):
         return response
 
-    async def _log_identified() -> None:
+    async def _log_identified(latency_ms: int | None = None) -> None:
         await log_request(
             client_id=client_id,
             request_source=request_source,
@@ -147,7 +149,7 @@ async def handle_identified_request(
             method=method,
             status_code=response.status_code,
             rejection_reason=None,
-            latency_ms=int((time.time() - start_time) * 1000),
+            latency_ms=latency_ms if latency_ms is not None else int((time.time() - start_time) * 1000),
             model=getattr(request.state, "resolved_model", None),
             session_id=request_session_id(request),
             agent_slug=getattr(request.state, "agent_slug", None),
@@ -166,8 +168,20 @@ async def handle_identified_request(
         response.body_iterator = _log_on_stream_end(response.body_iterator, _log_identified)
         return response
 
-    await _log_identified()
+    schedule_request_log(_log_identified(int((time.time() - start_time) * 1000)))
     return response
+
+
+def schedule_request_log(write: Awaitable[None]) -> None:
+    """Write a request log after the handler is done with its database connection.
+
+    The log is written from this middleware while the endpoint's own session may still hold a pooled connection
+    (its dependency closes after the response is sent). Waiting for a second connection there made every
+    in-flight request hold one and wait for another, which wedged the pool under load.
+    """
+    task = asyncio.ensure_future(write)
+    _stream_log_tasks.add(task)
+    task.add_done_callback(_stream_log_tasks.discard)
 
 
 def is_event_stream(response: Response) -> bool:

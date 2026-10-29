@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,6 +30,13 @@ def _request(*, state_session_id: str | None = None, path_params: dict[str, str]
     return request
 
 
+async def _drain_request_logs() -> None:
+    from app.middleware.access_control_handlers import _stream_log_tasks
+
+    while _stream_log_tasks:
+        await asyncio.gather(*list(_stream_log_tasks))
+
+
 async def _run_identified(path: str, status_code: int, request: MagicMock) -> AsyncMock:
     call_next = AsyncMock(return_value=Response(status_code=status_code))
     with (
@@ -41,6 +49,7 @@ async def _run_identified(path: str, status_code: int, request: MagicMock) -> As
         patch("app.middleware.access_control_handlers.log_request", new_callable=AsyncMock) as log,
     ):
         response = await handle_identified_request(request, call_next, path, "POST", 0.0)
+        await _drain_request_logs()
     assert response.status_code == status_code
     return log
 
@@ -216,3 +225,27 @@ async def test_cancelled_stream_is_still_logged() -> None:
         await iterator.aclose()  # client disconnect
         await asyncio.gather(*list(access_control_handlers._stream_log_tasks))
     log.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_request_log_is_written_after_the_handler_returns_not_before() -> None:
+    """The log needs its own pooled connection; the endpoint's may still be held until its response is sent."""
+    gate = asyncio.Event()
+    written: list[int] = []
+
+    async def slow_log(**kwargs: object) -> None:
+        await gate.wait()
+        written.append(int(kwargs["status_code"]))  # type: ignore[call-overload]
+
+    request = _request()
+    call_next = AsyncMock(return_value=Response(status_code=200))
+    with (
+        patch("app.middleware.access_control_handlers.identify_client", new_callable=AsyncMock, return_value=({"id": "client-1"}, None)),
+        patch("app.middleware.access_control_handlers.set_identified_state"),
+        patch("app.middleware.access_control_handlers.log_request", new=slow_log),
+    ):
+        response = await asyncio.wait_for(handle_identified_request(request, call_next, "/api/sessions", "GET", 0.0), 1)
+        assert response.status_code == 200 and written == []  # not blocked on the log
+        gate.set()
+        await _drain_request_logs()
+    assert written == [200]
