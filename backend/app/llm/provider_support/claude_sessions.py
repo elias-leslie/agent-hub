@@ -16,7 +16,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import os
 import shutil
+import signal
 import tempfile
 import time
 from collections.abc import Callable
@@ -95,14 +97,28 @@ class ClaudeSession:
         await session.lock.acquire()
         return session
 
+    def _signal_group(self, sig: signal.Signals) -> None:
+        """Signal the CLI's whole process group: it runs as its own session leader, so its helpers die with it."""
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(self.process.pid, sig)
+
+    async def _terminate(self) -> None:
+        """End the CLI and anything it spawned: SIGTERM to the group, SIGKILL if it has not exited after the grace."""
+        if self.process.returncode is None:
+            from app.config import settings
+
+            self._signal_group(signal.SIGTERM)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self.process.wait(), settings.claude_session_terminate_grace_seconds)
+        # Also sweeps helpers still alive after the leader exited.
+        self._signal_group(signal.SIGKILL)
+        await self.process.wait()
+
     async def close(self) -> None:
         if self._idle is not None:
             self._idle.cancel()
             self._idle = None
-        if self.process.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                self.process.kill()
-        await self.process.wait()
+        await self._terminate()
         if self._stderr_task is not None:
             self._stderr_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

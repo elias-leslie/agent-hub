@@ -67,6 +67,7 @@ from ..types import (
     UsageCost,
     UserMessage,
 )
+from ..utils.abort import cancel_on_signal, close_quietly
 from ..utils.json_parse import parse_streaming_json
 from ..utils.outcomes import ProviderOutcome, record_outcome
 from ..utils.retry import tag_if_transient
@@ -941,6 +942,7 @@ def stream_openai_completions(
             timestamp=int(time.time() * 1000),
         )
         state = _StreamState(output=output)
+        iterator: Any = None
 
         try:
             compat = _get_compat(model)
@@ -1178,8 +1180,12 @@ def stream_openai_completions(
                 tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()
+        finally:
+            # Release the HTTP connection whatever ended the loop; an aborted request is then closed, not left to GC.
+            await close_quietly(iterator)
 
     runner_task = asyncio.create_task(runner())
+    cancel_on_signal(runner_task, options.signal if options else None)
     stream._oai_runner_task = runner_task  # type: ignore[attr-defined]
     return stream
 

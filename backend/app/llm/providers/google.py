@@ -60,6 +60,7 @@ from ..types import (
     Usage,
     UsageCost,
 )
+from ..utils.abort import cancel_on_signal, close_quietly
 from ..utils.retry import tag_if_transient
 from ..utils.sanitize_unicode import sanitize_surrogates
 
@@ -304,6 +305,7 @@ def stream_google(
 
         explicit_key = options.api_key if options else None
         pool_key = None if explicit_key else _select_pool_key(model)
+        iterator: Any = None
 
         try:
             params = _build_params(model, context, options)
@@ -480,8 +482,11 @@ def stream_google(
                 tag_if_transient(output, exc, model.id)
             stream.push(ErrorEvent(reason=("aborted" if aborted else "error"), error=output))
             stream.end()
+        finally:
+            await close_quietly(iterator)
 
     runner_task = asyncio.create_task(runner())
+    cancel_on_signal(runner_task, options.signal if options else None)
     stream._google_runner_task = runner_task  # type: ignore[attr-defined]
     return stream
 

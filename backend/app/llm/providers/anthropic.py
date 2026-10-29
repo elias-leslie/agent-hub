@@ -60,6 +60,7 @@ from ..types import (
     UsageCost,
     UserMessage,
 )
+from ..utils.abort import cancel_on_signal
 from ..utils.json_parse import parse_streaming_json
 from ..utils.outcomes import ProviderOutcome, record_outcome
 from ..utils.retry import tag_if_transient
@@ -700,6 +701,7 @@ def stream_anthropic(
     # before completion. Pi-mono's IIFE relies on JS's micro-task queue
     # holding the reference; Python's task GC needs an anchor.
     runner_task = asyncio.create_task(runner())
+    cancel_on_signal(runner_task, options.signal if options else None)
     stream._anthropic_runner_task = runner_task  # type: ignore[attr-defined]
     return stream
 

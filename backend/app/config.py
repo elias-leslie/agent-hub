@@ -256,6 +256,8 @@ class Settings(BaseSettings):
     # Persistent Claude Code CLI sessions (app/llm/provider_support/claude_sessions.py).
     claude_session_idle_seconds: float = Field(default=600.0, gt=0)
     claude_session_pool_max: int = Field(default=8, ge=1)
+    # How long a stopped CLI gets to exit after SIGTERM to its process group before SIGKILL.
+    claude_session_terminate_grace_seconds: float = Field(default=2.0, gt=0)
 
     # Durable chat turns (app/services/turn_runs.py). A running turn keeps its event log in memory for as
     # long as it runs; this caps one turn's log, oldest events dropped first (a reattach from before the

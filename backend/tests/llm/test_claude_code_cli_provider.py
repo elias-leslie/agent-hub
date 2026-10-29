@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import itertools
 import json
+import os
 from pathlib import Path
+from signal import SIGKILL, SIGTERM, Signals
 
 import pytest
 
@@ -106,6 +109,9 @@ def _success(text: str) -> list[dict]:
     return events
 
 
+_PIDS = itertools.count(40_000)
+
+
 class FakeProcess:
     """A stream-json CLI: each stdin user message releases the next scripted turn on stdout."""
 
@@ -113,6 +119,8 @@ class FakeProcess:
         self.turns = list(turns)
         self.writes: list[dict] = []
         self.returncode: int | None = None
+        self.pid = next(_PIDS)
+        self.signals: list[Signals] = []
         self.stdin = self
         self.stdout = asyncio.StreamReader()
         self.stderr = asyncio.StreamReader()
@@ -124,6 +132,14 @@ class FakeProcess:
 
     async def drain(self) -> None:
         return None
+
+    def killpg(self, sig: Signals) -> None:
+        """The CLI leads its own process group; a group signal ends it, the way the real one does."""
+        self.signals.append(sig)
+        if self.returncode is None:
+            self.returncode = -sig
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
 
     def kill(self) -> None:
         self.returncode = -9
@@ -145,7 +161,14 @@ def cli_world(monkeypatch):
         launched.append((process, argv, kwargs))
         return process
 
+    def fake_killpg(pgid: int, sig: Signals) -> None:
+        match = [process for process, _, _ in launched if process.pid == pgid]
+        if not match:
+            raise ProcessLookupError
+        match[0].killpg(sig)
+
     monkeypatch.setattr(claude_sessions, "create_process", fake_create_process)
+    monkeypatch.setattr(os, "killpg", fake_killpg)
     monkeypatch.setattr(cli, "claude_binary", lambda: "claude")
 
     def spawn(*turns: list[dict]) -> FakeProcess:
@@ -216,7 +239,7 @@ async def test_mismatch_starts_a_fresh_seeded_process(cli_world, change) -> None
     assert "<conversation_so_far>" in second.writes[0]["message"]["content"][0]["text"]
     assert _block_texts(second.writes[0])[-1] == "second"
     if change not in ("model", "system"):
-        assert first.returncode == -9 or change == "no_session"
+        assert first.returncode == -15 or change == "no_session"
 
 
 def replace_text(message: AssistantMessage, text: str) -> AssistantMessage:
@@ -231,7 +254,7 @@ async def test_one_shot_requests_do_not_keep_a_process(cli_world) -> None:
     spawn, _ = cli_world
     first = spawn(_success("one"))
     await _ask([_user("hi")], session_id=None)
-    assert first.returncode == -9
+    assert first.returncode == -15
     assert claude_sessions.claude_pool._sessions == {}
 
 
@@ -255,7 +278,7 @@ async def test_fixtures_classify_and_evict_the_session(cli_world, name, kind, ca
         kind, category, served, "claude-opus-5-5",
     )
     assert result.error_message
-    assert poisoned.returncode == -9
+    assert poisoned.returncode == -15
     assert claude_sessions.claude_pool._sessions == {}
     spawn(_success("fresh"))
     await _ask([_user("again")], model_id="claude-opus-5-5")
@@ -319,7 +342,9 @@ async def test_abort_kills_and_evicts_the_process(cli_world) -> None:
     signal.set()
     result = await task
     assert result.stop_reason == "aborted"
-    assert process.returncode == -9
+    # The CLI's process group is signalled (SIGTERM first, then a sweep), not only its leader: no orphaned helpers.
+    assert process.returncode == -15
+    assert process.signals == [SIGTERM, SIGKILL]
     assert claude_sessions.claude_pool._sessions == {}
 
 
@@ -337,8 +362,8 @@ async def test_pool_cap_and_idle_expiry_come_from_settings(cli_world, monkeypatc
     one, two = spawn(_success("a")), spawn(_success("b"))
     await _ask([_user("x")], session_id="s1")
     await _ask([_user("y")], session_id="s2")
-    assert one.returncode == -9
+    assert one.returncode == -15
     assert list(claude_sessions.claude_pool._sessions) == [claude_sessions.pool_key("s2", "claude-haiku-5-5", None, "sys")]
     await asyncio.sleep(0.2)
-    assert two.returncode == -9
+    assert two.returncode == -15
     assert claude_sessions.claude_pool._sessions == {}

@@ -57,6 +57,7 @@ from ..types import (
     ToolResultMessage,
     Usage,
 )
+from ..utils.abort import cancel_on_signal
 from ..utils.outcomes import ProviderOutcome, is_model_switch, record_outcome
 from ..utils.refusal_codes import codex_refusal_category
 from ..utils.request_metrics import record_request_metrics
@@ -695,6 +696,12 @@ async def _run(
                         return
         # The stream ended without response.completed: a partial message is not an answer.
         raise _Interrupted("stream ended before response.completed")
+    except asyncio.CancelledError:
+        # The abort signal cancelled this task (see ``cancel_on_signal``); leaving the ``async with`` closed the HTTP stream.
+        error = replace(output, stop_reason="aborted", error_message="Request was aborted")
+        timing.failure = "aborted"
+        timing.finish(model.id, error)
+        stream.push(ErrorEvent(reason="aborted", error=error))
     except Exception as exc:
         silence = note_timeout(exc, model.id, options.timeout_ms if options else None)
         timing.failure = silence or repr(exc)[:200]
@@ -730,6 +737,7 @@ class _OpenAICodexResponsesProvider:
     ) -> AssistantMessageEventStream:
         stream = AssistantMessageEventStream()
         task = asyncio.create_task(_run(stream, model, context, options))
+        cancel_on_signal(task, options.signal if options else None)
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
         return stream

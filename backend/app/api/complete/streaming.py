@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import cast
@@ -371,13 +371,16 @@ async def _emit_events(
             if tool_loop_active and event.reason == "toolUse":
                 continue
             flush_thinking()
-            yield await _persist_and_build_done_sse(
-                writer=writer,
-                ctx=ctx,
-                message=aggregate_message_usage(event.message, usage_messages),
-                accumulated_content=content_buf[0],
-                cost_usd=total_cost_usd,
-                trace=trace,
+            # A Stop that lands while the finished answer is being saved must not abandon the save.
+            yield await asyncio.shield(
+                _persist_and_build_done_sse(
+                    writer=writer,
+                    ctx=ctx,
+                    message=aggregate_message_usage(event.message, usage_messages),
+                    accumulated_content=content_buf[0],
+                    cost_usd=total_cost_usd,
+                    trace=trace,
+                )
             )
             continue
         if isinstance(event, ErrorEvent):
@@ -406,13 +409,16 @@ class _PumpFailure:
 
 
 _PUMP_DONE = object()
+_PUMP_CANCELLED = object()
 
 
 async def _with_heartbeat(
     inner: AsyncIterator[str],
     interval: float = _HEARTBEAT_INTERVAL_S,
+    cancel_event: asyncio.Event | None = None,
+    on_cancel: Callable[[], str] | None = None,
 ) -> AsyncGenerator[str]:
-    """Wrap an SSE iterator with heartbeat comments during silence.
+    """Wrap an SSE iterator with heartbeat comments during silence, and end it the moment ``cancel_event`` is set.
 
     One dedicated task drains ``inner`` for its whole life, so every
     ``__anext__`` (and tool execution inside the loop) runs in the same task;
@@ -421,6 +427,10 @@ async def _with_heartbeat(
     proxy connections alive. (The removed Claude Agent SDK broke when
     ``__anext__`` hopped between tasks; providers now run in their own runner
     tasks and feed queues, so a single drain task is safe.)
+
+    A cancel does not wait for the next chunk: the drain task is cancelled (which unwinds the tool loop, stops a
+    running tool and closes the provider request), chunks it had queued but nobody read are dropped, and
+    ``on_cancel()``'s chunk is the last one yielded.
     """
     queue: asyncio.Queue[object] = asyncio.Queue(maxsize=16)
 
@@ -434,6 +444,18 @@ async def _with_heartbeat(
         await queue.put(_PUMP_DONE)
 
     task = asyncio.create_task(pump())
+
+    async def watch_cancel() -> None:
+        assert cancel_event is not None
+        await cancel_event.wait()
+        if task.done():  # the turn already finished; its last chunks stand
+            return
+        task.cancel()
+        while not queue.empty():
+            queue.get_nowait()
+        queue.put_nowait(_PUMP_CANCELLED)
+
+    watcher = asyncio.create_task(watch_cancel()) if cancel_event is not None else None
     try:
         while True:
             try:
@@ -442,16 +464,22 @@ async def _with_heartbeat(
             except TimeoutError:
                 yield ": heartbeat\n\n"
                 continue
+            if item is _PUMP_CANCELLED:
+                if on_cancel is not None:
+                    yield on_cancel()
+                return
             if item is _PUMP_DONE:
                 return
             if isinstance(item, _PumpFailure):
                 raise item.error
             yield cast(str, item)
     finally:
+        if watcher is not None:
+            watcher.cancel()
         if not task.done():
             task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
+        with suppress(asyncio.CancelledError):
+            await task
 
 
 async def stream_completion(
@@ -599,7 +627,9 @@ async def stream_completion(
                         attempt_output_started,
                         has_later_candidate,
                         tool_loop_active=execute_tools,
-                    )
+                    ),
+                    cancel_event=ctx.cancel_event,
+                    on_cancel=writer.cancel_acknowledged,
                 ):
                     yield chunk
                 break

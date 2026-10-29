@@ -120,7 +120,8 @@ class TurnRun:
 
     def _record(self, chunk: str) -> LoggedEvent | None:
         """Parse one ``data: {json}`` chunk into the log. Comments and the end marker are not events."""
-        if not chunk.startswith("data: {"):
+        if not chunk.startswith("data: {") or self._terminal is not None:
+            # Nothing follows a turn's terminal event (done, error, cancel): a late chunk is never published.
             return None
         try:
             payload = json.loads(chunk[6:])
