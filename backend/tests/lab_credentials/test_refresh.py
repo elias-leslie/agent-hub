@@ -95,3 +95,27 @@ async def test_owner_account_refresh_keeps_the_account_kind():
     assert isinstance(payload, dict)
     assert payload["kind"] == "account"
     assert payload["values"] == values
+
+
+@pytest.mark.asyncio
+async def test_optional_fields_are_handed_over_only_when_saved():
+    row = storage.prepare_lab_credential(REF, {"username": "viewer", "password": os.urandom(16).hex()}, kind="account")
+    request = storage.LabCredentialRequest(REF, ("username",), ("totp_secret", "password"))
+    resolved = await storage.resolve_lab_credentials(database([row]), "example-local", [request])
+    assert set(resolved[0].values) == {"username", "password"}
+    with pytest.raises(storage.LabCredentialError):
+        await storage.resolve_lab_credentials(
+            database([row]), "example-local", [storage.LabCredentialRequest(REF, ("username",), ("username",))],
+        )
+
+
+def test_selection_accepts_optional_fields_and_nothing_else():
+    from app.cli.lab_credentials import _requests
+
+    parsed = _requests([{"reference": REF, "fields": ["password"], "optional_fields": ["totp_secret"]}])
+    assert parsed[0].optional == ("totp_secret",)
+    assert _requests([{"reference": REF, "fields": ["password"]}])[0].optional == ()
+    for bad in ({"reference": REF, "fields": ["password"], "extra": []},
+                {"reference": REF, "fields": ["password"], "optional_fields": "totp_secret"}):
+        with pytest.raises(storage.LabCredentialError):
+            _requests([bad])

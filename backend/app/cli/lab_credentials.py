@@ -50,12 +50,16 @@ def _requests(document: object) -> list[LabCredentialRequest]:
         raise LabCredentialError("Lab selection must be a nonempty list")
     result = []
     for item in document:
-        if (not isinstance(item, dict) or set(item) != {"reference", "fields"}
-                or not isinstance(item["reference"], str)
-                or not isinstance(item["fields"], list)
-                or any(not isinstance(name, str) for name in item["fields"])):
+        if not isinstance(item, dict):
             raise LabCredentialError("Invalid lab credential selection")
-        result.append(LabCredentialRequest(item["reference"], tuple(item["fields"])))
+        optional: object = dict(item).get("optional_fields", [])
+        if (not {"reference", "fields"} <= set(item)
+                or not set(item) <= {"reference", "fields", "optional_fields"}
+                or not isinstance(item["reference"], str)
+                or not isinstance(item["fields"], list) or not isinstance(optional, list)
+                or any(not isinstance(name, str) for name in item["fields"] + optional)):
+            raise LabCredentialError("Invalid lab credential selection")
+        result.append(LabCredentialRequest(item["reference"], tuple(item["fields"]), tuple(optional)))
     return result
 
 

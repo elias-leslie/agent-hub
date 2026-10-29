@@ -71,6 +71,8 @@ def _provider(target: str) -> str:
 class LabCredentialRequest:
     reference: str
     fields: tuple[str, ...]
+    # Handed over when the bundle has them, skipped when not (e.g. an account's authenticator secret).
+    optional: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -407,7 +409,9 @@ async def resolve_lab_credentials(
             raise LabCredentialError("Lab credential outside target scope")
         if actor in actors or not request.fields or len(set(request.fields)) != len(request.fields):
             raise LabCredentialError("Duplicate actor or invalid field selection")
-        if any(not isinstance(name, str) or not _FIELD.fullmatch(name) for name in request.fields):
+        names = request.fields + request.optional
+        if (len(set(names)) != len(names)
+                or any(not isinstance(name, str) or not _FIELD.fullmatch(name) for name in names)):
             raise LabCredentialError("Invalid lab credential field selection")
         actors.append(actor)
     if not actors:
@@ -439,6 +443,7 @@ async def resolve_lab_credentials(
         if not set(request.fields) <= values.keys():
             raise LabCredentialError("Requested lab credential field unavailable")
         resolved.append(ResolvedLabCredential(
-            request.reference, {name: values[name] for name in request.fields},
+            request.reference,
+            {name: values[name] for name in request.fields + request.optional if name in values},
         ))
     return resolved

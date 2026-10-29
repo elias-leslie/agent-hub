@@ -90,6 +90,9 @@ The request file contains references and field names only:
 [{"reference":"secret://lab/example-local/viewer","fields":["username","password"]}]
 ```
 
+An entry may add `"optional_fields": [...]`: handed over when the bundle has them, skipped when not
+(an account's `totp_secret`, say). Required fields still fail the run when missing.
+
 `run` checks exact target/actor scope, duplicates, payload integrity, expiry and
 selected fields before launch. After its DB session closes, one trusted local
 child receives an anonymous socket descriptor numbered by
