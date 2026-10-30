@@ -24,6 +24,7 @@ from app.models import (
     AutomationRun,
     WorkflowScheduleControl,
 )
+from app.models.automation import RUN_ACTIVE_STATUSES, RUN_FINISHED_STATUSES
 from app.services.workflow_schedule_registry import SCHEDULE_DEFINITIONS
 
 logger = logging.getLogger(__name__)
@@ -341,7 +342,7 @@ async def _policy_gate_reasons(
     if concurrency_limit is not None:
         query = select(func.count()).select_from(AutomationRun).where(
             AutomationRun.project_id == policy.project_id,
-            AutomationRun.status.in_(["admitted", "dispatching", "dispatched", "accepted", "running"]),
+            AutomationRun.status.in_(RUN_ACTIVE_STATUSES),
         )
         active = (await db.scalar(query)) or 0
         if active >= concurrency_limit:
@@ -406,7 +407,7 @@ async def admit_run(
         # against the profile lock held above so a new one never supersedes it.
         active = await db.scalar(select(func.count()).select_from(AutomationRun).where(
             AutomationRun.profile_id == profile.id,
-            AutomationRun.status.in_(["admitted", "dispatching", "dispatched", "accepted", "running"]),
+            AutomationRun.status.in_(RUN_ACTIVE_STATUSES),
         ))
         if active:
             reasons.append("profile_overlap_cancel_newest")
@@ -492,7 +493,6 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
     await retire_removed_agent_hub_schedules(db)
 
 
-_FINISHED_RUN_STATUSES = ("succeeded", "failed", "skipped", "cancelled", "rejected")
 # Schedules deleted from SCHEDULE_DEFINITIONS whose catalog rows are pruned. Listed
 # explicitly so a schedule that is only renamed or briefly missing keeps its history.
 RETIRED_AGENT_HUB_SCHEDULES = ("agent-hub.feedback_cleanup",)
@@ -518,7 +518,7 @@ async def retire_removed_agent_hub_schedules(db: AsyncSession) -> list[str]:
     for key in sorted({row.workflow_key for row in rows}):
         in_flight = await db.scalar(select(func.count()).select_from(AutomationRun).where(
             AutomationRun.workflow_key == key,
-            AutomationRun.status.not_in(_FINISHED_RUN_STATUSES),
+            AutomationRun.status.not_in(RUN_FINISHED_STATUSES),
         ))
         if in_flight:
             logger.warning("Keeping retired automation %s until %d run(s) finish", key, in_flight)

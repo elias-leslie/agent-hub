@@ -19,6 +19,7 @@ from app.models import (
     AutomationProfileRevision,
     AutomationRun,
 )
+from app.models.automation import RUN_ACTIVE_STATUSES, RUN_OWNER_OUTCOMES
 from app.models.client import check_project_access
 from app.services import automations as service
 
@@ -518,7 +519,7 @@ async def accept_run(
     await _require_owner(db, request, row)
     if row.owner_run_id and row.owner_run_id != payload.owner_run_id:
         raise HTTPException(status_code=409, detail="Run already accepted by another owner execution")
-    if row.status not in {"admitted", "dispatching", "dispatched", "accepted", "running"}:
+    if row.status not in RUN_ACTIVE_STATUSES:
         raise HTTPException(status_code=409, detail="Run cannot be accepted in current status")
     row.owner_run_id = payload.owner_run_id
     row.owner_receipt = payload.receipt
@@ -533,7 +534,7 @@ async def complete_run(
     run_id: str, payload: CompleteRequest, request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
-    if payload.status not in {"succeeded", "failed", "skipped", "cancelled"}:
+    if payload.status not in RUN_OWNER_OUTCOMES:
         raise HTTPException(status_code=422, detail="Invalid terminal status")
     row = (await db.execute(select(AutomationRun).where(AutomationRun.id == run_id).with_for_update())).scalar_one_or_none()
     if row is None:
@@ -541,7 +542,7 @@ async def complete_run(
     await _require_owner(db, request, row)
     if row.owner_run_id and payload.owner_run_id and row.owner_run_id != payload.owner_run_id:
         raise HTTPException(status_code=409, detail="Owner receipt mismatch")
-    if row.status in {"succeeded", "failed", "skipped", "cancelled"}:
+    if row.status in RUN_OWNER_OUTCOMES:
         if row.status != payload.status:
             raise HTTPException(status_code=409, detail="Run already completed with another status")
         return _run(row)

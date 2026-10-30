@@ -22,6 +22,7 @@ from app.models import (
     AutomationProjectPolicy,
     AutomationRun,
 )
+from app.models.automation import RUN_DISPATCH_PENDING_STATUSES, RUN_OWNER_OUTCOMES
 from app.services.automations import (
     admit_run,
     current_definitions,
@@ -138,7 +139,7 @@ async def dispatch_run(run_id: str) -> None:
     """Send one admitted run; retries retain its stable owner occurrence ID."""
     async with async_session() as db:
         run = (await db.execute(select(AutomationRun).where(AutomationRun.id == run_id).with_for_update())).scalar_one_or_none()
-        if run is None or run.status not in {"admitted", "dispatching", "accepted"}:
+        if run is None or run.status not in RUN_DISPATCH_PENDING_STATUSES:
             return
         definition = await db.get(AutomationDefinition, (run.workflow_key, run.definition_version))
         profile = await db.get(AutomationProfile, run.profile_id)
@@ -228,7 +229,7 @@ async def dispatch_run(run_id: str) -> None:
 
     async with async_session() as db:
         row = await db.get(AutomationRun, run_id)
-        if row and row.status in {"admitted", "dispatching", "accepted"}:
+        if row and row.status in RUN_DISPATCH_PENDING_STATUSES:
             if row.owner_run_id and row.owner_run_id != owner_run_id:
                 row.status = "failed"
                 row.error = "Owner returned a different receipt for the same run"
@@ -239,7 +240,7 @@ async def dispatch_run(run_id: str) -> None:
             row.owner_receipt = receipt
             row.accepted_at = row.accepted_at or datetime.now(UTC)
             terminal = receipt.get("status") if dispatch_kind == "callback" else None
-            row.status = terminal if terminal in {"succeeded", "failed", "skipped", "cancelled"} else "accepted"
+            row.status = terminal if terminal in RUN_OWNER_OUTCOMES else "accepted"
             owner_error = receipt.get("error") if row.status != "accepted" else None
             if row.status != "accepted":
                 row.completed_at = datetime.now(UTC)
@@ -294,7 +295,7 @@ async def reconcile_runs() -> int:
 
     async with async_session() as db:
         rows = (await db.execute(select(AutomationRun).where(
-            AutomationRun.status.in_(["admitted", "dispatching", "accepted"]),
+            AutomationRun.status.in_(RUN_DISPATCH_PENDING_STATUSES),
         ))).scalars().all()
         pending = [(row.id, row.status, row.owner_run_id, row.workflow_key, row.definition_version) for row in rows]
     settled = 0

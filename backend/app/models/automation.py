@@ -123,3 +123,12 @@ class AutomationRun(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_automation_runs_profile_created", "profile_id", "created_at"),)
+
+
+# Run status sets. Agent Hub itself writes admitted, rejected, dispatching, accepted and the
+# owner-reported outcomes; dispatched and running are counted as active but nothing writes them.
+RUN_OWNER_OUTCOMES = ("succeeded", "failed", "skipped", "cancelled")
+RUN_FINISHED_STATUSES = (*RUN_OWNER_OUTCOMES, "rejected")
+RUN_ACTIVE_STATUSES = ("admitted", "dispatching", "dispatched", "accepted", "running")
+# Runs the dispatcher still sends or settles: not yet handed off, or accepted and awaiting an outcome.
+RUN_DISPATCH_PENDING_STATUSES = ("admitted", "dispatching", "accepted")

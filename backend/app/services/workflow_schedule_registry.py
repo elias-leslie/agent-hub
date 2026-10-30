@@ -175,15 +175,16 @@ async def is_workflow_schedule_enabled(
     # The profile row is the durable one-clock fence. Old Hatchet cron ticks
     # carry no run ID, while central dispatches carry an admitted run ID.
     from app.models import AutomationProfile, AutomationRun
+    from app.models.automation import RUN_ACTIVE_STATUSES
 
     profile = (await db.execute(select(AutomationProfile).where(
         AutomationProfile.source_ref == f"static:{schedule_id}"
     ))).scalar_one_or_none()
     if automation_run_id and profile is not None:
         run = await db.get(AutomationRun, automation_run_id)
-        if run and run.profile_id == profile.id and run.status in {
-            "admitted", "dispatching", "accepted", "running"
-        } and (profile.clock_owner == "central" or run.trigger == "manual"):
+        if run and run.profile_id == profile.id and run.status in RUN_ACTIVE_STATUSES and (
+            profile.clock_owner == "central" or run.trigger == "manual"
+        ):
             return True
     if profile is not None and profile.clock_owner == "central":
         return False
