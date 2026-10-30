@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 const PROVIDER_NAMES: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
+  'opencode-go': 'OpenCode Go',
   other: 'Other',
 }
 

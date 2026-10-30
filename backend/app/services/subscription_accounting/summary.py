@@ -36,12 +36,16 @@ EXPIRY_WARN_DAYS = 30
 METERED_ANOMALY_RATIO = 2.0
 METERED_ANOMALY_MIN_USD = 1.0
 API_EQUIV_LABEL = "API-equivalent value at list price. Value received from flat fees, not spend."
-WINDOW_LABELS = {300: "5h", 10080: "weekly"}
+WINDOW_LABELS = {300: "5h", 10080: "weekly", 43200: "monthly"}
 SOURCE_LABELS = {
     "claude_statusline": "Claude statusline",
     "codex_session_log": "Codex session log",
     "workflow_attempt": "workflow run",
+    "opencode_go_usage": "OpenCode usage",
 }
+# Subscription providers whose Hub-routed value is shown on its own; other providers' value is grouped as "other".
+VALUE_PROVIDERS = ("claude", "codex", "opencode-go")
+PROVIDER_NAMES = {"opencode-go": "OpenCode Go"}  # alerts title-case any other provider id
 
 
 def _day_bounds(day: date) -> tuple[datetime, datetime]:
@@ -255,7 +259,7 @@ async def build_summary(db: AsyncSession, days: int = 30, now: datetime | None =
         value_by_project[(r.provider, r.project)] += r.api_equiv_usd
         value_by_model[(r.provider, r.model)] += r.api_equiv_usd
     for row in hub_projects:
-        prov = row["provider"] if row["provider"] in ("claude", "codex") else "other"
+        prov = row["provider"] if row["provider"] in VALUE_PROVIDERS else "other"
         value_by_provider[prov] += row["api_equiv_usd"]
         value_by_project[(prov, row["project"])] += row["api_equiv_usd"]
     fee_by_provider: dict[str, float] = defaultdict(float)
@@ -351,8 +355,9 @@ def _alerts(
     for prov in utilization:
         for w in prov["windows"]:
             if w["window_minutes"] == 10080 and w["used_percent"] >= WEEKLY_ALERT_PERCENT:
+                name = PROVIDER_NAMES.get(prov["provider"], prov["provider"].title())
                 alerts.append({"code": f"{prov['provider']}.weekly_high", "severity": "warning",
-                               "message": f"{prov['provider'].title()} weekly limit {w['used_percent']:.0f}% used",
+                               "message": f"{name} weekly limit {w['used_percent']:.0f}% used",
                                "resets_at": w["resets_at"]})
     drawn_today = drawn_by_day.get(today, 0.0)
     if drawn_today > 0:

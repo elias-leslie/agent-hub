@@ -3,7 +3,8 @@
 Reads only bytes appended since the last pass (cursor per file, committed in the same transaction as
 the rollups, so a pass is never double-counted). Produces:
 - subscription_usage_daily: tokens, API-equivalent value and Codex credits drawn per day/model/project.
-- subscription_usage_snapshots: 5h / weekly window readings (Codex rate_limits; Claude statusline file).
+- subscription_usage_snapshots: 5h / weekly window readings (Codex rate_limits; Claude statusline file; OpenCode Go's
+  usage endpoint, which also reports a monthly window).
 - credit_lots rows for balance increases that no configured lot explains (source=unclassified).
 
 Codex credit draw: concurrent sessions report stale balances, so draws are measured against a running
@@ -41,7 +42,7 @@ from app.models import (
 )
 from app.utils.native_homes import claude_project_roots, codex_session_roots, native_homes
 
-from . import rates
+from . import opencode_go, rates
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ CLAUDE_WINDOWS = {"five_hour": 300, "seven_day": 10080}
 SOURCE_CODEX_LOG = "codex_session_log"
 SOURCE_CLAUDE_STATUSLINE = "claude_statusline"
 SOURCE_WORKFLOW = "workflow_attempt"
+SOURCE_OPENCODE_GO = "opencode_go_usage"
 WORKFLOW_STATE = "@workflow_windows"
 WORKFLOW_PROVIDERS = ("claude", "codex")  # catalog providers whose workflow attempts record rate_limit_windows
 WORKFLOW_LOOKBACK = timedelta(days=8)
@@ -799,6 +801,24 @@ async def workflow_snapshot_events(db: AsyncSession, state: dict[str, Any], now:
     return events
 
 
+async def opencode_go_snapshot_events() -> list[SnapshotEvent]:
+    """OpenCode Go's quota windows as readings; none when it is not set up or OpenCode did not answer."""
+    try:
+        usage = await opencode_go.get_usage()
+    except Exception:  # a quota reading must never stop the transcript pass
+        logger.warning("OpenCode Go quota reading failed", exc_info=True)
+        return []
+    if usage["state"] != "ok":
+        return []
+    at = datetime.fromisoformat(usage["fetched_at"])
+    return [
+        SnapshotEvent(opencode_go.PROVIDER, at, opencode_go.WINDOW_MINUTES[w["key"]], float(w["percent"]),
+                      datetime.fromisoformat(w["resets_at"]) if w["resets_at"] else None, None, None,
+                      SOURCE_OPENCODE_GO)
+        for w in usage["windows"]
+    ]
+
+
 _lock = asyncio.Lock()
 _last_run = 0.0
 
@@ -810,6 +830,7 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         return {"skipped": True}
     async with _lock:
         _last_run = time.monotonic()
+        quota_readings = await opencode_go_snapshot_events()  # an HTTP call: made before the transaction opens
         locked = (await db.execute(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": COLLECT_LOCK_KEY})).scalar()
         if not locked:
             await db.rollback()
@@ -823,6 +844,7 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         snap_state = dict(cursors.get(SNAPSHOT_STATE, (0, {}))[1])
         workflow_state = dict(cursors.get(WORKFLOW_STATE, (0, {}))[1])
         result.snapshots += await workflow_snapshot_events(db, workflow_state, datetime.now(UTC))
+        result.snapshots += quota_readings
         result.cursors[WORKFLOW_STATE] = (0, workflow_state)
         snapshots = select_snapshots(result.snapshots, snap_state)
         result.cursors[CODEX_CREDIT_STATE] = (0, credit_state)

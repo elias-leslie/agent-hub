@@ -25,7 +25,7 @@ from app.models import (
     UsageSession,
 )
 from app.services.subscription_accounting import collector, rates
-from app.services.subscription_accounting.summary import amortize, draw_down
+from app.services.subscription_accounting.summary import _alerts, amortize, draw_down
 from app.services.token_counter import estimate_cost
 
 
@@ -243,11 +243,16 @@ async def test_usage_collect_replay_uses_initialized_collector(monkeypatch: pyte
         calls.append("collect")
         return {"replay_pending": 0}
 
+    async def load(actual_db):
+        assert actual_db is db
+        calls.append("credentials")
+
     monkeypatch.setattr(usage_collect, "async_session", session)
     monkeypatch.setattr(usage_collect, "refresh_runtime_model_catalog", refresh)
+    monkeypatch.setattr(usage_collect, "get_credential_manager", lambda: SimpleNamespace(load=load))
     monkeypatch.setattr(usage_collect, "collect", collect)
     assert await usage_collect.run(replay="native-usage-test") == {"replay_pending": 0}
-    assert calls == ["catalog", "collect"]
+    assert calls == ["catalog", "credentials", "collect"]
 
 
 @pytest.mark.integration
@@ -420,6 +425,39 @@ def test_snapshot_selection_lets_a_reading_without_a_reset_join_the_open_window_
     # Three hours on, the recorded window is over: the reading has no reset to match and starts a window.
     later = collector.select_snapshots([ev(180, 4, None, "workflow_attempt")], state)
     assert [(k.used_percent, k.resets_at) for k in later] == [(4, None)]
+
+
+async def test_opencode_go_quota_windows_become_snapshot_readings(monkeypatch: pytest.MonkeyPatch) -> None:
+    windows = [
+        {"key": "rolling", "label": "5 hours", "status": "ok", "percent": 12, "resets_at": "2026-10-29T23:00:00+00:00"},
+        {"key": "weekly", "label": "Week", "status": "ok", "percent": 85, "resets_at": "2026-11-02T00:00:00+00:00"},
+        {"key": "monthly", "label": "Month", "status": "ok", "percent": 40, "resets_at": None},
+    ]
+    usage = {"provider": "opencode-go", "state": "ok", "reason": None, "windows": windows,
+             "fetched_at": "2026-10-29T21:00:00+00:00"}
+    monkeypatch.setattr(collector.opencode_go, "get_usage", AsyncMock(return_value=usage))
+    events = await collector.opencode_go_snapshot_events()
+    at = datetime(2026, 10, 29, 21, tzinfo=UTC)
+    assert [(e.provider, e.ts, e.window_minutes, e.used_percent, e.resets_at, e.source) for e in events] == [
+        ("opencode-go", at, 300, 12.0, datetime(2026, 10, 29, 23, tzinfo=UTC), "opencode_go_usage"),
+        ("opencode-go", at, 10080, 85.0, datetime(2026, 11, 2, tzinfo=UTC), "opencode_go_usage"),
+        ("opencode-go", at, 43200, 40.0, None, "opencode_go_usage"),
+    ]
+    # They go through the same selection as every other provider's readings.
+    assert len(collector.select_snapshots(events, {})) == 3
+
+    alerts = _alerts([{"provider": "opencode-go", "windows": [{"window_minutes": 10080, "used_percent": 85.0,
+                                                               "resets_at": None}]}], [], {}, at.date(), [], set(), at.date())
+    assert [a["message"] for a in alerts] == ["OpenCode Go weekly limit 85% used"]
+
+
+@pytest.mark.parametrize("state", ["not_configured", "unavailable"])
+async def test_opencode_go_without_a_reading_adds_no_snapshots(state: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    usage = {"provider": "opencode-go", "state": state, "reason": "x", "windows": [], "fetched_at": "2026-10-29T21:00:00+00:00"}
+    monkeypatch.setattr(collector.opencode_go, "get_usage", AsyncMock(return_value=usage))
+    assert await collector.opencode_go_snapshot_events() == []
+    monkeypatch.setattr(collector.opencode_go, "get_usage", AsyncMock(side_effect=OverflowError))
+    assert await collector.opencode_go_snapshot_events() == []
 
 
 def _plan(provider: str, usd: float | None, start: datetime, end: datetime | None) -> SimpleNamespace:

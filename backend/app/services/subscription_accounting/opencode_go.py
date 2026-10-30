@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 PROVIDER = "opencode-go"
 # Response keys in display order, with the labels the Costs page shows.
 WINDOWS: tuple[tuple[str, str], ...] = (("rolling", "5 hours"), ("weekly", "Week"), ("monthly", "Month"))
+# Length of each window as stored with the other providers' readings; a month is taken as 30 days.
+WINDOW_MINUTES = {"rolling": 300, "weekly": 10080, "monthly": 43200}
 USER_AGENT = "agent-hub/0.1.0"
 _FAILURES = {401: "OpenCode rejected the API key.", 403: "No OpenCode Go subscription on this key."}
 
