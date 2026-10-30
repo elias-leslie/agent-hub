@@ -7,8 +7,9 @@ ssh connection carrying a command or shell (the Tether link is `ssh -N`, so
 its sshd process has no children), and no user work: no process left in a
 user slice outside Tether's own units and the usual user-manager daemons, so
 a detached `setsid`/`nohup` job, a stray tmux or a `systemd-run --user` unit
-keeps the host up however little CPU it uses. Thresholds and the ignored
-units and commands come from the config file.
+keeps the host up however little CPU it uses. Running containers and root
+`systemd-run` jobs (transient system units) count as work too. Thresholds and
+the ignored units and commands come from the config file.
 Anything that cannot be read counts as busy: unknown is never idle.
 Every run logs one line saying why the host stays up or powers off.
 """
@@ -27,6 +28,7 @@ import time
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
+from typing import Any
 
 DEFAULT_CONFIG = Path("/etc/agent-host/idle.conf")
 STATE_DIR = Path("/run/agent-host-idle")
@@ -44,6 +46,7 @@ class Config:
     tether_socket: str
     ignore_units: tuple[str, ...] = ()
     ignore_commands: tuple[str, ...] = ()
+    ignore_system_units: tuple[str, ...] = ()
 
 
 def load_config(path: Path) -> Config:
@@ -66,6 +69,7 @@ def load_config(path: Path) -> Config:
         tether_socket=values["TETHER_SOCKET"],
         ignore_units=tuple(values["IGNORE_UNITS"].split()),
         ignore_commands=tuple(values["IGNORE_COMMANDS"].split()),
+        ignore_system_units=tuple(values.get("IGNORE_SYSTEM_UNITS", "").split()),
     )
 
 
@@ -169,6 +173,49 @@ def user_work(config: Config, proc: Path = Path("/proc"), exclude_cgroup: str | 
     return sorted(found)
 
 
+def containers(run: Any = None) -> int:
+    """Running containers; none without docker. Raises when docker can't answer."""
+    run = run or subprocess.run
+    try:
+        answer = run(["docker", "ps", "-q"], capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return 0
+    if answer.returncode != 0:
+        raise RuntimeError(answer.stderr.strip() or f"docker ps exited {answer.returncode}")
+    return len(answer.stdout.split())
+
+
+def system_jobs(config: Config, run: Any = None) -> list[str]:
+    """Running transient units in system.slice (root `systemd-run` jobs), except
+    IGNORE_SYSTEM_UNITS (a container's own scope is counted as a container)."""
+    run = run or subprocess.run
+    listed = run(
+        ["systemctl", "list-units", "--type=service,scope", "--state=running", "--no-legend", "--plain"],
+        capture_output=True, text=True, check=False,
+    )
+    if listed.returncode != 0:
+        raise RuntimeError(f"systemctl list-units exited {listed.returncode}")
+    names = [line.split()[0] for line in listed.stdout.splitlines() if line.strip()]
+    if not names:
+        return []
+    shown = run(
+        ["systemctl", "show", "--property=Id,Transient,Slice", "--", *names],
+        capture_output=True, text=True, check=False,
+    )
+    if shown.returncode != 0:
+        raise RuntimeError(f"systemctl show exited {shown.returncode}")
+    found: list[str] = []
+    for block in shown.stdout.strip().split("\n\n"):
+        props = dict(line.partition("=")[::2] for line in block.splitlines() if "=" in line)
+        unit = props.get("Id", "")
+        if props.get("Transient") != "yes" or props.get("Slice") != "system.slice":
+            continue
+        if any(fnmatchcase(unit, pattern) for pattern in config.ignore_system_units):
+            continue
+        found.append(unit)
+    return sorted(found)
+
+
 @dataclass(frozen=True)
 class Reading:
     sessions: int | None
@@ -177,6 +224,8 @@ class Reading:
     ssh: int | None
     errors: tuple[str, ...]
     work: tuple[str, ...] = ()
+    containers: int = 0
+    jobs: tuple[str, ...] = ()
 
 
 def read_host(config: Config, exclude_cgroup: str | None = None) -> Reading:
@@ -184,6 +233,8 @@ def read_host(config: Config, exclude_cgroup: str | None = None) -> Reading:
     sessions = wakes = ssh = None
     load = None
     work: tuple[str, ...] = ()
+    running = 0
+    jobs: tuple[str, ...] = ()
     try:
         sessions = len(tether_get(config.tether_socket, "/v1/sessions")["items"])
         wakes = len(tether_get(config.tether_socket, "/v1/wakes")["items"])
@@ -201,7 +252,15 @@ def read_host(config: Config, exclude_cgroup: str | None = None) -> Reading:
         work = tuple(user_work(config, exclude_cgroup=exclude_cgroup))
     except OSError as exc:
         errors.append(f"user processes unreadable ({exc})")
-    return Reading(sessions, wakes, load, ssh, tuple(errors), work)
+    try:
+        running = containers()
+    except (OSError, RuntimeError) as exc:
+        errors.append(f"containers unreadable ({exc})")
+    try:
+        jobs = tuple(system_jobs(config))
+    except (OSError, RuntimeError, IndexError) as exc:
+        errors.append(f"system units unreadable ({exc})")
+    return Reading(sessions, wakes, load, ssh, tuple(errors), work, running, jobs)
 
 
 def busy_reasons(reading: Reading, config: Config) -> list[str]:
@@ -218,6 +277,11 @@ def busy_reasons(reading: Reading, config: Config) -> list[str]:
         names = sorted(set(reading.work))
         shown = ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
         reasons.append(f"{len(reading.work)} user process(es) outside Tether ({shown})")
+    if reading.containers:
+        reasons.append(f"{reading.containers} running container(s)")
+    if reading.jobs:
+        shown = ", ".join(reading.jobs[:5]) + (", ..." if len(reading.jobs) > 5 else "")
+        reasons.append(f"{len(reading.jobs)} root job(s) ({shown})")
     return reasons
 
 
@@ -230,7 +294,7 @@ def decide(reading: Reading, config: Config, idle_since: float | None, now: floa
         return "busy", "stay up: " + "; ".join(reasons)
     summary = (
         f"0 sessions, 0 wakes, load {reading.load:.2f} < {config.load_max:g}, "
-        "no ssh sessions besides the link, no user processes"
+        "no ssh sessions besides the link, no user processes, containers or root jobs"
     )
     idle_minutes = 0.0 if idle_since is None else (now - idle_since) / 60
     if idle_minutes >= config.idle_minutes:

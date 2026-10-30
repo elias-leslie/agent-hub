@@ -49,11 +49,16 @@ def refusals(config) -> list[str]:
         found.append(f"{wakes} pending wake(s)")
     if subprocess.run(["pgrep", "-u", str(Path.home().owner()), "-x", "tmux: server"], capture_output=True).returncode == 0:
         found.append("a tmux server is running")
-    docker = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True)
-    if docker.returncode != 0:
+    try:
+        if running := idle.containers():
+            found.append(f"{running} running container(s)")
+    except (OSError, RuntimeError):
         found.append("docker unreadable")
-    elif docker.stdout.strip():
-        found.append(f"{len(docker.stdout.split())} running container(s)")
+    try:
+        if jobs := idle.system_jobs(config):
+            found.append(f"{len(jobs)} root job(s) ({', '.join(jobs[:5])})")
+    except (OSError, RuntimeError, IndexError):
+        found.append("system units unreadable")
     # This command's own ssh session is one; anything more is someone else.
     if (ssh := idle.ssh_sessions()) > 1:
         found.append(f"{ssh - 1} other ssh session(s)")

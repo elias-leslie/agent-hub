@@ -84,6 +84,8 @@ re-runnable: a second run changes nothing unless the workstation changed.
     no Tether sessions, no pending wakes, load below `LOAD_MAX`, no ssh
     connection that runs a shell or command (the Tether link is `ssh -N`), and
     no user work.
+  - Running containers and root `systemd-run` jobs (transient units in
+    `system.slice`, except `IGNORE_SYSTEM_UNITS`) also keep it up.
   - User work is any process left in a user slice, however little CPU it uses:
     a `setsid -f`/`nohup` job, a stray tmux, a `systemd-run --user` unit, or
     something left running after a Tether session ended. Tether's own units,

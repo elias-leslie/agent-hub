@@ -31,6 +31,7 @@ def test_shipped_config_holds_the_thresholds() -> None:
     assert (config.enabled, config.idle_minutes, config.load_max, config.load_window) == (True, 15.0, 0.3, 5)
     assert "tether@*.service" in config.ignore_units and "tmux-spawn-*.scope" not in config.ignore_units
     assert {"sshd", "sshd-session"} <= set(config.ignore_commands)
+    assert config.ignore_system_units == ("docker-*.scope",)
 
 
 def test_idle_host_powers_off_only_after_the_idle_minutes() -> None:
@@ -52,6 +53,8 @@ def test_idle_host_powers_off_only_after_the_idle_minutes() -> None:
         ({"ssh": 1}, "1 ssh session(s) besides the link"),
         ({"sessions": None, "wakes": None, "errors": ("Tether unreadable (x)",)}, "Tether unreadable"),
         ({"work": ("sleep", "make")}, "2 user process(es) outside Tether (make, sleep)"),
+        ({"containers": 2}, "2 running container(s)"),
+        ({"jobs": ("run-u12.service",)}, "1 root job(s) (run-u12.service)"),
     ],
 )
 def test_any_activity_or_unknown_keeps_the_host_up(reading: dict[str, Any], reason: str) -> None:
@@ -59,6 +62,37 @@ def test_any_activity_or_unknown_keeps_the_host_up(reading: dict[str, Any], reas
     values = {"sessions": 0, "wakes": 0, "load": 0.0, "ssh": 0, "errors": (), **reading}
     action, message = idle.decide(idle.Reading(**values), _config(idle), 0.0, now=10_000.0)
     assert action == "busy" and reason in message
+
+
+def test_containers_count_running_ones_and_none_without_docker() -> None:
+    idle = _idle()
+    assert idle.containers(lambda argv, **_: subprocess.CompletedProcess(argv, 0, "a1\nb2\n", "")) == 2
+
+    def missing(argv: list[str], **_: Any) -> Any:
+        raise FileNotFoundError(argv[0])
+
+    assert idle.containers(missing) == 0
+    with pytest.raises(RuntimeError):
+        idle.containers(lambda argv, **_: subprocess.CompletedProcess(argv, 1, "", "denied"))
+
+
+def test_system_jobs_counts_root_systemd_run_units_only() -> None:
+    idle = _idle()
+    listed = "ssh.service loaded active running OpenSSH\nrun-u12.service loaded active running /bin/make\n"
+    shown = "\n\n".join([
+        "Id=ssh.service\nTransient=no\nSlice=system.slice",
+        "Id=run-u12.service\nTransient=yes\nSlice=system.slice",
+        "Id=docker-abc.scope\nTransient=yes\nSlice=system.slice",
+        "Id=session-3.scope\nTransient=yes\nSlice=user-1000.slice",
+    ])
+
+    def run(argv: list[str], **_: Any) -> Any:
+        return subprocess.CompletedProcess(argv, 0, listed if argv[1] == "list-units" else shown, "")
+
+    config = _config(idle, ignore_system_units=("docker-*.scope",))
+    assert idle.system_jobs(config, run) == ["run-u12.service"]
+    with pytest.raises(RuntimeError):
+        idle.system_jobs(config, lambda argv, **_: subprocess.CompletedProcess(argv, 1, "", ""))
 
 
 def test_disabled_config_never_powers_off() -> None:
@@ -237,6 +271,7 @@ def test_clean_snapshot_refuses_while_user_work_runs(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(idle, "user_work", lambda config, exclude_cgroup=None: ["sleep"])
     found = prepare.refusals(idle.load_config(HOST_DIR / "idle.conf"))
     assert "1 user process(es) outside Tether (sleep)" in found
+    assert {"docker unreadable", "system units unreadable"} <= set(found)
 
 
 def test_clean_snapshot_counts_only_roots_that_have_not_ended(monkeypatch: pytest.MonkeyPatch) -> None:
