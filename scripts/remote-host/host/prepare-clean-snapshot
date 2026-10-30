@@ -12,6 +12,7 @@ then takes the snapshot.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -54,6 +55,14 @@ def refusals(config) -> list[str]:
     return found
 
 
+def _remove_tree(path: Path) -> None:
+    """Remove a tree whose directories may be read-only (context artifacts are)."""
+    for root, dirs, _files in os.walk(path):
+        os.chmod(root, 0o700)
+        dirs[:] = [name for name in dirs if not os.path.islink(os.path.join(root, name))]
+    shutil.rmtree(path)
+
+
 def _wait_healthy(config, timeout: float = 30.0) -> dict:
     deadline = time.monotonic() + timeout
     while True:
@@ -86,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for directory in (STATE_DIR, CONTEXT_ARTIFACTS):
             if directory.exists():
-                shutil.rmtree(directory)
+                _remove_tree(directory)
         cleared = 0
         for entry in SCRATCH.iterdir():
             if entry.is_dir() and not entry.is_symlink():

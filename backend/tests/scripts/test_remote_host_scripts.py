@@ -105,3 +105,21 @@ def test_st_guard_runs_remote_commands_with_a_placeholder_database(tmp_path: Pat
         result = _guard(tmp_path, *argv)
         assert result.returncode == 0, result.stderr
         assert result.stdout == f"ran: {' '.join(argv)} db=postgresql://st-remote-host\n"
+
+
+def test_clean_snapshot_removes_read_only_trees_without_following_links(tmp_path: Path) -> None:
+    prepare = SourceFileLoader("prepare_clean_snapshot", str(HOST_DIR / "prepare-clean-snapshot")).load_module()
+    tree, outside = tmp_path / "context-deliveries", tmp_path / "outside"
+    (tree / "claude_code/agent-hub").mkdir(parents=True)
+    (tree / "claude_code/agent-hub/CLAUDE.md").write_text("context", encoding="utf-8")
+    outside.mkdir()
+    (outside / "keep").write_text("x", encoding="utf-8")
+    (tree / "claude_code/link").symlink_to(outside)
+    for directory in (tree / "claude_code/agent-hub", tree / "claude_code", outside):
+        directory.chmod(0o555)
+    try:
+        prepare._remove_tree(tree)
+        assert not tree.exists()
+        assert (outside / "keep").exists() and outside.stat().st_mode & 0o777 == 0o555
+    finally:
+        outside.chmod(0o755)
