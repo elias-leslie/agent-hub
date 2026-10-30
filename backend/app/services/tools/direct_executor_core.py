@@ -6,6 +6,7 @@ proper environment inheritance.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from pathlib import Path
@@ -47,7 +48,7 @@ from app.services.tools._executor_web import (
 from app.services.tools._executor_web import (
     search_web as _search_web,
 )
-from app.services.tools._sensitive_content import scan_runtime_sensitive_content
+from app.services.tools._sensitive_content import secret_block_reason
 from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
@@ -372,12 +373,7 @@ class DirectToolExecutor:
     async def write_file(self, path: str, content: str, allow_large_truncate: bool = False) -> str:
         """Write a file."""
         allowed_root = self._root_for_file_tool(path)
-        block_reason = await scan_runtime_sensitive_content(
-            path,
-            content,
-            repo_root=str(self.working_dir),
-            tool_name="write_file",
-        )
+        block_reason = await asyncio.to_thread(secret_block_reason, path, content)
         if block_reason:
             return f"Error: Write blocked: {block_reason}"
         return await _write_file(
@@ -408,12 +404,7 @@ class DirectToolExecutor:
         allowed_root = self._root_for_file_tool(path)
 
         async def _guard(updated_content: str) -> str | None:
-            return await scan_runtime_sensitive_content(
-                path,
-                updated_content,
-                repo_root=str(self.working_dir),
-                tool_name="edit_file",
-            )
+            return await asyncio.to_thread(secret_block_reason, path, updated_content)
 
         return await _edit_file(
             path,

@@ -406,29 +406,21 @@ class TestDirectToolExecutor:
         assert written_file.exists()
 
     @pytest.mark.asyncio
-    async def test_write_file_blocks_sensitive_content(
-        self,
-        executor: DirectToolExecutor,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        async def _fake_scan(path: str, content: str, **_: object) -> str | None:
-            if "SIMULATED_SECRET_TOKEN" in content:
-                return "Secret-like credential detected by gitleaks"
-            return None
+    async def test_write_file_blocks_sensitive_content(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
+        result = await executor.write_file("blocked.txt", "KEY=" + "AKIA" + "ABCDEFGHIJ234567")
 
-        monkeypatch.setattr(
-            "app.services.tools.direct_executor_core.scan_runtime_sensitive_content",
-            _fake_scan,
-        )
-
-        result = await executor.write_file(
-            "blocked.txt",
-            "TOKEN=SIMULATED_SECRET_TOKEN_123",
-        )
-
-        assert result == "Error: Write blocked: Secret-like credential detected by gitleaks"
+        assert result == "Error: Write blocked: content contains a credential (aws access key) (blocked.txt)"
         assert not (tmp_path / "blocked.txt").exists()
+
+    @pytest.mark.asyncio
+    async def test_edit_file_blocks_sensitive_content(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
+        target = tmp_path / "cfg.py"
+        target.write_text("KEY = 'placeholder'\n")
+
+        result = await executor.edit_file("cfg.py", "placeholder", "sk-ant-" + "api03-abcdefghij0123456789")
+
+        assert result == "Error: Edit blocked: content contains a credential (anthropic key) (cfg.py)"
+        assert target.read_text() == "KEY = 'placeholder'\n"
 
 
 class TestDirectToolHandler:
