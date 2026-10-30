@@ -314,3 +314,20 @@ def test_bootstrap_on_host_never_eats_a_loop_input(tmp_path: Path) -> None:
                             capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == ["one.sh", "two.sh", "three.sh"]
+
+
+def test_home_links_map_a_deployed_release_to_the_mirrored_checkout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A host has no deployed releases: a link into one (Pi's st-coord.ts) points at the checkout's copy."""
+    links = SourceFileLoader("home_links", str(HOST_DIR.parent / "home-links")).load_module()
+    releases, projects = tmp_path / "releases", tmp_path / "projects"
+    source = releases / "summitflow/releases/abc/source/scripts/lib/pi-coord-extension.ts"
+    source.parent.mkdir(parents=True)
+    source.write_text("x")
+    checkout = projects / "summitflow/scripts/lib/pi-coord-extension.ts"
+    checkout.parent.mkdir(parents=True)
+    checkout.write_text("x")
+    monkeypatch.setattr(links, "RELEASES", releases)
+    monkeypatch.setattr(links, "PROJECTS", projects)
+    assert links.release_source(source, {"summitflow"}) == checkout
+    assert links.release_source(source, {"agent-hub"}) is None
+    assert links.release_source(tmp_path / "elsewhere.ts", {"summitflow"}) is None

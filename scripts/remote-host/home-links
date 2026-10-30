@@ -2,7 +2,8 @@
 """List the workstation's home entries an agent host must mirror.
 
 Prints tab-separated lines on stdout:
-  link <path> <target>   a symlink whose target resolves into a mirrored checkout
+  link <path> <target>   a symlink whose target resolves into a mirrored checkout,
+                         or into a deployed release of one (then the checkout's copy)
   file <path>            a hook script Claude or Codex settings call that is a plain file
 Paths are relative to HOME. The scan is one level deep in the directories
 below, so it never walks the home tree.
@@ -17,6 +18,8 @@ from pathlib import Path
 
 HOME = Path.home()
 PROJECTS = Path("/srv/workspaces/projects")
+# Deployed releases; a link into one maps to the same file in the mirrored checkout.
+RELEASES = HOME / ".summitflow/services/projects"
 SCAN_DIRS = (
     ".",
     "bin",
@@ -50,11 +53,29 @@ def links(mirrored: set[str]) -> list[tuple[str, str]]:
             if not entry.is_symlink():
                 continue
             path = str(entry.relative_to(HOME))
-            resolved = entry.resolve()
-            if path in HOST_OWNED or not any(resolved.is_relative_to(root) for root in roots):
+            if path in HOST_OWNED:
                 continue
-            found.append((path, str(entry.readlink())))
+            resolved = entry.resolve()
+            if any(resolved.is_relative_to(root) for root in roots):
+                found.append((path, str(entry.readlink())))
+            elif (checkout := release_source(resolved, mirrored)) is not None:
+                found.append((path, str(checkout)))
     return found
+
+
+def release_source(resolved: Path, mirrored: set[str]) -> Path | None:
+    """The mirrored checkout's copy of a file in a deployed release
+    (~/.summitflow/services/projects/<name>/releases/<id>/source/...), which a
+    host doesn't have; None when it isn't one or the checkout lacks the file."""
+    try:
+        rel = resolved.relative_to(RELEASES)
+    except ValueError:
+        return None
+    parts = rel.parts
+    if len(parts) < 5 or parts[0] not in mirrored or parts[1] != "releases" or parts[3] != "source":
+        return None
+    checkout = PROJECTS / parts[0] / Path(*parts[4:])
+    return checkout if checkout.exists() else None
 
 
 def hook_files() -> list[str]:
