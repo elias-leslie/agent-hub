@@ -116,7 +116,10 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
    - From the template: `st vm clone 9001 <newid> <name>`
      (`ubuntu-2404-agent-ready`), then run the bootstrap.
 2. Add an ssh Host alias for it in `~/.ssh/config`. Use the alias everywhere,
-   never the IP.
+   never the IP. Pin the key with `IdentityFile ~/.ssh/id_ed25519_davion_gem` and
+   `IdentitiesOnly yes`, the key clones authorize. Without it, ssh falls back to
+   the desktop keyring agent. Codex's sandbox doesn't have that agent, and the
+   link fails if the desktop session ends.
 3. Run `scripts/remote-host/bootstrap <alias>`.
 4. Register it with Agent Hub under its ssh alias (the bootstrap checks that
    the host token belongs to that name). Write the token straight to a file and copy it
