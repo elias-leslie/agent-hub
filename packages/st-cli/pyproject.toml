@@ -21,7 +21,7 @@ agent-hub-st = "agent_hub_st.__main__:main"
 
 [tool.uv.sources]
 agent-hub-client = { path = "../agent-hub-client" }
-summitflow-st-sdk = { path = "../../docker/workspace-packages/summitflow_st_sdk-0.1.1-py3-none-any.whl" }
+summitflow-st-sdk = { path = "../../docker/workspace-packages/summitflow_st_sdk-0.1.5-py3-none-any.whl" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_hub_st"]
