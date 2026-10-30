@@ -211,6 +211,9 @@ async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
         result_data = await run_data_retention(db)
 
     result = DataRetentionResult(status="success", **result_data)
+    from app.services.owner_notice import notify_retention_result
+
+    await notify_retention_result(result.session_archive_failed)
     ctx.log(
         f"Data retention: request_logs={result.request_logs_deleted}, "
         f"usage_stats={result.usage_stats_deleted}, "

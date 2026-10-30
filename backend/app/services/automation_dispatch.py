@@ -31,6 +31,7 @@ from app.services.automations import (
     owner_sync_pending,
     policy_sync_pending,
 )
+from app.services.owner_notice import notify_run_settled
 
 logger = logging.getLogger(__name__)
 
@@ -337,4 +338,7 @@ async def reconcile_runs() -> int:
                 row.completed_at = datetime.now(UTC)
                 await db.commit()
                 settled += 1
+            else:
+                continue
+        await notify_run_settled(run_id, workflow_key, terminal)
     return settled

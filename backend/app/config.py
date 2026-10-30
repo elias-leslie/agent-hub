@@ -88,6 +88,8 @@ class Settings(BaseSettings):
     # An archived session idle this many days loses its archived events (the session row and the usage_calls cost
     # ledger stay); 0 keeps archives forever. Owner decision 2026-10-30: 45 days raw, then compressed for a year.
     session_event_archives_delete_after_days: float = Field(default=365, ge=0)
+    # Where owner notices (app/services/owner_notice.py) link to: the Agent Hub web UI the owner opens.
+    owner_web_url: str = "https://agent.summitflow.dev"
     # A parent's child_session_update keeps this many characters of the child event's text; the child keeps it all.
     child_session_update_preview_chars: int = Field(default=300, ge=0)
 

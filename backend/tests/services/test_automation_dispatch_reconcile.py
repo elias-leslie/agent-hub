@@ -13,6 +13,12 @@ from app.services.automation_dispatch import dispatch_run, reconcile_runs
 from app.workflows.scheduled import EmptyInput
 
 
+@pytest.fixture(autouse=True)
+def _no_owner_notices():
+    with patch("app.services.automation_dispatch.notify_run_settled", new=AsyncMock()) as notify:
+        yield notify
+
+
 class BoundDefinition:
     def __init__(self) -> None:
         self.bound = True
