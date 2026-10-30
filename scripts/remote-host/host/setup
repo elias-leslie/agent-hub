@@ -145,19 +145,28 @@ say "summitflow backend environment synced"
 profile_block="# >>> agent-host PATH (scripts/remote-host) >>>
 PATH=\"$agent_path:\$PATH\"
 # <<< agent-host PATH <<<"
-if ! grep -qF '# >>> agent-host PATH' "$HOME/.profile"; then
-    printf '\n%s\n' "$profile_block" >>"$HOME/.profile"
-    say "added the agent PATH to ~/.profile"
-elif ! grep -qF "PATH=\"$agent_path:" "$HOME/.profile"; then
-    python3 - "$HOME/.profile" "$profile_block" <<'PY'
+# ~/.profile covers login shells; ~/.bashrc covers non-interactive `ssh host cmd`,
+# so its block goes first, ahead of Ubuntu's early return for non-interactive shells.
+for rc in .profile .bashrc; do
+    if ! grep -qF '# >>> agent-host PATH' "$HOME/$rc" 2>/dev/null; then
+        if [[ $rc == .bashrc ]]; then
+            printf '%s\n\n' "$profile_block" | cat - "$HOME/$rc" 2>/dev/null >"$HOME/$rc.tmp.$$"
+            mv -f -- "$HOME/$rc.tmp.$$" "$HOME/$rc"
+        else
+            printf '\n%s\n' "$profile_block" >>"$HOME/$rc"
+        fi
+        say "added the agent PATH to ~/$rc"
+    elif ! grep -qF "PATH=\"$agent_path:" "$HOME/$rc"; then
+        python3 - "$HOME/$rc" "$profile_block" <<'PY'
 import re, sys
 path, block = sys.argv[1], sys.argv[2]
 text = open(path, encoding="utf-8").read()
 text = re.sub(r"# >>> agent-host PATH.*?# <<< agent-host PATH <<<", lambda _m: block, text, flags=re.S)
 open(path, "w", encoding="utf-8").write(text)
 PY
-    say "updated the agent PATH in ~/.profile"
-fi
+        say "updated the agent PATH in ~/$rc"
+    fi
+done
 
 tether_changed=0
 unit_dir=$HOME/.config/systemd/user
