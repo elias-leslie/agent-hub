@@ -10,7 +10,7 @@ import pytest
 
 from app.api.complete.execution import build_agentic_response, execute_with_fallback
 from app.api.complete.types import CompletionInternalResult
-from app.services.llm_errors import ProviderError
+from app.services.llm_errors import ProviderError, RateLimitError
 from app.services.llm_messages import Message
 
 
@@ -201,6 +201,37 @@ async def test_codex_to_gemini_fallback_preserves_failure_reason_and_request_con
     assert result.model_used == "gemini-3.5-flash-lite"
     assert result.fallback_used is True
     assert result.fallback_reason == "ProviderError: primary blew up"
+
+
+@pytest.mark.asyncio
+async def test_codex_rate_limit_moves_coder_to_opencode_go_fallback() -> None:
+    """A Codex weekly-limit 429 must reach the next route instead of stalling the run."""
+    from app.api.complete.complete_execution import _run_with_agentic_fallback
+
+    agent = SimpleNamespace(agent=SimpleNamespace(
+        fallback_models=["opencode-go/deepseek-v4-pro", "opencode-go/deepseek-v4.1-flash"],
+    ))
+    success = CompletionInternalResult(
+        content="done", model="opencode-go/deepseek-v4-pro", provider="opencode-go",
+        input_tokens=1, output_tokens=1, finish_reason="stop", session_id="sess-1",
+        memory_uuids=[], cited_uuids=[],
+    )
+    run = AsyncMock(side_effect=[RateLimitError("codex", retry_after=60.0), success])
+    with patch("app.api.complete.complete_execution._run_internal", new=run), patch(
+        "app.routing.availability.route_unavailable_reason", new=AsyncMock(return_value=None),
+    ):
+        result = await _run_with_agentic_fallback(
+            req=SimpleNamespace(project_id="agent-hub", agent_slug="coder"),
+            primary_model="codex/gpt-6.1-sol", provider="codex", agent=agent, msgs=[],
+            db=AsyncMock(), sid="sess-1", client_id=None, source=None, thinking=None,
+            tools=None, fmt=None, skip_cache=False,
+        )
+
+    assert [call.args[1] for call in run.await_args_list] == ["codex/gpt-6.1-sol", "opencode-go/deepseek-v4-pro"]
+    assert run.await_args_list[1].args[2] == "opencode-go"
+    assert result.fallback_used is True
+    assert result.model_used == "opencode-go/deepseek-v4-pro"
+    assert result.fallback_reason == "RateLimitError: Rate limit exceeded for codex"
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,8 @@ SUBSCRIPTION_ONLY_SLUGS = {
 
 # Exact owner-promoted routes supersede the older provider-diversity policy.
 # Other text agents continue to require their provider-diverse model chains.
+# Owner 2026-10-30: a Codex-only chain stalls when Codex hits its weekly limit,
+# so promoted routes fall back to tool-capable OpenCode Go (Claude runs tool-denied).
 GPT61_PROMOTED_EFFORTS = {
     "coder": "medium",
     "debugger": "high",
@@ -24,6 +26,7 @@ GPT61_PROMOTED_EFFORTS = {
     "researcher": "medium",
     "neri-reporter": "medium",
 }
+GPT61_PROMOTED_FALLBACKS = ["opencode-go/deepseek-v4-pro", "opencode-go/deepseek-v4.1-flash"]
 
 EXCLUDED_SLUGS = {
     "designer",
@@ -67,7 +70,7 @@ def test_seed_agents_use_provider_diverse_model_chains_for_text_agents() -> None
         if slug in GPT61_PROMOTED_EFFORTS:
             assert agent["primary_model_id"] == "codex/gpt-6.1-sol", slug
             assert agent["thinking_level"] == GPT61_PROMOTED_EFFORTS[slug], slug
-            assert agent["fallback_models"] == [], slug
+            assert agent["fallback_models"] == GPT61_PROMOTED_FALLBACKS, slug
             assert agent.get("escalation_model_id") is None, slug
             continue
         if slug in SUBSCRIPTION_ONLY_SLUGS:
