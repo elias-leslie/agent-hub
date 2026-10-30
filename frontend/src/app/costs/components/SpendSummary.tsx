@@ -35,10 +35,13 @@ function Versus({
 function Tile({
   label,
   value,
+  cash,
   children,
 }: {
   label: string
   value: string
+  /** Cash actually paid over the same period, already formatted; omitted when it doesn't apply. */
+  cash?: string
   children: React.ReactNode
 }) {
   return (
@@ -50,16 +53,29 @@ function Tile({
         {value}
       </p>
       <p className="mt-1 text-xs">{children}</p>
+      {cash !== undefined && (
+        <p className="mt-1 text-xs text-slate-400">
+          Cash paid <span className="font-mono text-slate-200">{cash}</span>
+        </p>
+      )}
     </div>
   )
+}
+
+/** Formatted cash paid today and over the last 7 days ('…' while loading, 'unavailable' on failure). */
+export interface CashPaid {
+  today: string
+  week: string
 }
 
 export function SpendSummary({
   summary,
   loading,
+  cash,
 }: {
   summary: Summary | undefined
   loading: boolean
+  cash?: CashPaid
 }) {
   if (loading || !summary) {
     return (
@@ -68,7 +84,7 @@ export function SpendSummary({
           <div
             key={i}
             className={cn(
-              'h-[98px] rounded-2xl bg-slate-800/50',
+              'h-[122px] rounded-2xl bg-slate-800/50',
               'animate-pulse',
             )}
           />
@@ -85,10 +101,10 @@ export function SpendSummary({
           unit="/hr"
         />
       </Tile>
-      <Tile label="Today" value={usd(summary.today)}>
+      <Tile label="Today" value={usd(summary.today)} cash={cash?.today}>
         <Versus ratio={summary.today_ratio} typical={summary.today_typical} />
       </Tile>
-      <Tile label="Last 7 days" value={usd(summary.week)}>
+      <Tile label="Last 7 days" value={usd(summary.week)} cash={cash?.week}>
         <Versus ratio={summary.week_ratio} typical={summary.week_typical} />
       </Tile>
     </div>

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CostsPage from '@/app/costs/page'
+import { type CostAccountingResponse, fetchCostAccounting } from '@/lib/api'
 import type { SpendItemDetail, SpendOverview } from '@/lib/api/analytics'
 import { fetchSpend, fetchSpendItem } from '@/lib/api/analytics'
 import { createQueryClientWrapper } from './test-utils'
@@ -187,5 +188,67 @@ describe('CostsPage', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(nav.search).toBe('kind=routine')
+  })
+
+  it('shows cash paid next to list price and puts plans above the list', async () => {
+    nav.reset('range=7d')
+    vi.mocked(fetchSpend).mockResolvedValue({ ...overview, range: '7d' })
+    const day = {
+      subscriptions_usd: 7,
+      metered_usd: 0.25,
+      credit_purchases_usd: 0,
+    }
+    vi.mocked(fetchCostAccounting).mockResolvedValue({
+      window: { start: '2026-10-12', end: '2026-10-18', days: 7 },
+      cash: {
+        total_usd: 50.77,
+        subscriptions_usd: 50.6,
+        metered_api_usd: 0.17,
+        credit_purchases_usd: 0,
+        month_to_date_usd: 120,
+        projected_month_usd: 220,
+        subscriptions: [],
+        unverified_plans: [],
+        daily: [
+          { date: '2026-10-17', ...day },
+          { date: '2026-10-18', ...day },
+        ],
+      },
+      utilization: [],
+      credits: {
+        used_in_window: 0,
+        balance: 0,
+        burn_per_day_7d: 0,
+        lots: [],
+      },
+      alerts: [],
+    } as unknown as CostAccountingResponse)
+    try {
+      render(<CostsPage />, { wrapper: createQueryClientWrapper() })
+
+      const week = (await screen.findByText('Last 7 days')).parentElement
+      expect(week).toHaveTextContent('$1,938')
+      expect(week).toHaveTextContent('Cash paid $50.77')
+      expect(screen.getByText('Today').parentElement).toHaveTextContent(
+        'Cash paid $7.25',
+      )
+      expect(screen.getByText(/Big numbers are list price/)).toBeInTheDocument()
+      expect(
+        await screen.findByText(
+          /\$9\.50 at list price \(\$50\.77 cash\) across 2 items/,
+        ),
+      ).toBeInTheDocument()
+      const plans = screen.getByText('Plans and credits')
+      const list = screen.getByRole('heading', {
+        name: "What's costing the most",
+      })
+      expect(
+        plans.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    } finally {
+      vi.mocked(fetchCostAccounting).mockImplementation(
+        () => new Promise(() => {}),
+      )
+    }
   })
 })

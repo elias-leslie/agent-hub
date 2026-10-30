@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CircleDollarSign, X } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense, useCallback } from 'react'
+import { type CostAccountingResponse, fetchCostAccounting } from '@/lib/api'
 import {
   fetchSpend,
   type SpendKind,
@@ -14,7 +15,7 @@ import { CostTable } from './components/CostTable'
 import { ItemDrawer } from './components/ItemDrawer'
 import { PlansSection } from './components/PlansSection'
 import { SpendChart } from './components/SpendChart'
-import { SpendSummary } from './components/SpendSummary'
+import { type CashPaid, SpendSummary } from './components/SpendSummary'
 import {
   bucketSpan,
   KIND_META,
@@ -76,6 +77,22 @@ function Legend({ data }: { data: SpendOverview }) {
   )
 }
 
+function cashToday(data: CostAccountingResponse): number {
+  const day = data.cash.daily.at(-1)
+  return day
+    ? day.subscriptions_usd + day.metered_usd + day.credit_purchases_usd
+    : 0
+}
+
+/** Cash text for a tile: '…' while the accounting loads, 'unavailable' when it failed. */
+function cashText(
+  query: { data?: CostAccountingResponse; isError: boolean },
+  pick: (data: CostAccountingResponse) => number,
+): string {
+  if (query.data) return usd(pick(query.data))
+  return query.isError ? 'unavailable' : '…'
+}
+
 function Chip({
   active,
   onClick,
@@ -118,6 +135,28 @@ function CostsView() {
     refetchInterval: 60_000,
     placeholderData: keepPreviousData,
   })
+  // Same keys as PlansSection, so these share its requests.
+  const weekCash = useQuery({
+    queryKey: ['cost-accounting', 7],
+    queryFn: () => fetchCostAccounting(7),
+    refetchInterval: 5 * 60 * 1000,
+  })
+  const rangeCash = useQuery({
+    queryKey: ['cost-accounting', RANGE_DAYS[state.range]],
+    queryFn: () => fetchCostAccounting(RANGE_DAYS[state.range]),
+    refetchInterval: 5 * 60 * 1000,
+  })
+  const cash: CashPaid = {
+    today: cashText(weekCash, cashToday),
+    week: cashText(weekCash, (d) => d.cash.total_usd),
+  }
+  // 1h and rolling 24h have no matching cash window (cash is counted per calendar day).
+  const listCash =
+    (state.range === '7d' || state.range === '30d') &&
+    data?.range === state.range &&
+    rangeCash.data
+      ? rangeCash.data.cash.total_usd
+      : null
   const closeItem = useCallback(() => update({ item: null }), [update])
   const narrowed = Boolean(
     state.kind || state.project || state.model || state.bucket,
@@ -126,7 +165,7 @@ function CostsView() {
   return (
     <div className="page-shell">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
-      <header className="page-header">
+      <header className="page-header max-sm:static">
         <div className="page-container px-4 lg:px-8">
           <div className="page-header-row">
             <div className="page-title-group">
@@ -135,12 +174,6 @@ function CostsView() {
               </div>
               <div className="page-title-stack">
                 <h1 className="page-title">Costs</h1>
-                <div className="page-meta">
-                  <span>
-                    What agent work would cost at API list prices, subscription
-                    use included.
-                  </span>
-                </div>
               </div>
             </div>
             <div
@@ -174,13 +207,25 @@ function CostsView() {
       <main className="page-frame">
         <div className="page-container space-y-5">
           <Link
-            href="/admin#activity"
+            href="/token-share#activity"
             className="inline-block text-sm text-amber-300 underline focus-ring-amber my-3"
           >
-            Work and admin activity across projects
+            Token share across projects
           </Link>
-          <SpendSummary summary={data?.summary} loading={isLoading} />
+          <SpendSummary
+            summary={data?.summary}
+            loading={isLoading}
+            cash={cash}
+          />
+          <p className="text-xs text-slate-400">
+            Big numbers are list price: what this agent work would cost billed
+            per token at API rates, subscription use included. Cash paid is what
+            you actually paid: plans prorated by day, plus metered API and
+            credit purchases, counted by calendar day with today in full.
+          </p>
           {data && <CoverageLine data={data} />}
+
+          <PlansSection daysRange={RANGE_DAYS[state.range]} />
 
           {error && !data ? (
             <div className="panel-surface p-5 text-sm text-red-400">
@@ -215,7 +260,8 @@ function CostsView() {
                   </h2>
                   {data && (
                     <span className="text-xs text-slate-500">
-                      {usd(data.total_usd)} across{' '}
+                      {usd(data.total_usd)} at list price
+                      {listCash != null && ` (${usd(listCash)} cash)`} across{' '}
                       {data.item_count.toLocaleString()}{' '}
                       {data.item_count === 1 ? 'item' : 'items'}
                       {data.item_count > data.items.length &&
@@ -332,8 +378,6 @@ function CostsView() {
               </section>
             </>
           )}
-
-          <PlansSection daysRange={RANGE_DAYS[state.range]} />
         </div>
       </main>
 

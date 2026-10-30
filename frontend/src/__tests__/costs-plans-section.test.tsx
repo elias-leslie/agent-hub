@@ -1,9 +1,16 @@
-import { render, screen, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { withLiveOpenCodeGo } from '@/app/costs/components/openCodeGoLive'
 import { PlansSection, timeUntil } from '@/app/costs/components/PlansSection'
 import type { CostAccountingResponse } from '@/lib/api'
 import {
+  classifyCreditLot,
   fetchOpenCodeGoUsage,
   type OpenCodeGoUsage,
   type ProviderUtilization,
@@ -172,6 +179,7 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/lib/api/analytics', async (original) => ({
   ...(await original<typeof import('@/lib/api/analytics')>()),
   fetchOpenCodeGoUsage: vi.fn(),
+  classifyCreditLot: vi.fn(() => Promise.resolve()),
 }))
 
 function renderPlans(liveResult: OpenCodeGoUsage | Error) {
@@ -206,6 +214,49 @@ describe('PlansSection', () => {
     expect(screen.getByText(/workflow run ·/)).toBeInTheDocument()
     expect(screen.getByText(/Grant: 37,311 of 62,500 left/)).toBeInTheDocument()
     expect(screen.queryByText(/Not money spent/)).not.toBeInTheDocument()
+  })
+
+  it('records detected credits as a grant or a purchase from the alert', async () => {
+    vi.mocked(fetchOpenCodeGoUsage).mockReturnValue(new Promise(() => {}))
+    const saved = data.alerts
+    data.alerts = [
+      {
+        code: 'codex.lot_unclassified',
+        severity: 'warning',
+        lot_id: 2,
+        message: 'New Codex credits detected (12,500): granted or purchased?',
+      },
+    ]
+    try {
+      render(<PlansSection daysRange={30} />, {
+        wrapper: createQueryClientWrapper(),
+      })
+      await screen.findByText(/New Codex credits detected/)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Granted' }))
+      await waitFor(() =>
+        expect(vi.mocked(classifyCreditLot)).toHaveBeenCalledWith(2, {
+          source: 'grant',
+        }),
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Purchased…' }))
+      expect(screen.getByLabelText('Paid $')).toHaveFocus()
+      const save = screen.getByRole('button', { name: 'Save purchase' })
+      expect(save).toBeDisabled()
+      fireEvent.change(screen.getByLabelText('Paid $'), {
+        target: { value: '40' },
+      })
+      fireEvent.click(save)
+      await waitFor(() =>
+        expect(vi.mocked(classifyCreditLot)).toHaveBeenLastCalledWith(2, {
+          source: 'purchase',
+          paid_usd: 40,
+        }),
+      )
+    } finally {
+      data.alerts = saved
+    }
   })
 
   it('reads one day as "last day" and prices cents like the rest of Costs', async () => {

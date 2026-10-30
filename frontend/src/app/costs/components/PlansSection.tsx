@@ -1,14 +1,15 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Coins, Gauge, Wallet } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import {
   type CostAccountingResponse,
   type CostAlert,
   type CreditLotState,
   fetchCostAccounting,
 } from '@/lib/api'
-import { fetchOpenCodeGoUsage } from '@/lib/api/analytics'
+import { classifyCreditLot, fetchOpenCodeGoUsage } from '@/lib/api/analytics'
 import { formatRelativeTime } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
 import { usd } from '../format'
@@ -90,24 +91,119 @@ const ALERT_STYLES: Record<CostAlert['severity'], string> = {
   info: 'border-slate-700/60 bg-slate-800/40 text-slate-300',
 }
 
+/** Records a detected credit lot as a grant, or as a purchase with what was paid. */
+function ClassifyLot({ lotId }: { lotId: number }) {
+  const queryClient = useQueryClient()
+  const [buying, setBuying] = useState(false)
+  const [paid, setPaid] = useState('')
+  const paidInput = useRef<HTMLInputElement>(null)
+  // The Purchased… button is replaced by the form; keep keyboard focus there.
+  useEffect(() => {
+    if (buying) paidInput.current?.focus()
+  }, [buying])
+  const save = useMutation({
+    mutationFn: (body: Parameters<typeof classifyCreditLot>[1]) =>
+      classifyCreditLot(lotId, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['cost-accounting'] }),
+  })
+  const paidUsd = Number(paid)
+  const button =
+    'rounded-lg border border-slate-600 bg-slate-900/60 px-2.5 py-1 text-xs text-slate-100 hover:border-slate-400 focus-ring-amber disabled:opacity-50'
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        className={button}
+        disabled={save.isPending}
+        onClick={() => save.mutate({ source: 'grant' })}
+      >
+        Granted
+      </button>
+      {buying ? (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            save.mutate({ source: 'purchase', paid_usd: paidUsd })
+          }}
+        >
+          <label className="flex items-center gap-1.5 text-xs">
+            Paid $
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              required
+              ref={paidInput}
+              value={paid}
+              onChange={(event) => setPaid(event.target.value)}
+              className="h-7 w-24 rounded-md border border-slate-600 bg-slate-950 px-2 text-xs text-slate-100 focus-ring-amber"
+            />
+          </label>
+          <button
+            type="submit"
+            className={button}
+            disabled={save.isPending || paid === '' || !(paidUsd >= 0)}
+          >
+            Save purchase
+          </button>
+          <button
+            type="button"
+            className={button}
+            disabled={save.isPending}
+            onClick={() => {
+              setBuying(false)
+              setPaid('')
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          className={button}
+          disabled={save.isPending}
+          onClick={() => setBuying(true)}
+        >
+          Purchased…
+        </button>
+      )}
+      {save.isPending && (
+        <span role="status" className="text-xs">
+          Saving…
+        </span>
+      )}
+      {save.error && (
+        <span role="alert" className="text-xs text-red-300">
+          {save.error instanceof Error ? save.error.message : "Couldn't save"}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Alerts({ alerts }: { alerts: CostAlert[] }) {
   if (alerts.length === 0) return null
   return (
     <ul className="mb-4 space-y-2">
       {alerts.map((alert) => (
         <li
-          key={alert.code}
+          key={`${alert.code}-${alert.lot_id ?? ''}`}
           className={cn(
             'flex items-start gap-2 rounded-xl border px-3 py-2 text-sm',
             ALERT_STYLES[alert.severity],
           )}
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
+          <div>
             {alert.message}
             {timeUntil(alert.resets_at ?? null) &&
               `; resets ${timeUntil(alert.resets_at ?? null)}`}
-          </span>
+            {alert.lot_id != null && <ClassifyLot lotId={alert.lot_id} />}
+          </div>
         </li>
       ))}
     </ul>

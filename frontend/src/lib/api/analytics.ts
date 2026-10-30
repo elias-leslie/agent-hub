@@ -45,6 +45,8 @@ export interface CostAlert {
   severity: 'info' | 'warning' | 'critical'
   message: string
   resets_at?: string | null
+  /** The credit lot an unclassified-credits alert is about. */
+  lot_id?: number
 }
 
 export interface CostAccountingResponse {
@@ -123,6 +125,24 @@ export async function fetchCostAccounting(
     throw new Error(`Cost accounting fetch failed: ${response.status}`)
   }
   return response.json()
+}
+
+/** Record whether a credit lot was a grant or a purchase (a purchase needs what was paid). */
+export async function classifyCreditLot(
+  lotId: number,
+  body: { source: 'grant' } | { source: 'purchase'; paid_usd: number },
+): Promise<void> {
+  const response = await fetchApi(
+    `${API_BASE}/analytics/subscriptions/credit-lots/${lotId}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`Couldn't save: ${response.status}`)
+  }
 }
 
 export type SpendRange = '1h' | '24h' | '7d' | '30d'

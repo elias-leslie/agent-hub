@@ -451,6 +451,15 @@ async def test_opencode_go_quota_windows_become_snapshot_readings(monkeypatch: p
     assert [a["message"] for a in alerts] == ["OpenCode Go weekly limit 85% used"]
 
 
+def test_unclassified_lot_alert_names_the_lot_to_record() -> None:
+    today = datetime(2026, 10, 30, tzinfo=UTC).date()
+    lot = {"id": 7, "source": "unclassified", "credits": 12500.0, "remaining": 12500.0, "remaining_fraction": None,
+           "projected_unused_at_expiry": None, "days_to_expiry": None}
+    alerts = _alerts([], [lot], {}, today, [], set(), today)
+    assert alerts == [{"code": "codex.lot_unclassified", "severity": "warning", "lot_id": 7,
+                       "message": "New Codex credits detected (12,500): granted or purchased?"}]
+
+
 @pytest.mark.parametrize("state", ["not_configured", "unavailable"])
 async def test_opencode_go_without_a_reading_adds_no_snapshots(state: str, monkeypatch: pytest.MonkeyPatch) -> None:
     usage = {"provider": "opencode-go", "state": state, "reason": "x", "windows": [], "fetched_at": "2026-10-29T21:00:00+00:00"}

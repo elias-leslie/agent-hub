@@ -378,8 +378,8 @@ def _alerts(
             alerts.append({"code": "codex.purchased_credits_in_use", "severity": "critical",
                            "message": "Codex is drawing purchased credits (real cash)"})
         if lot["source"] == "unclassified":
-            alerts.append({"code": "codex.lot_unclassified", "severity": "warning",
-                           "message": f"New Codex credits detected ({lot['credits']:,.0f}); record whether granted or purchased"})
+            alerts.append({"code": "codex.lot_unclassified", "severity": "warning", "lot_id": lot["id"],
+                           "message": f"New Codex credits detected ({lot['credits']:,.0f}): granted or purchased?"})
     prior = [r["metered_usd"] for r in series[-15:-1]]
     if prior and series:
         med = statistics.median(prior)
