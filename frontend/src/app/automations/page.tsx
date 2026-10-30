@@ -94,6 +94,13 @@ function profileStatus(profile: AutomationProfile): {
     : { label: 'Paused', tone: 'muted' }
 }
 
+// A paused or blocked profile keeps its last computed next_run_at, which goes stale.
+function nextRunText(profile: AutomationProfile): string {
+  if (profile.effective_enabled || profile.clock_owner === 'legacy')
+    return timestamp(profile.next_run_at)
+  return `Not scheduled (${profileStatus(profile).label.toLowerCase()})`
+}
+
 function ProfileForm({
   profile,
   definitions,
@@ -1032,7 +1039,7 @@ export default function AutomationsPage() {
                                         Next run
                                       </dt>
                                       <dd className="mt-1 text-slate-200">
-                                        {timestamp(selected.next_run_at)}
+                                        {nextRunText(selected)}
                                       </dd>
                                     </div>
                                     <div>

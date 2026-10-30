@@ -9,8 +9,9 @@ import {
   fetchCostAccounting,
 } from '@/lib/api'
 import { fetchOpenCodeGoUsage } from '@/lib/api/analytics'
-import { formatCurrency, formatRelativeTime } from '@/lib/formatters'
+import { formatRelativeTime } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
+import { usd } from '../format'
 import { type ShownProvider, withLiveOpenCodeGo } from './openCodeGoLive'
 
 const PROVIDER_NAMES: Record<string, string> = {
@@ -24,10 +25,8 @@ function providerName(provider: string): string {
   return PROVIDER_NAMES[provider] ?? provider
 }
 
-function usd(value: number): string {
-  return value >= 100
-    ? `$${Math.round(value).toLocaleString()}`
-    : formatCurrency(value)
+function lastDays(days: number): string {
+  return days === 1 ? 'last day' : `last ${days} days`
 }
 
 function credits(value: number): string {
@@ -106,7 +105,7 @@ function Alerts({ alerts }: { alerts: CostAlert[] }) {
 function CashCard({ data }: { data: CostAccountingResponse }) {
   const { cash, window } = data
   return (
-    <Card title={`Cash, last ${window.days} days`} icon={Wallet}>
+    <Card title={`Cash, ${lastDays(window.days)}`} icon={Wallet}>
       <p className="mb-3 font-mono text-2xl text-slate-100">
         {usd(cash.total_usd)}
       </p>
@@ -248,7 +247,7 @@ function CreditsCard({ data }: { data: CostAccountingResponse }) {
     <Card title="Codex credits" icon={Coins}>
       <div className="space-y-1.5">
         <Row
-          label={`Used, last ${data.window.days} days`}
+          label={`Used, ${lastDays(data.window.days)}`}
           value={credits(c.used_in_window)}
         />
         <Row label="Balance" value={credits(c.balance)} />

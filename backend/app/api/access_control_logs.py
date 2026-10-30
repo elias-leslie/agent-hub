@@ -25,10 +25,10 @@ async def get_request_log(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     days: int = Query(default=30, ge=1, le=30, description="Days of history (max 30)"),
+    hours: int | None = Query(default=None, ge=1, le=720, description="Hours of history; overrides days"),
 ) -> RequestLogResponse:
     """Get request log with filtering. Automatically respects 30-day retention."""
-    # Calculate retention cutoff
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - (timedelta(hours=hours) if hours else timedelta(days=days))
 
     query = select(RequestLog).where(RequestLog.created_at >= cutoff)
 

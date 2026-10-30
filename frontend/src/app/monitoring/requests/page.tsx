@@ -70,6 +70,7 @@ export default function MonitoringRequestsPage() {
       toolTypeFilter,
       agentFilter,
       rejectedOnly,
+      timeRange,
     ],
     queryFn: ({ pageParam = 0 }) =>
       fetchRequestLog({
@@ -78,6 +79,7 @@ export default function MonitoringRequestsPage() {
         tool_type: toolTypeFilter,
         agent_slug: agentFilter || undefined,
         rejected_only: rejectedOnly,
+        hours: timeRange,
         limit: pageSize,
         offset: pageParam * pageSize,
       }),

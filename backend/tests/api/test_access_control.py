@@ -3,7 +3,7 @@
 Tests the AccessControlMiddleware, identify flow, client CRUD, and API endpoints.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -762,6 +762,25 @@ class TestAccessControlAPI:
         assert response.status_code == 200
         data = response.json()
         assert len(data["requests"]) <= 10
+
+    async def test_request_log_follows_the_page_time_range_in_hours(self):
+        """The log and its total cover the selected range (e.g. 6h), not the whole 30-day retention."""
+        from app.api.access_control_logs import get_request_log
+
+        count = MagicMock()
+        count.scalar.return_value = 0
+        rows = MagicMock()
+        rows.scalars.return_value.all.return_value = []
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[count, rows])
+
+        before = datetime.now(UTC)
+        await get_request_log(db, client_id=None, status_code=None, rejected_only=False, tool_type=None,
+                              agent_slug=None, limit=50, offset=0, days=30, hours=6)
+        cutoffs = [v for v in db.execute.await_args_list[0].args[0].compile().params.values()
+                   if isinstance(v, datetime)]
+        assert len(cutoffs) == 1
+        assert before - timedelta(hours=6, seconds=5) <= cutoffs[0] <= before - timedelta(hours=6) + timedelta(seconds=5)
 
 
 class TestClientAuthServiceUnit:

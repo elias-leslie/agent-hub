@@ -147,4 +147,42 @@ describe('Automations project policy', () => {
       }),
     ).toBeInTheDocument()
   })
+  it('shows no next run for a paused profile instead of its stale date', async () => {
+    vi.mocked(fetchAutomationProfiles).mockResolvedValue({
+      items: [
+        {
+          id: 'p2',
+          project_id: 'agent-hub',
+          subject_id: null,
+          workflow_key: 'agent-hub.memory_governance',
+          definition_version: 1,
+          label: 'Memory governance',
+          schedule_type: 'cron',
+          schedule_value: '15 3 * * *',
+          schedule_timezone: 'UTC',
+          config: {},
+          enabled: false,
+          effective_enabled: false,
+          gate_reasons: [],
+          clock_owner: 'central',
+          next_run_at: '2026-10-19T03:15:00Z',
+          last_run_at: '2026-10-18T03:15:00Z',
+          unreviewed_count: 0,
+          last_reviewed_at: null,
+          revision: 1,
+        },
+      ],
+      total: 1,
+    })
+    render(<AutomationsPage />, { wrapper })
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Memory governance/ }),
+    )
+    expect(
+      await screen.findByText('Not scheduled (paused)'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(new Date('2026-10-19T03:15:00Z').toLocaleString()),
+    ).not.toBeInTheDocument()
+  })
 })

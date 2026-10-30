@@ -99,8 +99,11 @@ export function Sidebar({
           'panel-surface w-full p-4 lg:w-[18.5rem] lg:self-start',
           'lg:relative lg:translate-x-0 lg:z-auto',
           'max-lg:fixed max-lg:top-20 max-lg:left-4 max-lg:bottom-4 max-lg:z-40 max-lg:w-[min(21rem,calc(100vw-2rem))] max-lg:shadow-2xl',
-          'max-lg:transition-transform max-lg:duration-200 max-lg:ease-in-out',
-          mobileOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
+          'max-lg:transition-[translate,visibility] max-lg:duration-200 max-lg:ease-in-out',
+          // Closed: clear the left-4 inset too, and leave the tab order.
+          mobileOpen
+            ? 'max-lg:translate-x-0'
+            : 'max-lg:invisible max-lg:-translate-x-[calc(100%+1rem)]',
         )}
       >
         <div className="mb-4 flex items-start justify-between gap-3">

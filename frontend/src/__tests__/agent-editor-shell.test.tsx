@@ -123,4 +123,20 @@ describe('agent editor shell', () => {
     expect(onTabChange).toHaveBeenCalledWith('models')
     expect(onMobileClose).toHaveBeenCalled()
   })
+  it('moves the closed mobile sidebar fully off screen and out of the tab order', () => {
+    render(
+      <Sidebar
+        activeTab="general"
+        agent={agent}
+        onTabChange={vi.fn()}
+        mobileOpen={false}
+        onMobileClose={vi.fn()}
+      />,
+    )
+
+    const nav = screen.getByRole('navigation', { hidden: true })
+    expect(nav).toHaveClass('max-lg:invisible')
+    expect(nav).toHaveClass('max-lg:-translate-x-[calc(100%+1rem)]')
+    expect(nav).not.toHaveClass('max-lg:-translate-x-full')
+  })
 })

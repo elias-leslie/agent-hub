@@ -205,6 +205,23 @@ describe('PlansSection', () => {
     expect(screen.queryByText(/Not money spent/)).not.toBeInTheDocument()
   })
 
+  it('reads one day as "last day" and prices cents like the rest of Costs', async () => {
+    vi.mocked(fetchOpenCodeGoUsage).mockReturnValue(new Promise(() => {}))
+    const saved = { window: data.window, cash: data.cash }
+    data.window = { ...data.window, days: 1 }
+    data.cash = { ...data.cash, metered_api_usd: 0.66 }
+    try {
+      render(<PlansSection daysRange={1} />, {
+        wrapper: createQueryClientWrapper(),
+      })
+      expect(await screen.findByText('Cash, last day')).toBeInTheDocument()
+      expect(screen.getByText('Used, last day')).toBeInTheDocument()
+      expect(screen.getByText('$0.66')).toBeInTheDocument()
+    } finally {
+      Object.assign(data, saved)
+    }
+  })
+
   it('shows OpenCode Go once in plan limits, live when OpenCode answers', async () => {
     data.utilization = [...data.utilization, storedOpenCode]
     renderPlans(live)

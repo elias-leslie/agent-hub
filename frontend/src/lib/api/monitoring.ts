@@ -14,6 +14,7 @@ export async function fetchRequestLog(params: {
   rejected_only?: boolean
   tool_type?: string
   agent_slug?: string
+  hours?: number
   limit?: number
   offset?: number
 }): Promise<RequestLogResponse> {
@@ -24,6 +25,7 @@ export async function fetchRequestLog(params: {
   if (params.rejected_only) searchParams.set('rejected_only', 'true')
   if (params.tool_type) searchParams.set('tool_type', params.tool_type)
   if (params.agent_slug) searchParams.set('agent_slug', params.agent_slug)
+  if (params.hours) searchParams.set('hours', params.hours.toString())
   if (params.limit) searchParams.set('limit', params.limit.toString())
   if (params.offset) searchParams.set('offset', params.offset.toString())
 
