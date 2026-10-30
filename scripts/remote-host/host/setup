@@ -10,8 +10,9 @@ projects=/srv/workspaces/projects
 cred_bin=$HOME/.local/lib/agent-hub/cred-bin
 state=$HOME/.local/state/agent-host
 # Credential shims (Agent Hub's agent-hub-cred-exec) go first, then the
-# context launchers, then the real binaries, as on the workstation.
-agent_path="$cred_bin:$HOME/.claude/bin:$HOME/.codex/bin:$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+# context launchers, then the real binaries, as on the workstation; rustup's
+# cargo/rustc proxies after the local bins.
+agent_path="$cred_bin:$HOME/.claude/bin:$HOME/.codex/bin:$HOME/bin:$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
 export PATH="$agent_path"
 
 say() { printf 'setup: %s\n' "$*"; }
@@ -118,6 +119,19 @@ for unit in agent-host-idle.service agent-host-idle.timer; do
 done
 ((units_changed)) && sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now --quiet agent-host-idle.timer
+
+# --- toolchains the template lacks --------------------------------------
+# Rust for hunts and labs on Rust targets: Ubuntu's rustup with a minimal
+# stable toolchain. A rustup already in ~/.cargo (installed by hand) is kept.
+if ! command -v rustup >/dev/null; then
+    sudo -n apt-get install -y -qq rustup >/dev/null
+    say "installed rustup"
+fi
+if ! rustup default 2>/dev/null | grep -q .; then
+    rustup set profile minimal >/dev/null 2>&1
+    rustup default stable >/dev/null 2>&1
+    say "installed the stable Rust toolchain"
+fi
 
 # --- harness binaries (copied by bootstrap) and launch links -------------
 link "$HOME/.local/bin/claude" "$HOME/.local/share/claude/versions/$claude_version"

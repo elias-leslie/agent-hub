@@ -53,12 +53,19 @@ re-runnable: a second run changes nothing unless the workstation changed.
     `DATABASE_URL` that nothing listens on. DB-backed parts of a command (such
     as some `st pulse` sections) report "connection refused" after
     SummitFlow's 30 s pool wait. API-backed parts answer normally.
+- **Toolchains:** the template brings clang/lld, cmake/ninja, bazelisk, docker,
+  node and uv. Setup adds Rust (Ubuntu's `rustup`, minimal stable toolchain); a
+  rustup already in `~/.cargo` is kept.
 - **PATH:** `cred-bin`, `~/.claude/bin`, `~/.codex/bin`, `~/bin`, `~/.local/bin`,
-  then the system dirs.
+  `~/.cargo/bin`, then the system dirs.
   - `cred-bin` (`~/.local/lib/agent-hub/cred-bin`) holds Agent Hub's credential
     shims, installed by `agent-hub install`.
-  - The same PATH is set in `~/.profile` (managed block) and in the
-    `tether@default` drop-in `remote.conf`. Tether puts its own shims in front.
+  - The same PATH is set in `~/.profile` and `~/.bashrc` (managed blocks) and in
+    the `tether@default` drop-in `remote.conf`, so panes, `bash -c` and plain
+    `ssh host cmd` all find the tools. Tether puts its own shims in front.
+- **Working directory:** a root started with `--blank-slate` runs in
+  `/tmp/aico-blank-slate`, not a project path. Its brief must name absolute
+  source paths.
 - **sshd:** `/etc/ssh/sshd_config.d/50-agent-host.conf` (`host/sshd-agent-host.conf`)
   allows 100 sessions per connection, since every remote terminal, paste and
   health check is one session on the Tether link's single connection (the
