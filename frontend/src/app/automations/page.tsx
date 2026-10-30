@@ -417,7 +417,8 @@ function PolicyEditor({
   )
 }
 
-function RunRow({ run }: { run: AutomationRun }) {
+/** `label` is the run's profile name when that profile is loaded; else the workflow key stands in. */
+function RunRow({ run, label }: { run: AutomationRun; label?: string }) {
   return (
     <details className="border-b border-slate-800/80 px-4 py-3 last:border-b-0">
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 focus-visible:outline-2 focus-visible:outline-amber-500">
@@ -434,7 +435,7 @@ function RunRow({ run }: { run: AutomationRun }) {
             {run.status}
           </span>
           <span className="truncate text-sm font-medium text-slate-200">
-            {run.workflow_key}
+            {label ?? run.workflow_key}
           </span>
           <span className="text-xs text-slate-500">
             {run.trigger || 'scheduled'}
@@ -445,6 +446,10 @@ function RunRow({ run }: { run: AutomationRun }) {
         </time>
       </summary>
       <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="text-slate-500">Workflow</dt>
+          <dd className="mt-1 break-all text-slate-300">{run.workflow_key}</dd>
+        </div>
         <div>
           <dt className="text-slate-500">Run ID</dt>
           <dd className="mt-1 break-all text-slate-300">{run.id}</dd>
@@ -1210,7 +1215,14 @@ export default function AutomationsPage() {
               </div>
             ) : runsQuery.data?.items.length ? (
               runsQuery.data.items.map((run) => (
-                <RunRow key={run.id} run={run} />
+                <RunRow
+                  key={run.id}
+                  run={run}
+                  label={
+                    profiles.find((profile) => profile.id === run.profile_id)
+                      ?.label
+                  }
+                />
               ))
             ) : (
               <p className="p-5 text-sm text-slate-400">

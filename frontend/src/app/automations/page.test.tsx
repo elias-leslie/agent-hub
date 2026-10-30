@@ -5,6 +5,7 @@ import {
   fetchAutomationPolicy,
   fetchAutomationProfiles,
   fetchAutomationRegistry,
+  fetchAutomationRuns,
 } from '@/lib/api/automations'
 import { fetchProjectCatalog } from '@/lib/api/project-permissions'
 import AutomationsPage from './page'
@@ -71,5 +72,79 @@ describe('Automations project policy', () => {
     expect(
       screen.queryByRole('heading', { name: 'Execution permission' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('names runs by their profile and keeps the workflow key in the details', async () => {
+    vi.mocked(fetchAutomationProfiles).mockResolvedValue({
+      items: [
+        {
+          id: 'p1',
+          project_id: 'agent-hub',
+          subject_id: null,
+          workflow_key: 'agent-hub.session_cleanup',
+          definition_version: 1,
+          label: 'Session cleanup',
+          schedule_type: 'cron',
+          schedule_value: '*/15 * * * *',
+          schedule_timezone: 'UTC',
+          config: {},
+          enabled: true,
+          effective_enabled: true,
+          gate_reasons: [],
+          clock_owner: 'central',
+          next_run_at: null,
+          last_run_at: null,
+          unreviewed_count: 0,
+          last_reviewed_at: null,
+          revision: 1,
+        },
+      ],
+      total: 1,
+    })
+    vi.mocked(fetchAutomationRuns).mockResolvedValue({
+      items: [
+        {
+          id: 'r1',
+          profile_id: 'p1',
+          project_id: 'agent-hub',
+          workflow_key: 'agent-hub.session_cleanup',
+          definition_version: 1,
+          profile_revision: 1,
+          occurrence_key: 'o1',
+          scheduled_for: null,
+          status: 'succeeded',
+          trigger: 'scheduled',
+          gate_reasons: [],
+          created_at: '2026-10-29T21:45:02Z',
+        },
+        {
+          id: 'r2',
+          profile_id: 'gone',
+          project_id: 'agent-hub',
+          workflow_key: 'agent-hub.session_reaper',
+          definition_version: 1,
+          profile_revision: 1,
+          occurrence_key: 'o2',
+          scheduled_for: null,
+          status: 'succeeded',
+          trigger: 'scheduled',
+          gate_reasons: [],
+          created_at: '2026-10-29T21:30:02Z',
+        },
+      ],
+      total: 2,
+    })
+    render(<AutomationsPage />, { wrapper })
+    fireEvent.click(screen.getByRole('button', { name: 'Run history' }))
+    const named = await screen.findByText('Session cleanup', {
+      selector: 'summary span',
+    })
+    expect(named).toBeInTheDocument()
+    expect(screen.getByText('agent-hub.session_cleanup')).toBeInTheDocument()
+    expect(
+      screen.getByText('agent-hub.session_reaper', {
+        selector: 'summary span',
+      }),
+    ).toBeInTheDocument()
   })
 })
