@@ -26,7 +26,10 @@ ui           the desktop is on the workstation
 selection    the desktop is on the workstation
 show         shows files to the owner through the workstation's Tether
 tether       this host's Tether is reached through the workstation hub
-aico         Aico runs on the workstation; create remote agents with --host there
+aico         the Aico app runs on the workstation; here only create, root, roots and wake reach this host's Tether
+aico:create  allow
+aico:root    allow
+aico:roots   allow
 aico:wake    allow
 wiki         the Vault lives on the workstation
 bugout       lab runs from the workstation

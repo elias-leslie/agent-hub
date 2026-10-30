@@ -189,7 +189,7 @@ def test_st_guard_refuses_workstation_only_commands_at_once(tmp_path: Path) -> N
     refused = _guard(tmp_path, "vm", "list")
     assert refused.returncode == 2 and "st vm: workstation-only" in refused.stderr and not refused.stdout
 
-    sub = _guard(tmp_path, "aico", "create", "x")
+    sub = _guard(tmp_path, "aico", "layout", "x")
     assert sub.returncode == 2 and "st aico: workstation-only" in sub.stderr
 
 
@@ -203,7 +203,7 @@ def test_st_guard_refuses_workstation_only_commands_at_once(tmp_path: Path) -> N
         ("--human", "snap", "create"),
         ("-c", "service", "status"),
         ("--no-compact", "--progress-only", "--", "vm", "list"),
-        ("-P", "x", "aico", "create"),
+        ("-P", "x", "aico", "layout"),
     ],
 )
 def test_st_guard_sees_the_command_after_global_options(tmp_path: Path, argv: tuple[str, ...]) -> None:
@@ -217,8 +217,10 @@ def test_st_guard_refuses_an_unknown_option_before_the_command(tmp_path: Path) -
 
 
 def test_st_guard_runs_remote_commands_with_a_placeholder_database(tmp_path: Path) -> None:
+    # An agent here starts and steers helpers on this host's own Tether.
     for argv in (("pulse", "--brief"), ("aico", "wake", "list"), ("--help",), ("-P", "agent-hub", "pulse"),
-                 ("--project=x", "-c", "aico", "wake", "list")):
+                 ("--project=x", "-c", "aico", "wake", "list"), ("aico", "create", "x"),
+                 ("aico", "root", "status", "x"), ("aico", "roots")):
         result = _guard(tmp_path, *argv)
         assert result.returncode == 0, result.stderr
         assert result.stdout == f"ran: {' '.join(argv)} db=postgresql://st-remote-host\n"

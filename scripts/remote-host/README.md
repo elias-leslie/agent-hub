@@ -56,7 +56,10 @@ re-runnable: a second run changes nothing unless the workstation changed.
   SummitFlow launcher, with the backend env from `uv sync --locked`.
   - Commands listed in `host/st-workstation-only` are refused at once with a
     reason and exit 2. They cover snapshots and rollback, services, the
-    database, VMs, the desktop, the browser and secrets.
+    database, VMs, the desktop, the browser and secrets. Of `st aico`, only
+    `create`, `root`, `roots` and `wake` run here, against this host's own
+    Tether: an agent here starts and steers helpers on this host, nested under
+    itself in the workstation's Aico.
   - Everything else runs against the forwarded SummitFlow API (`-R 8001`). It
     authenticates with the agent token that Agent Hub serves through the `st`
     credential shim.
