@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.helpers.agent_metrics import compute_agent_metrics
+from app.api.helpers.agent_metrics import compute_agent_metrics, compute_agents_metrics
 from app.api.helpers.agent_preview import build_agent_preview
 from app.api.schemas.agent_schemas import (
     AgentCreateRequest,
@@ -369,11 +369,7 @@ async def get_all_agent_metrics(
     service = get_agent_service()
     agents = await service.list_agents(db, active_only=True)
 
-    metrics: dict[str, AgentMetrics] = {}
-    for agent in agents:
-        metrics[agent.slug] = await compute_agent_metrics(db, agent.slug)
-
-    return AgentMetricsListResponse(metrics=metrics)
+    return AgentMetricsListResponse(metrics=await compute_agents_metrics(db, [agent.slug for agent in agents]))
 
 
 @router.get("/{slug}/metrics", response_model=AgentMetrics)

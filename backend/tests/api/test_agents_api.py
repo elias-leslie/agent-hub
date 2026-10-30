@@ -9,7 +9,7 @@ Tests cover:
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -449,26 +449,20 @@ class TestAgentMetricsEndpoint:
 
         with (
             patch("app.api.agents.get_agent_service") as mock_get_service,
-            patch("app.api.agents.compute_agent_metrics") as mock_compute_metrics,
+            patch("app.api.agents.compute_agents_metrics") as mock_compute_metrics,
         ):
             mock_svc = MagicMock()
             mock_svc.list_agents = AsyncMock(return_value=[mock_dto])
             mock_get_service.return_value = mock_svc
 
-            # Mock metrics response
-            mock_compute_metrics.return_value = {
-                "slug": "coder",
-                "name": "Code Generator",
-                "total_sessions": 0,
-                "total_input_tokens": 0,
-                "total_output_tokens": 0,
-            }
+            mock_compute_metrics.return_value = {"coder": {"slug": "coder", "requests_24h": 3}}
 
             response = api_client.get("/api/agents/metrics/all")
 
             assert response.status_code == 200
             data = response.json()
-            assert "metrics" in data
+            assert data["metrics"]["coder"]["requests_24h"] == 3
+            mock_compute_metrics.assert_awaited_once_with(ANY, [mock_dto.slug])
 
     @pytest.mark.asyncio
     async def test_get_agent_metrics_returns_200(self, api_client):
