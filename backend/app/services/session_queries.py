@@ -2,18 +2,21 @@
 
 import base64
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     ColumnElement,
+    Exists,
     Select,
     String,
     and_,
+    any_,
     bindparam,
     case,
+    exists,
     false,
     func,
     literal_column,
@@ -22,6 +25,7 @@ from sqlalchemy import (
     text,
     tuple_,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -266,6 +270,8 @@ class SessionListFilters:
     roots_only: bool = False
     work_role: str | None = None
     harness: str | None = None
+    # Sessions whose prompts match q, looked up once by resolve_prompt_search; None = match in each query.
+    prompt_match_ids: tuple[str, ...] | None = None
 
 
 def session_last_active() -> ColumnElement[datetime]:
@@ -363,8 +369,39 @@ def session_requested_model_expression() -> ColumnElement[str]:
     return literal_column(_REQUESTED_MODEL_SQL, type_=String)
 
 
-def _search_predicate(q: str) -> ColumnElement[bool]:
+def _prompt_match(pattern: str) -> Exists:
+    # The list's title is the first prompt, so search reads prompts too (not harness-injected context).
+    return exists().where(
+        SessionEvent.session_id == Session.id,
+        SessionEvent.event_type == SessionEventType.USER_MESSAGE,
+        func.left(SessionEvent.content, _TITLE_SOURCE_PREFIX_CHARS).ilike(pattern, escape="\\"),
+        ~SessionEvent.content.op("~*")(_HARNESS_SCAFFOLD_PATTERN),
+    )
+
+
+async def resolve_prompt_search(db: AsyncSession, filters: SessionListFilters) -> SessionListFilters:
+    """Find prompt matches once per request instead of rescanning prompts in every list and facet query."""
+    if not filters.q:
+        return filters
+    rows = await db.execute(
+        select(SessionEvent.session_id)
+        .where(
+            SessionEvent.event_type == SessionEventType.USER_MESSAGE,
+            func.left(SessionEvent.content, _TITLE_SOURCE_PREFIX_CHARS).ilike(_like_pattern(filters.q), escape="\\"),
+            ~SessionEvent.content.op("~*")(_HARNESS_SCAFFOLD_PATTERN),
+        )
+        .distinct()
+    )
+    return replace(filters, prompt_match_ids=tuple(str(sid) for sid in rows.scalars()))
+
+
+def _search_predicate(q: str, prompt_match_ids: tuple[str, ...] | None = None) -> ColumnElement[bool]:
     pattern = _like_pattern(q)
+    prompt_match = (
+        _prompt_match(pattern)
+        if prompt_match_ids is None
+        else Session.id == any_(bindparam("prompt_match_ids", list(prompt_match_ids), type_=ARRAY(String)))
+    )
     return or_(
         Session.id.ilike(_like_pattern(q, prefix_only=True), escape="\\"),
         Session.summary_oneliner.ilike(pattern, escape="\\"),
@@ -373,6 +410,7 @@ def _search_predicate(q: str) -> ColumnElement[bool]:
         Session.agent_slug.ilike(pattern, escape="\\"),
         Session.project_id.ilike(pattern, escape="\\"),
         Session.model.ilike(pattern, escape="\\"),
+        prompt_match,
     )
 
 
@@ -416,7 +454,7 @@ def session_list_predicates(
     if filters.model:
         predicates.append(session_requested_model_expression() == filters.model)
     if filters.q and filters.q.strip():
-        predicates.append(_search_predicate(filters.q.strip()))
+        predicates.append(_search_predicate(filters.q.strip(), filters.prompt_match_ids))
     return predicates
 
 

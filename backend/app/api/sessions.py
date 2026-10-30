@@ -58,6 +58,7 @@ from app.services.session_queries import (
     fetch_session_events_summary,
     fetch_session_facets,
     query_session_event_window,
+    resolve_prompt_search,
 )
 from app.services.session_responses import (
     apply_session_rollups,
@@ -283,6 +284,7 @@ async def get_session_facets(
         harness=harness,
     )
     try:
+        filters = await resolve_prompt_search(db, filters)
         data = await fetch_session_facets(db, filters)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -511,6 +513,7 @@ async def list_sessions(
     normalized_sort, normalized_direction = _normalize_session_sort(sort_by, sort_direction)
     try:
         start, end, inner_cursor = accounting_window(accounting_start, accounting_end, cursor)
+        filters = await resolve_prompt_search(db, filters)
         raw_stats = await list_sessions_with_stats(
             db,
             page=page,

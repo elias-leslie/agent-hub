@@ -15,7 +15,7 @@ from uuid import uuid4
 import httpx
 import pytest
 import pytest_asyncio
-from sqlalchemy import Enum, make_url, text
+from sqlalchemy import Enum, make_url, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
@@ -219,6 +219,26 @@ async def test_new_filters_kind_roots_benchmarks_since_model_and_q(
     assert ids == ["cccc-chat"]
     ids, _ = await list_ids(api, "q=code")  # id prefix only: "aaaa-code" does not start with "code"
     assert ids == []
+
+
+async def test_search_finds_sessions_by_the_prompt_shown_as_their_title(
+    api: httpx.AsyncClient, pg_db: AsyncSession,
+) -> None:
+    from app.services.session_queries import SessionListFilters, session_list_predicates
+
+    await add_session(pg_db, "lane-aico", minutes=1, session_type="claude_code")
+    await add_event(pg_db, "lane-aico", 1, 1, "user_message", content="Maintenance sprint lane 'aico'. Read the brief")
+    await add_session(pg_db, "other", minutes=2, session_type="claude_code")
+    await add_event(pg_db, "other", 1, 1, "user_message", content="<environment_context>sprint lane</environment_context>")
+    await add_event(pg_db, "other", 1, 2, "user_message", content="Fix the build")
+
+    ids, body = await list_ids(api, "q=sprint%20lane")
+    assert ids == ["lane-aico"] and body["total"] == 1
+    facets = (await api.get("/api/sessions/facets?q=sprint%20lane")).json()
+    assert facets["kind"]["coding"] == 1
+    # Callers that don't resolve prompt matches up front still match prompts, in SQL.
+    unresolved = select(Session.id).where(*session_list_predicates(SessionListFilters(q="SPRINT LANE")))
+    assert list((await pg_db.execute(unresolved)).scalars()) == ["lane-aico"]
 
 
 async def _walk(api: httpx.AsyncClient, query: str, on_page: Any = None) -> list[str]:
