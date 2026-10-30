@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import time
+from collections.abc import Callable
 
 import pytest
 
 from app.services.memory.episode_validation import EpisodeValidationError, EpisodeValidator
+from tests.linear_time import assert_linear
 
 
 def test_task_execution_log_pattern_still_detects_subtask_attempts() -> None:
@@ -16,17 +17,20 @@ def test_task_execution_log_pattern_still_detects_subtask_attempts() -> None:
 
 
 def test_task_execution_log_pattern_is_linear_on_long_hyphen_runs() -> None:
-    content = "subtask " + "-" * 50_000
-    started = time.monotonic()
-    assert EpisodeValidator._detect_non_reusable_patterns(content) == []
-    assert time.monotonic() - started < 1.0
+    def build(n: int) -> str:
+        return "subtask " + "-" * n
+
+    assert EpisodeValidator._detect_non_reusable_patterns(build(8_000)) == []
+    assert_linear(EpisodeValidator._detect_non_reusable_patterns, build, 8_000)
 
 
-def test_task_execution_log_pattern_is_linear_on_repeated_subtask_tokens() -> None:
-    for content in ("subtask a " * 50_000, "subtask a\n" * 50_000, "subtask" * 50_000 + " x"):
-        started = time.monotonic()
-        assert EpisodeValidator._detect_non_reusable_patterns(content) == []
-        assert time.monotonic() - started < 1.0
+@pytest.mark.parametrize("unit", ["subtask a ", "subtask a\n", "subtask"])
+def test_task_execution_log_pattern_is_linear_on_repeated_subtask_tokens(unit: str) -> None:
+    def build(n: int) -> str:
+        return unit * n + (" x" if unit == "subtask" else "")
+
+    assert EpisodeValidator._detect_non_reusable_patterns(build(4_000)) == []
+    assert_linear(EpisodeValidator._detect_non_reusable_patterns, build, 4_000)
 
 
 def test_subtask_attempt_detection_matches_original_line_semantics() -> None:
@@ -79,28 +83,30 @@ def test_compact_tier_cannot_balloon_on_update() -> None:
 
 
 def test_tool_output_detection_is_linear_on_long_lines() -> None:
-    content = ("=" * 200_000 + " passed\n") + ("E" + " " * 200_000 + "\n")
-    start = time.perf_counter()
-    EpisodeValidator.looks_like_tool_output(content)
-    assert time.perf_counter() - start < 1.0
+    def build(n: int) -> str:
+        return ("=" * n + " passed\n") + ("E" + " " * n + "\n")
+
+    assert_linear(EpisodeValidator.looks_like_tool_output, build, 20_000)
 
 
-@pytest.mark.parametrize(
-    "line",
-    [
-        "  File " + '"' + "a" * 200_000,
-        " " * 200_000 + "x",
-        "= " * 100_000,
-        "=" * 100_000 + " " + "word " * 40_000,
-        "A" * 200_000 + ":NOPE",
-        "E" + " " * 200_000,
-    ],
-)
-def test_tool_output_line_pattern_is_fast_on_adversarial_lines(line: str) -> None:
-    started = time.perf_counter()
+_ADVERSARIAL_LINES: dict[str, Callable[[int], str]] = {
+    "unclosed_file_quote": lambda n: "  File " + '"' + "a" * n,
+    "leading_spaces": lambda n: " " * n + "x",
+    "spaced_equals": lambda n: "= " * n,
+    "equals_then_words": lambda n: "=" * n + " " + "word " * (2 * n // 5),
+    "caps_without_status": lambda n: "A" * n + ":NOPE",
+    "e_then_spaces": lambda n: "E" + " " * n,
+}
+
+
+def _match_and_search(line: str) -> None:
     assert EpisodeValidator.TOOL_OUTPUT_LINE_PATTERN.match(line) is None
     assert EpisodeValidator.TOOL_OUTPUT_LINE_PATTERN.search("x" + line) is None
-    assert time.perf_counter() - started < 1.0
+
+
+@pytest.mark.parametrize("build", list(_ADVERSARIAL_LINES.values()), ids=list(_ADVERSARIAL_LINES))
+def test_tool_output_line_pattern_is_fast_on_adversarial_lines(build: Callable[[int], str]) -> None:
+    assert_linear(_match_and_search, build, 20_000)
 
 
 @pytest.mark.parametrize(

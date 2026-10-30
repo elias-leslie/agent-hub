@@ -9,7 +9,6 @@ import hashlib
 import importlib.util
 import json
 import re
-import time
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -44,6 +43,7 @@ from app.services.memory.embedder import EmbedderService
 from app.services.memory.fingerprint import content_fingerprint
 from app.services.memory.privacy_filter import apply_privacy_filter
 from app.services.secret_redaction import SECRET_PATTERNS, redact_secrets, redact_text, redact_value
+from tests.linear_time import assert_linear
 
 
 def _pem(edge: str, kind: str = "") -> str:
@@ -346,31 +346,31 @@ def test_near_misses_are_left_alone(text: str) -> None:
     assert redact_secrets(text) == (text, {})
 
 
+# Each builder takes a repeat count; the case's size is the full input timed against one eighth of it.
 # Built per case so collection does not hold megabytes of hostile text in every worker.
-_HOSTILE_INPUTS: dict[str, Callable[[], str]] = {
-    "pem_headers_tokens_and_slack_prefixes": lambda: (
-        (_pem("BEGIN") + " a" * 50 + "\n") * 2000 + "ghp_" + "a" * 30 + " " + "xoxb-" * 20000
+_HOSTILE_INPUTS: dict[str, tuple[Callable[[int], str], int]] = {
+    # Full size: the PEM body bound (8 KB) is reached only on inputs well past it.
+    "pem_headers_tokens_and_slack_prefixes": (
+        lambda n: (_pem("BEGIN") + " a" * 50 + "\n") * n + "ghp_" + "a" * 30 + " " + "xoxb-" * (10 * n),
+        2000,
     ),
-    # Codes of any length and many codes: an unterminated 400 KB parameter run, then 50,000 cut points.
-    "unterminated_csi_parameters": lambda: "\x1b[" + "1;" * 200_000 + SAMPLES["github_token"],
-    "many_cut_points": lambda: ("a\x1b[1mghp_\x1b[0m") * 50_000,
-    "backslash_run_without_introducer": lambda: "\\" * 400_000 + SAMPLES["github_token"],
-    "escaped_csi_introducers": lambda: ("\\" * 15 + "u009b") * 20_000,
-    "osc_openings_without_terminator": lambda: "\x1b]" * 200_000,
-    "long_unterminated_osc": lambda: "\x1b]" + "a" * 400_000 + SAMPLES["github_token"],
-    "escaped_osc_hyperlinks": lambda: ("\\\\u001b]8;;" + "x" * 2000) * 200,
-    "escaped_osc_introducers": lambda: ("\\" * 15 + "u001b]") * 20_000,
-    "unending_nf_escape": lambda: "\x1b" + " " * 400_000,
-    "charset_escapes_inside_tokens": lambda: ("ghp_AA\x1b(B" + "A" * 34) * 10_000,
+    # Codes of any length and many codes: an unterminated parameter run, then many cut points.
+    "unterminated_csi_parameters": (lambda n: "\x1b[" + "1;" * n + SAMPLES["github_token"], 25_000),
+    "many_cut_points": (lambda n: ("a\x1b[1mghp_\x1b[0m") * n, 6_400),
+    "backslash_run_without_introducer": (lambda n: "\\" * n + SAMPLES["github_token"], 6_400),
+    "escaped_csi_introducers": (lambda n: ("\\" * 15 + "u009b") * n, 2_400),
+    "osc_openings_without_terminator": (lambda n: "\x1b]" * n, 25_000),
+    "long_unterminated_osc": (lambda n: "\x1b]" + "a" * n + SAMPLES["github_token"], 50_000),
+    "escaped_osc_hyperlinks": (lambda n: ("\\\\u001b]8;;" + "x" * 2000) * n, 32),
+    "escaped_osc_introducers": (lambda n: ("\\" * 15 + "u001b]") * n, 2_400),
+    "unending_nf_escape": (lambda n: "\x1b" + " " * n, 50_000),
+    "charset_escapes_inside_tokens": (lambda n: ("ghp_AA\x1b(B" + "A" * 34) * n, 1_280),
 }
 
 
-@pytest.mark.parametrize("build", list(_HOSTILE_INPUTS.values()), ids=list(_HOSTILE_INPUTS))
-def test_patterns_stay_linear_on_hostile_input(build: Callable[[], str]) -> None:
-    hostile = build()
-    started = time.monotonic()
-    redact_secrets(hostile)
-    assert time.monotonic() - started < 2
+@pytest.mark.parametrize(("build", "size"), list(_HOSTILE_INPUTS.values()), ids=list(_HOSTILE_INPUTS))
+def test_patterns_stay_linear_on_hostile_input(build: Callable[[int], str], size: int) -> None:
+    assert_linear(redact_secrets, build, size)
 
 
 def test_redact_value_walks_json_and_keeps_clean_objects() -> None:

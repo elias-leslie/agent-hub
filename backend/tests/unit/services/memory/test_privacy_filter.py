@@ -5,6 +5,7 @@ from app.services.memory.privacy_filter import (
     strip_memory_tags,
     strip_private_tags,
 )
+from tests.linear_time import assert_linear
 
 
 class TestStripPrivateTags:
@@ -148,24 +149,17 @@ class TestLinearScan:
         assert count == 1
 
     def test_many_unclosed_opening_tags_are_linear(self) -> None:
-        import time
+        def build(tags: int) -> str:
+            return "<private>" * tags + "<memory>" * tags
 
-        def scan_seconds(tags: int) -> float:
-            content = "<private>" * tags + "<memory>" * tags
-            best = float("inf")
-            for _ in range(5):
-                started = time.perf_counter()
-                strip_private_tags(content)
-                strip_memory_tags(content)
-                best = min(best, time.perf_counter() - started)
-            return best
+        def scan(content: str) -> None:
+            strip_private_tags(content)
+            strip_memory_tags(content)
 
-        # Growth ratio, not a wall-clock bound, so host load does not matter: 8x the
-        # unclosed tags costs ~4-8x when linear and ~30x when every opening tag rescans
-        # to the end of the input.
-        assert scan_seconds(8_000) / scan_seconds(1_000) < 16
+        # Only the tag scan is timed; secret redaction has its own linear-time tests.
+        assert_linear(scan, build, 8_000)
 
-        content = "<private>" * 8_000 + "<memory>" * 8_000
+        content = build(8_000)
         result, stats = apply_privacy_filter(content)
         assert result == content
         assert stats == {"private_tags_stripped": 0, "memory_tags_stripped": 0, "secrets_redacted": 0}
