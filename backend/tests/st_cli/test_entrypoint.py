@@ -114,6 +114,10 @@ def test_owner_package_has_no_reverse_summitflow_imports() -> None:
                     # Fixed local owner backend, loaded only by command execution.
                     assert [alias.name for alias in node.names] == ["run_lab_operation"]
                     continue
+                if path.name == "remote_hosts.py" and node.module == "app.cli.remote_hosts":
+                    # Same fixed local owner backend, loaded only by command execution.
+                    assert [alias.name for alias in node.names] == ["run_remote_host_operation"]
+                    continue
                 if path.name == "native_sessions.py" and node.module == "app.services.session_ingestion.native_operator":
                     # The local owner command binds the fixed Agent Hub backend
                     # before loading its own authority. This is not an import of
