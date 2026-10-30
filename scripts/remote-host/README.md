@@ -135,8 +135,11 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
 - **Resize:** `st vm resize <vmid> --cores N --memory MB [--restart]`. More
   disk: `st vm grow-disk`.
 - **Roll back:** `st vm rollback <vmid> agent-host-ready`. It discards
-  everything since the snapshot. Run the bootstrap afterwards to bring the
-  checkouts and CLIs up to date.
+  everything since the snapshot, including the VM's Proxmox config (a
+  snapshot keeps it). Run the bootstrap afterwards to bring the checkouts and
+  CLIs up to date. A snapshot from before 2026-10-30 03:00 resets VM 200's
+  balloon minimum to 4096, which leaves agents waiting on the 6 GiB memory
+  guard after a cold boot: run `ssh davion-gem qm set 200 --balloon 8192`.
 - **Remove:**
   1. `st agents hosts revoke <name>`. The token stops working and its grants
      are dropped.
