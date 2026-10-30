@@ -83,6 +83,16 @@ SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
         category="maintenance",
     ),
     WorkflowScheduleDefinition(
+        schedule_id="local_history",
+        label="Local agent history",
+        description=(
+            "Imports Claude Code turns and subagents the Stop hook missed, then deletes local Claude Code, "
+            "Codex and Pi transcripts idle past the retention days once Agent Hub holds all of them."
+        ),
+        cron="30 4 * * *",
+        category="maintenance",
+    ),
+    WorkflowScheduleDefinition(
         schedule_id="model_enrichment_sync",
         label="Model enrichment sync",
         description="Refreshes model benchmark, pricing, catalog, and routable availability data.",

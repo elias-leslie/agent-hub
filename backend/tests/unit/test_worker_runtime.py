@@ -13,6 +13,7 @@ from app.worker_runtime import (
 from app.workflows.agent_wake import agent_wake_task
 from app.workflows.automation_clock import automation_clock_task
 from app.workflows.completion import completion_task
+from app.workflows.local_history import local_history_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
 from app.workflows.scheduled import (
@@ -43,6 +44,7 @@ def test_ops_workflows_match_maintenance_runtime() -> None:
         memory_cleanup_task,
         memory_governance_task,
         data_retention_task,
+        local_history_task,
         session_summary_task,
         observation_processing_task,
         model_enrichment_sync_task,

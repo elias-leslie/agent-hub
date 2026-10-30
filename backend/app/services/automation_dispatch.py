@@ -111,6 +111,7 @@ async def sync_owner_policies(project_id: str | None = None) -> bool:
 
 
 def _hatchet_task(target: str):
+    from app.workflows.local_history import local_history_task
     from app.workflows.model_sync import model_enrichment_sync_task
     from app.workflows.scheduled import (
         data_retention_task,
@@ -128,6 +129,7 @@ def _hatchet_task(target: str):
         "memory_cleanup": memory_cleanup_task,
         "memory_governance": memory_governance_task,
         "data_retention": data_retention_task,
+        "local_history": local_history_task,
         "model_enrichment_sync": model_enrichment_sync_task,
     }
     if target not in tasks:

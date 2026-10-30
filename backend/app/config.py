@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     # its per-session result is reused until the next boundary, so repeated polls do not re-read every
     # session's tool history. 0 = a window ending now, recomputed on every read.
     session_accounting_cache_seconds: int = Field(default=30, ge=0)
+    # Local harness history (app/services/local_history.py): a Claude Code, Codex or Pi transcript on this
+    # machine is deleted once it has been idle this many days and Agent Hub holds all of it. 0 = never delete.
+    local_history_retention_days: float = Field(default=7, ge=0)
+    # Comma-separated fnmatch patterns over the transcript path, project id, cwd and repo root; matches are kept.
+    local_history_exclude_globs: str = "*/neri*,*-neri*,neri*,*target-labs*,*workerd-bazel*"
+    # Claude Code catch-up waits until a transcript has been quiet this long, so it never races a live turn.
+    local_history_catch_up_idle_minutes: float = Field(default=60, ge=0)
+    # Codex threads are removed through its own CLI so its thread stores drop them too.
+    local_history_codex_bin: str = "codex"
 
     @field_validator("agent_hub_db_url")
     @classmethod
