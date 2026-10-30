@@ -144,7 +144,9 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
 
 - **Resize:** `st vm resize <vmid> --cores N --memory MB [--restart]`. More
   disk: `st vm grow-disk`.
-- **Roll back:** `st vm rollback <vmid> agent-host-ready`. It discards
+- **Roll back:** `st vm rollback <vmid> signed-in-rust` (VM 200's newest clean
+  snapshot: all five tools signed in, Rust installed; `agent-host-ready` is the
+  older one without either). It discards
   everything since the snapshot, including the VM's Proxmox config (a
   snapshot keeps it). Run the bootstrap afterwards to bring the checkouts and
   CLIs up to date. A snapshot from before 2026-10-30 03:00 resets VM 200's
