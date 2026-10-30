@@ -147,7 +147,7 @@ function LoginRow({
       >
         {login.updated_at ? formatRelativeTime(login.updated_at) : 'Unknown'}
       </td>
-      <td className="sticky right-0 bg-slate-950/95 px-4 py-3 shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]">
+      <td className="sticky right-0 bg-slate-950 px-4 py-3 shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]">
         {confirming ? (
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs text-slate-300">
