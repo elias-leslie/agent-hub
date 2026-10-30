@@ -32,6 +32,7 @@ export function Filters({
         <input
           type="text"
           placeholder="Filter by client ID..."
+          aria-label="Client ID"
           value={clientFilter}
           onChange={(e) => {
             setClientFilter(e.target.value)
@@ -45,6 +46,7 @@ export function Filters({
         <input
           type="text"
           placeholder="Filter by agent..."
+          aria-label="Agent"
           value={agentFilter}
           onChange={(e) => {
             setAgentFilter(e.target.value)
@@ -54,6 +56,7 @@ export function Filters({
       </div>
 
       <select
+        aria-label="Tool type"
         value={toolTypeFilter || ''}
         onChange={(e) => {
           setToolTypeFilter(e.target.value || undefined)
@@ -67,6 +70,7 @@ export function Filters({
       </select>
 
       <select
+        aria-label="Status code"
         value={statusFilter || ''}
         onChange={(e) => {
           setStatusFilter(
