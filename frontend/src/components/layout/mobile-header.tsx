@@ -7,7 +7,8 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-800/70 bg-slate-950/75 px-4 backdrop-blur-xl lg:hidden">
+    // Above the pages' fixed .page-backdrop layer (z-index 0), which otherwise dims this bar.
+    <header className="relative z-10 flex h-16 items-center justify-between border-b border-slate-800/70 bg-slate-950/75 px-4 backdrop-blur-xl lg:hidden">
       <button
         type="button"
         onClick={onMenuClick}

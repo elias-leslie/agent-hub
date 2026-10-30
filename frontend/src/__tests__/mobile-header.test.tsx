@@ -15,4 +15,9 @@ describe('MobileHeader', () => {
     fireEvent.click(button)
     expect(onMenuClick).toHaveBeenCalledOnce()
   })
+
+  it('stacks above the fixed page backdrop so pages cannot dim it', () => {
+    render(<MobileHeader onMenuClick={vi.fn()} />)
+    expect(screen.getByRole('banner')).toHaveClass('relative', 'z-10')
+  })
 })
