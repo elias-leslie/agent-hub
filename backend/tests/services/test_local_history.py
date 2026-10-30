@@ -64,6 +64,9 @@ def _reason(unit: HistoryUnit, cursors: dict[str, ImportCursor], *, open_files=f
 def test_idle_fully_imported_transcript_may_be_deleted(tmp_path: Path) -> None:
     transcript = _write(tmp_path / "pi" / "--repo--" / "s.jsonl", b'{"type":"message"}\n')
     assert _reason(HistoryUnit("pi", transcript), {str(transcript): _cursor(transcript)}) is None
+    # A remount renumbers the btrfs device; the inode and content still prove the same file.
+    renumbered = replace(_cursor(transcript), device=transcript.stat().st_dev + 13)
+    assert _reason(HistoryUnit("pi", transcript), {str(transcript): renumbered}) is None
 
 
 @pytest.mark.unit
@@ -300,13 +303,13 @@ def _session(session_id: str, transcript: Path, *, checkpoint: str | None = None
     )
 
 
-def _checkpoint(path: Path, offset: int) -> str:
+def _checkpoint(path: Path, offset: int, *, device_shift: int = 0) -> str:
     import json
 
     stat = path.stat()
     data = path.read_bytes()
     return json.dumps({
-        "line_offset": 1, "byte_offset": offset, "device": stat.st_dev, "inode": stat.st_ino,
+        "line_offset": 1, "byte_offset": offset, "device": stat.st_dev + device_shift, "inode": stat.st_ino,
         "tail_digest": hashlib.sha256(data[max(0, offset - 128):offset]).hexdigest(),
         "turn": 1, "sequence": 0, "saw_content": True,
     })
@@ -322,7 +325,7 @@ async def test_catch_up_imports_missed_turns_and_records_subagents(
     agent = _write(stores.claude / "-srv-repo" / "p" / "subagents" / "agent-a1.jsonl", b'{"type":"user"}\n')
     _write(agent.with_name("agent-a1.meta.json"), b'{"agentType":"Explore","description":"look"}')
     live_agent = _write(stores.claude / "-srv-repo" / "p" / "subagents" / "agent-a2.jsonl", b"{}\n", age_days=0)
-    parent = _session("p", transcript, checkpoint=_checkpoint(transcript, 16))
+    parent = _session("p", transcript, checkpoint=_checkpoint(transcript, 16, device_shift=13))
     child = _session(subagent_session_id("p", "subagents/agent-a1.jsonl"), agent, parent="p")
     child.provider_metadata.pop("transcript_ingestion", None)
     sessions = {"p": parent}

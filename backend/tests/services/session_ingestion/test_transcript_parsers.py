@@ -755,6 +755,29 @@ def test_incremental_reader_waits_for_complete_line_and_survives_rotation(tmp_pa
 
 
 @pytest.mark.unit
+def test_incremental_reader_continues_after_a_device_renumber(tmp_path: Path) -> None:
+    transcript = tmp_path / "native.jsonl"
+
+    def line(text: str) -> str:
+        return json.dumps({"type": "response_item", "payload": {
+            "type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}}) + "\n"
+
+    transcript.write_text(line("first"))
+    first, checkpoint = read_incremental_transcript_events(str(transcript))
+    remounted = json.loads(checkpoint or "{}")
+    remounted["device"] += 13  # btrfs gives the same file a new st_dev after a remount
+    with transcript.open("a") as output:
+        output.write(line("second"))
+
+    second, _ = read_incremental_transcript_events(str(transcript), json.dumps(remounted))
+    assert [event.content for event in second] == ["second"]
+    assert first[0].turn is not None
+    assert second[0].turn == first[0].turn + 1
+    health = inspect_transcript_source(str(transcript), json.dumps(remounted))
+    assert (health.caught_up, health.committed_byte_offset) == (False, remounted["byte_offset"])
+
+
+@pytest.mark.unit
 def test_incremental_source_health_proves_current_complete_extent(tmp_path: Path) -> None:
     transcript = tmp_path / "native.jsonl"
     transcript.write_text(json.dumps({

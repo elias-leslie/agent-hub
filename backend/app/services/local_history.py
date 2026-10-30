@@ -9,8 +9,8 @@ this machine; those copies are only needed to resume a recent session (Tether af
    (workflow agents included) is recorded as a child session of its parent;
 2. deletes a local transcript only when it has been idle for ``local_history_retention_days``, no
    process has it open, no ``local_history_exclude_globs`` pattern matches it, Agent Hub's committed
-   import cursor covers that exact content (cursor at its last byte, same tail digest; same device and
-   inode for a plain file), the parser lost no record to a malformed line, and Agent Hub still holds the
+   import cursor covers that exact content (cursor at its last byte, same tail digest; same inode for a
+   plain file), the parser lost no record to a malformed line, and Agent Hub still holds the
    session's events. Everything deleted with it (a Claude Code session's other transcripts, the threads a
    Codex thread spawned) must pass the same guard.
 
@@ -102,7 +102,9 @@ class ImportCursor:
     duplicate: bool = False
 
     def same_source(self, stat: os.stat_result) -> bool:
-        return (self.device, self.inode) == (stat.st_dev, stat.st_ino) and self.byte_offset <= stat.st_size
+        # Btrfs renumbers st_dev on every mount; Agent Hub's stored event identity drops the device and
+        # keeps the inode (session_ingestion._events.source_identity), so this matches on the inode too.
+        return self.inode == stat.st_ino and self.byte_offset <= stat.st_size
 
     def covers(self, path: Path) -> bool:
         """True when the committed cursor sits at the end of this file's (decompressed) content."""

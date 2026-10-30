@@ -242,8 +242,9 @@ def read_incremental_transcript_events(
                 else:
                     offset = legacy_offset
             elif (
-                parser_checkpoint.device != stat.st_dev
-                or parser_checkpoint.inode != stat.st_ino
+                # Btrfs renumbers st_dev on every mount, so the device alone never restarts a file;
+                # stored identities drop it too (source_identity).
+                parser_checkpoint.inode != stat.st_ino
                 or offset > stat.st_size
                 or _tail_digest(transcript, offset) != parser_checkpoint.tail_digest
             ):
@@ -359,8 +360,7 @@ def inspect_transcript_source(
         f"{stat.st_dev}:{stat.st_ino}".encode()
     ).hexdigest()
     identity_matches = (
-        parsed.device == stat.st_dev
-        and parsed.inode == stat.st_ino
+        parsed.inode == stat.st_ino
         and parsed.byte_offset <= stat.st_size
     )
     issues: list[TranscriptSourceIssue] = []
