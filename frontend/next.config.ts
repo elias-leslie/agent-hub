@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
         destination: '/dashboard',
         permanent: false,
       },
+      // Activity was renamed Token share; keep old links and bookmarks working.
+      {
+        source: '/admin',
+        destination: '/token-share',
+        permanent: false,
+      },
     ]
   },
 

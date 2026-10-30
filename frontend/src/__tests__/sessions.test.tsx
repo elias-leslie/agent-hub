@@ -271,7 +271,7 @@ describe('SessionsPage', () => {
     )
     const link =
       screen
-        .getByRole('link', { name: 'Work and admin activity across projects' })
+        .getByRole('link', { name: 'Token share across projects' })
         .getAttribute('href') ?? ''
     const scope = parseSessionListState(
       new URL(link, 'https://example.test').searchParams,

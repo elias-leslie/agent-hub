@@ -155,10 +155,10 @@ function SessionsView() {
       <main className="relative px-0 md:px-4 lg:px-8">
         <div className="page-container">
           <Link
-            href={`/admin?${sessionScopeParams(state)}#activity`}
+            href={`/token-share?${sessionScopeParams(state)}#activity`}
             className="mx-3 mt-3 inline-block text-[13px] text-amber-300 underline focus-ring-amber md:mx-0"
           >
-            Work and admin activity across projects
+            Token share across projects
           </Link>
           <div className="min-w-0 py-3">
             {data.error ? (

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { SessionEfficiency } from '@/app/admin/components/SessionEfficiency'
 import { SessionRow } from '@/app/sessions/components/SessionRow'
+import { SessionEfficiency } from '@/app/token-share/components/SessionEfficiency'
 import { parseActivityCost } from '@/lib/api/activity-cost'
 import type { SessionListItem } from '@/lib/api/sessions'
 import snapshot from './fixtures/session-efficiency-snapshot.json'

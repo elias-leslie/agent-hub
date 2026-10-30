@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { EfficiencyOverview } from '@/app/admin/components/EfficiencyOverview'
 import {
   parseSessionListState,
   sessionScopeParams,
 } from '@/app/sessions/hooks/useSessionListState'
+import { EfficiencyOverview } from '@/app/token-share/components/EfficiencyOverview'
 import { type ActivityCost, parseActivityCost } from '@/lib/api/activity-cost'
 import { type ContextSplit, isContextSplit } from '@/lib/api/context-split'
 import type { DurationSplit } from '@/lib/api/duration-split'

@@ -20,8 +20,8 @@ describe('SidebarNav', () => {
     render(<SidebarNav isCollapsed={false} pathname="/dashboard" />)
 
     expect(
-      screen.getByRole('link', { name: 'Activity Work & admin activity' }),
-    ).toHaveAttribute('href', '/admin')
+      screen.getByRole('link', { name: 'Token share Admin vs other work' }),
+    ).toHaveAttribute('href', '/token-share')
     const group = agentsGroup()
     const links = within(group).getAllByRole('link')
     expect(links.map((link) => link.getAttribute('href'))).toEqual(
@@ -33,7 +33,12 @@ describe('SidebarNav', () => {
       ).toBeInTheDocument()
     }
 
-    for (const href of ['/chat', '/dashboard', '/admin', '/access-control']) {
+    for (const href of [
+      '/chat',
+      '/dashboard',
+      '/token-share',
+      '/access-control',
+    ]) {
       const link = screen
         .getAllByRole('link')
         .find((candidate) => candidate.getAttribute('href') === href)
@@ -43,7 +48,7 @@ describe('SidebarNav', () => {
   })
 
   it.each([
-    ['/admin', '/admin'],
+    ['/token-share', '/token-share'],
     ['/agents/assistant', '/agents'],
     ['/memory', '/memory'],
     ['/runtime-context', '/runtime-context'],
@@ -64,9 +69,9 @@ describe('SidebarNav', () => {
     render(<SidebarNav isCollapsed={true} pathname="/memory" />)
 
     const group = agentsGroup()
-    expect(screen.getByRole('link', { name: 'Activity' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Token share' })).toHaveAttribute(
       'href',
-      '/admin',
+      '/token-share',
     )
     const memory = within(group).getByRole('link', { name: 'Memory' })
     expect(memory).toHaveAttribute('title', 'Memory')

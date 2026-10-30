@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { ActivityCostPanel } from '@/app/admin/components/ActivityCostPanel'
-import { SessionHotspotsPanel } from '@/app/admin/components/SessionHotspotsPanel'
 import { parseSessionListState } from '@/app/sessions/hooks/useSessionListState'
+import { ActivityCostPanel } from '@/app/token-share/components/ActivityCostPanel'
+import { SessionHotspotsPanel } from '@/app/token-share/components/SessionHotspotsPanel'
 import {
   activitySessionParams,
   activitySessionsHref,

@@ -118,10 +118,10 @@ const NAV_ENTRIES: NavEntry[] = [
     ],
   },
   {
-    href: '/admin',
-    label: 'Activity',
+    href: '/token-share',
+    label: 'Token share',
     icon: Activity,
-    description: 'Work & admin activity',
+    description: 'Admin vs other work',
   },
   {
     href: '/access-control',

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { HunterResponseActivity } from '@/app/admin/components/HunterResponseActivity'
+import { HunterResponseActivity } from '@/app/token-share/components/HunterResponseActivity'
 import { parseActivityCost } from '@/lib/api/activity-cost'
 import { activityFixture } from './activity-cost-fixture'
 import sample from './fixtures/hunter-responses.json'

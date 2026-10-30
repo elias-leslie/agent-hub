@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminPage from '@/app/admin/page'
+import TokenSharePage from '@/app/token-share/page'
 import { fetchSessionHotspots, type SessionHotspots } from '@/lib/api'
 import { fetchRequestBlockStats, fetchSessionEfficiency } from '@/lib/api/admin'
 import { activityFixture } from './activity-cost-fixture'
@@ -12,14 +12,14 @@ vi.mock('@/lib/api/admin', () => ({
   fetchSessionEfficiency: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/admin',
+  usePathname: () => '/token-share',
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   useSearchParams: () =>
     new URLSearchParams(
       'accounting_start=2026-10-21T12:00:00Z&accounting_end=2026-10-22T12:00:00Z',
     ),
 }))
-vi.mock('@/app/admin/components/SessionHotspotsPanel', () => ({
+vi.mock('@/app/token-share/components/SessionHotspotsPanel', () => ({
   SessionHotspotsPanel: () => <div>Existing session diagnostics</div>,
 }))
 
@@ -53,7 +53,7 @@ function mount() {
   const Wrapper = createQueryClientWrapper()
   return render(
     <Wrapper>
-      <AdminPage />
+      <TokenSharePage />
     </Wrapper>,
   )
 }
@@ -68,7 +68,7 @@ describe('Activity page loading', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: 'Work and admin activity',
+        name: 'Token share',
       }),
     ).toBeInTheDocument()
     expect(await screen.findByText('50s / 100s')).toBeInTheDocument()
@@ -97,12 +97,10 @@ describe('Activity page loading', () => {
     expect(await screen.findByText('50s / 100s')).toBeInTheDocument()
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Refresh activity data' }),
+        screen.getByRole('button', { name: 'Refresh token share' }),
       ).not.toBeDisabled(),
     )
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Refresh activity data' }),
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh token share' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Showing the last loaded snapshot',
     )

@@ -257,17 +257,17 @@ export default function AccessControlPage() {
                 </a>
 
                 <a
-                  href="/admin"
+                  href="/token-share"
                   className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-5"
                 >
                   <div className="flex items-center gap-3 mb-2">
                     <Settings className="h-5 w-5 text-slate-400" />
                     <h2 className="text-sm font-semibold text-slate-100">
-                      Admin
+                      Token share
                     </h2>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Session hotspots, blocked requests, and schedules
+                    Admin vs other work, blocked requests, session hotspots
                   </p>
                 </a>
 

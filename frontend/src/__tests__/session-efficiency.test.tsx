@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { SessionEfficiency } from '@/app/admin/components/SessionEfficiency'
+import { SessionEfficiency } from '@/app/token-share/components/SessionEfficiency'
 import {
   type ActivityCost,
   activitySessionParams,
