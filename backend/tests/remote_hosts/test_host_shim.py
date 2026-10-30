@@ -118,12 +118,10 @@ def _run(host: dict[str, Any], *argv: str, stdin: str | None = None, env: dict[s
 
 
 def _install(host: dict[str, Any]) -> None:
-    # argv[0] picks the mode, so run through the "agent-hub" name as the host does.
-    link = host["home"] / ".local/bin/agent-hub"
-    link.parent.mkdir(parents=True, exist_ok=True)
-    link.symlink_to(SCRIPT)
-    result = _run(host, str(link), "install", "--token-stdin", stdin=TOKEN + "\n")
+    # The first install runs the checkout file by path; it links the "agent-hub" name itself.
+    result = _run(host, str(SCRIPT), "install", "--token-stdin", stdin=TOKEN + "\n")
     assert result.returncode == 0, result.stderr
+    assert (host["home"] / ".local/bin/agent-hub").resolve() == SCRIPT
 
 
 def test_install_saves_a_private_token_and_shims_only_served_granted_tools(host: dict[str, Any]) -> None:

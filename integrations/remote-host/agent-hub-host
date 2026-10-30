@@ -3,7 +3,8 @@
 
 One file, three names (by the name it runs as):
 
-- ``agent-hub``: ``install``, ``credential push``, ``login status``, ``native``.
+- ``agent-hub`` (or ``agent-hub-host``, the checkout's own name, for the first
+  install): ``install``, ``credential push``, ``login status``, ``native``.
 - ``agent-hub-cred-exec TOOL [ARGS]``: fetch TOOL's credentials, then exec its command.
 - ``<command>`` (a link in ``~/.local/lib/agent-hub/cred-bin``): the same, for the tool
   the install index maps that command to.
@@ -34,6 +35,7 @@ PASSTHROUGH = {"--version", "--help"}
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config/agent-hub"
 SHIM_DIR = HOME / ".local/lib/agent-hub/cred-bin"
+CLI_NAMES = ("agent-hub", "agent-hub-host")
 BIN_DIR = HOME / ".local/bin"
 INDEX_FILE = CONFIG_DIR / "cred-shims.json"
 MAP_CACHE = CONFIG_DIR / "tool-map.json"
@@ -330,7 +332,7 @@ def main(argv: list[str]) -> int:
     name = Path(argv[0]).name
     label = name
     try:
-        if name == "agent-hub":
+        if name in CLI_NAMES:
             return _cli(argv[1:])
         if name == "agent-hub-cred-exec":
             if len(argv) < 2:
@@ -346,7 +348,7 @@ def main(argv: list[str]) -> int:
         label = tool
         launch(tool, name, argv[1:])
     except Refused as exc:
-        prefix = "agent-hub" if name == "agent-hub" else f"agent-hub-cred-exec: {label}"
+        prefix = "agent-hub" if name in CLI_NAMES else f"agent-hub-cred-exec: {label}"
         print(f"{prefix}: {exc}", file=sys.stderr)
         return 1
 
