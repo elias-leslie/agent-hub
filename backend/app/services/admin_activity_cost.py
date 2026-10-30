@@ -235,11 +235,18 @@ def _command_family(words: list[str]) -> tuple[str, str]:
     return "unknown", "unknown"
 
 
-@lru_cache(maxsize=4096)  # a pure function of the command text; session lists re-classify the same commands on every read
 def _shell_family(command: str) -> tuple[str, str]:
     # No execution, expansion, or parsing of scripts. Unsupported syntax remains unknown.
     if any(token in command for token in ("$", "`", "<<", "(", ")")):
         return "unknown", "unknown"
+    return _parsed_shell_family(command)
+
+
+# A pure function of the command text; session lists re-classify a day of commands every accounting window.
+# The cache must hold that whole set: an LRU smaller than one pass hits almost nothing (24h held ~11k parseable
+# commands, ~2 MB). Scripts and heredocs return above without entering it.
+@lru_cache(maxsize=32768)
+def _parsed_shell_family(command: str) -> tuple[str, str]:
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|\n")
         lexer.whitespace = " \t\r"

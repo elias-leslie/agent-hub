@@ -509,3 +509,17 @@ def test_hunter_ambiguous_shell_invocations_stay_unknown(command):
     ], sessions=[hunter_session()])["hunter_responses"]
     assert buckets(data["breakdown"], "responses")["unknown"] == 1
     assert data["rows"][0]["first_source_recon_signal"] is None
+
+
+def test_shell_classification_cache_holds_a_full_list_pass_and_skips_scripts():
+    """Session lists re-classify a day of commands each window; a cache smaller than one pass never hits."""
+    from app.services.admin_activity_cost import _parsed_shell_family, _shell_family
+
+    _parsed_shell_family.cache_clear()
+    commands = [f"git -C /srv/repo-{index} status" for index in range(5000)]
+    for _ in range(2):
+        assert all(_shell_family(command) == ("git", "administration") for command in commands)
+    assert _parsed_shell_family.cache_info().misses == len(commands)
+    assert _shell_family("cat <<'EOF'\nx\nEOF") == ("unknown", "unknown")
+    assert _parsed_shell_family.cache_info().currsize == len(commands)
+    _parsed_shell_family.cache_clear()
