@@ -16,7 +16,7 @@
   ],
   "namespace": "agents",
   "help": {
-    "": "Usage: agents [OPTIONS] COMMAND [ARGS]...\n\n  Agent management (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  list         List agents.\n  get          Get one agent by slug.\n  versions     Show compact agent version history.\n  activity     Show recent agent sessions and request logs.\n  create       Create an agent using the Agent Hub API.\n  preview      Show the effective runtime prompt/context preview for an...\n  update       Update an agent using the Agent Hub API.\n  credentials  Authorized local lab enrollment, refresh, refs and trusted...",
+    "": "Usage: agents [OPTIONS] COMMAND [ARGS]...\n\n  Agent management (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  list         List agents.\n  get          Get one agent by slug.\n  versions     Show compact agent version history.\n  activity     Show recent agent sessions and request logs.\n  create       Create an agent using the Agent Hub API.\n  preview      Show the effective runtime prompt/context preview for an...\n  update       Update an agent using the Agent Hub API.\n  credentials  Authorized local lab enrollment, refresh, refs and trusted...\n  hosts        Remote hosts: register, revoke, grant tools, and the...",
     "list": "Usage: agents list [OPTIONS]\n\n  List agents.\n\nOptions:\n  --active-only / --all         [default: active-only]\n  --coding-only / --non-coding\n  --limit <int range>           [default: 100; 1<=x<=500]\n  --offset <int range>          [default: 0; x>=0]\n  --json                        Print full API payload.\n  --scores                      Show compact assignment rows with all score\n                                dimensions.\n  --by-model                    Group active agents by primary model.\n  --help                        Show this message and exit.",
     "get": "Usage: agents get [OPTIONS] {slug}\n\n  Get one agent by slug.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --json  Print full API payload.\n  --help  Show this message and exit.",
     "versions": "Usage: agents versions [OPTIONS] {slug}\n\n  Show compact agent version history.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --limit <int range>  [default: 20; 1<=x<=100]\n  --json               Print full API payload.\n  --help               Show this message and exit.",
@@ -28,7 +28,17 @@
     "credentials enroll": "Usage: agents credentials enroll [OPTIONS]\n\n  Insert an authorized lab actor once; use refresh for known synthetic actors.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --kind <str>        [required]\n  --input <str>       Current-user-owned private JSON file, or - for piped\n                      stdin  [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
     "credentials refresh": "Usage: agents credentials refresh [OPTIONS]\n\n  Replace an existing synthetic bundle in full; never reset a target account.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --input <str>       Current-user-owned private JSON file, or - for piped\n                      stdin  [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
     "credentials refs": "Usage: agents credentials refs [OPTIONS]\n\n  List identity metadata only; presence does not establish validity.\n\nOptions:\n  --target <str>  One target; omit for every saved target\n  --help          Show this message and exit.",
-    "credentials run": "Usage: agents credentials run [OPTIONS] {command}...\n\n  Launch one trusted local adapter with selected fields; suppress its output.\n\n  Read JSON through EOF from the descriptor in AGENT_HUB_LAB_CREDENTIAL_FD:\n  {schema_version: 1, target: TARGET, credentials: [{reference: REF, values:\n  FIELDS}]}. Only PATH and the descriptor number reach the child's\n  environment. Close the descriptor after reading. A trusted login adapter may\n  drive an isolated browser; an API token does not establish its browser\n  session. Never use a shell, model harness or general browser executable as\n  the recipient.\n\nArguments:\n  command...  Absolute trusted child executable and nonsecret arguments\n              [required]\n\nOptions:\n  --target <str>    [required]\n  --request <path>  [required]\n  --help            Show this message and exit."
+    "credentials run": "Usage: agents credentials run [OPTIONS] {command}...\n\n  Launch one trusted local adapter with selected fields; suppress its output.\n\n  Read JSON through EOF from the descriptor in AGENT_HUB_LAB_CREDENTIAL_FD:\n  {schema_version: 1, target: TARGET, credentials: [{reference: REF, values:\n  FIELDS}]}. Only PATH and the descriptor number reach the child's\n  environment. Close the descriptor after reading. A trusted login adapter may\n  drive an isolated browser; an API token does not establish its browser\n  session. Never use a shell, model harness or general browser executable as\n  the recipient.\n\nArguments:\n  command...  Absolute trusted child executable and nonsecret arguments\n              [required]\n\nOptions:\n  --target <str>    [required]\n  --request <path>  [required]\n  --help            Show this message and exit.",
+    "hosts": "Usage: agents hosts [OPTIONS] COMMAND [ARGS]...\n\n  Remote hosts: register, revoke, grant tools, and the per-tool credential map\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  list            Every registered host, including revoked ones.\n  add             Register a host, or re-admit a revoked one with a fresh...\n  revoke          Invalidate the host's token and drop its grants.\n  grant\n  deny\n  tools           Map rows with stored/expiry state.\n  tool-add\n  tool-remove\n  credential-set  Save (or replace) the value granted hosts fetch for...",
+    "hosts list": "Usage: agents hosts list [OPTIONS]\n\n  Every registered host, including revoked ones.\n\nOptions:\n  --help  Show this message and exit.",
+    "hosts add": "Usage: agents hosts add [OPTIONS] {name}\n\n  Register a host, or re-admit a revoked one with a fresh token and no grants.\n\n  Hand the file to the host with `ssh HOST agent-hub install --token-stdin <\n  FILE`, then delete it.\n\nArguments:\n  name  Host name, e.g. the ssh alias  [required]\n\nOptions:\n  --token-out <path>  New file to receive the token (created 0600)  [required]\n  --help              Show this message and exit.",
+    "hosts revoke": "Usage: agents hosts revoke [OPTIONS] {name}\n\n  Invalidate the host's token and drop its grants.\n\nArguments:\n  name  [required]\n\nOptions:\n  --help  Show this message and exit.",
+    "hosts grant": "Usage: agents hosts grant [OPTIONS] {name} {tool}\n\nArguments:\n  name  [required]\n  tool  Tether tool slug  [required]\n\nOptions:\n  --help  Show this message and exit.",
+    "hosts deny": "Usage: agents hosts deny [OPTIONS] {name} {tool}\n\nArguments:\n  name  [required]\n  tool  Tether tool slug  [required]\n\nOptions:\n  --help  Show this message and exit.",
+    "hosts tools": "Usage: agents hosts tools [OPTIONS]\n\n  Map rows with stored/expiry state.\n\nOptions:\n  --help  Show this message and exit.",
+    "hosts tool-add": "Usage: agents hosts tool-add [OPTIONS]\n\nOptions:\n  --tool <str>              Tether tool slug  [required]\n  --name <str>              [required]\n  --command <str>           Executable the host shim stands in for  [required]\n  --config-dir <str>        The tool's real config dir, ~/-relative\n                            [required]\n  --env-var <str>\n  --auth-file <str>         Path under the config dir\n  --rotates / --no-rotates  [default: no-rotates]\n  --description <str>\n  --help                    Show this message and exit.",
+    "hosts tool-remove": "Usage: agents hosts tool-remove [OPTIONS] {tool} {name}\n\nArguments:\n  tool  [required]\n  name  [required]\n\nOptions:\n  --help  Show this message and exit.",
+    "hosts credential-set": "Usage: agents hosts credential-set [OPTIONS] {tool} {name}\n\n  Save (or replace) the value granted hosts fetch for TOOL/NAME. Hosts push\n  theirs with `agent-hub credential push`.\n\nArguments:\n  tool  [required]\n  name  [required]\n\nOptions:\n  --input <str>       Your private (0600) file, or - for piped stdin\n                      [required]\n  --expires-at <str>  ISO time with timezone\n  --help              Show this message and exit."
   },
   "usage": [
     {
@@ -102,6 +112,69 @@
       "cmd": "st agents credentials run --target TARGET --request FILE -- /absolute/trusted-child [ARGS]",
       "when": "trusted local launcher supplies selected lab fields in an inherited descriptor; API tokens do not establish browser sessions",
       "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.list",
+      "tier": "reference",
+      "cmd": "st agents hosts list",
+      "when": "list remote hosts, their granted tools and when each last fetched",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.add",
+      "tier": "reference",
+      "cmd": "st agents hosts add NAME --token-out FILE",
+      "when": "register a remote host; its bearer token is written once to a new 0600 file, never printed",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.revoke",
+      "tier": "reference",
+      "cmd": "st agents hosts revoke NAME",
+      "when": "stop every future credential fetch by a host",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.grant",
+      "tier": "reference",
+      "cmd": "st agents hosts grant NAME TOOL",
+      "when": "let a host fetch a tool's served credentials at launch",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.deny",
+      "tier": "reference",
+      "cmd": "st agents hosts deny NAME TOOL",
+      "when": "remove a host's grant for a tool",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.tools",
+      "tier": "reference",
+      "cmd": "st agents hosts tools",
+      "when": "show the per-tool credential map and whether Agent Hub holds each served value (never the values)",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.tool-add",
+      "tier": "reference",
+      "cmd": "st agents hosts tool-add --tool SLUG --name NAME --command CMD --config-dir ~/DIR (--env-var VAR | --auth-file FILE) [--rotates]",
+      "when": "add a credential row to the per-tool map",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.tool-remove",
+      "tier": "reference",
+      "cmd": "st agents hosts tool-remove TOOL NAME",
+      "when": "remove a map row and any value stored for it",
+      "on_demand": "agent administration"
+    },
+    {
+      "surface": "st.agents.hosts.credential-set",
+      "tier": "reference",
+      "cmd": "st agents hosts credential-set TOOL NAME --input FILE|- [--expires-at ISO]",
+      "when": "store a non-rotating tool credential created on the workstation; private file or piped stdin only, never argv",
+      "on_demand": "agent administration"
     }
   ],
   "help_options": {
@@ -111,6 +184,9 @@
       "--help": 0
     },
     "credentials": {
+      "--help": 0
+    },
+    "hosts": {
       "--help": 0
     }
   }

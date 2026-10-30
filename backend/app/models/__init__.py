@@ -46,6 +46,7 @@ from .native_observation import (
 )
 from .project_permission import ProjectPermission
 from .prompt import AgentPrompt, Prompt, PromptRevision
+from .remote_host import RemoteHost, RemoteToolCredential
 from .runtime_context import RuntimeContextOverride
 from .session import (
     CostLog,
@@ -113,6 +114,8 @@ __all__ = [
     "ProjectPermission",
     "Prompt",
     "PromptRevision",
+    "RemoteHost",
+    "RemoteToolCredential",
     "RequestLog",
     "RuntimeContextOverride",
     "Session",

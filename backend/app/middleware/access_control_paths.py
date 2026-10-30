@@ -31,6 +31,7 @@ EXEMPT_PATHS = frozenset(
 EXEMPT_PREFIXES = (
     "/ws/",  # WebSocket connections (uses different auth model)
     "/api/memory/capture/stream",  # SSE stream (BaseHTTPMiddleware buffers streaming responses)
+    "/api/host-credentials/",  # Remote host bearer token checked in the route; values never request-logged
 )
 
 # Path prefixes whose GET/HEAD reads bypass identification but still log requests.

@@ -15,7 +15,7 @@ from app.db import get_db
 from app.services.credential_manager import get_credential_manager
 from app.services.credential_upsert import reset_provider_cooldown_after_credential_change
 from app.services.system_credentials import (
-    is_lab_credential_provider,
+    is_scoped_credential_provider,
     is_system_credential_provider,
 )
 from app.storage.credentials import (
@@ -38,7 +38,7 @@ VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token", "account_id
 
 def _is_visible_credential_provider(provider: str) -> bool:
     """Return whether a credential provider should be exposed via the public API."""
-    return not (is_system_credential_provider(provider) or is_lab_credential_provider(provider))
+    return not (is_system_credential_provider(provider) or is_scoped_credential_provider(provider))
 
 
 def _require_visible_provider(provider: str) -> None:

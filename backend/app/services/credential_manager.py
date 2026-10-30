@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Credential
-from app.services.system_credentials import is_lab_credential_provider
+from app.services.system_credentials import is_scoped_credential_provider
 from app.storage.credentials import EncryptionError, decrypt_value
 
 logger = logging.getLogger(__name__)
@@ -92,7 +92,7 @@ class CredentialManager:
 
             loaded = 0
             for cred in credentials:
-                if is_lab_credential_provider(cred.provider):
+                if is_scoped_credential_provider(cred.provider):
                     continue
                 key = f"{cred.provider}:{cred.credential_type}"
                 try:
@@ -191,8 +191,8 @@ class CredentialManager:
 
         Called after CRUD operations to keep cache in sync.
         """
-        if is_lab_credential_provider(provider):
-            raise ValueError("Lab credentials cannot enter the provider cache")
+        if is_scoped_credential_provider(provider):
+            raise ValueError("Lab and host-tool credentials cannot enter the provider cache")
         key = f"{provider}:{credential_type}"
         self._cache[key] = value
         if provider == "gemini" and credential_type == "api_key":
@@ -207,8 +207,8 @@ class CredentialManager:
 
     def set_api_keys(self, provider: str, values: list[str]) -> None:
         """Atomically set ordered API keys for a provider."""
-        if is_lab_credential_provider(provider):
-            raise ValueError("Lab credentials cannot enter the provider cache")
+        if is_scoped_credential_provider(provider):
+            raise ValueError("Lab and host-tool credentials cannot enter the provider cache")
         key = f"{provider}:api_key"
         ordered = self._dedupe(values)
         if not ordered:
@@ -224,8 +224,8 @@ class CredentialManager:
 
         Used for updates so the multi-key cache doesn't retain stale values.
         """
-        if is_lab_credential_provider(provider):
-            raise ValueError("Lab credentials cannot enter the provider cache")
+        if is_scoped_credential_provider(provider):
+            raise ValueError("Lab and host-tool credentials cannot enter the provider cache")
         key = f"{provider}:{credential_type}"
         values = self._multi_cache.get(key)
         if not values:

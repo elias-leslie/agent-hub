@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""Agent Hub on a remote host: launch-time credentials and sign-in status.
+
+One file, three names (by the name it runs as):
+
+- ``agent-hub``: ``install``, ``credential push``, ``login status``, ``native``.
+- ``agent-hub-cred-exec TOOL [ARGS]``: fetch TOOL's credentials, then exec its command.
+- ``<command>`` (a link in ``~/.local/lib/agent-hub/cred-bin``): the same, for the tool
+  the install index maps that command to.
+
+The shim fetches the tool's non-rotating credentials from Agent Hub with this host's
+token, sets the env var or writes a 0600 file under ``$XDG_RUNTIME_DIR`` linked into
+the tool's real config dir, then execs the next ``<command>`` on PATH (the context
+launcher). It fails closed with a one-line reason; ``--version`` and ``--help`` pass
+straight through. Rotating logins (Codex, Pi OAuth, agy) stay on this host's disk and
+are only read for status. Standard library only: the host has no Agent Hub install.
+"""
+
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import stat
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any, NoReturn
+
+PASSTHROUGH = {"--version", "--help"}
+HOME = Path.home()
+CONFIG_DIR = HOME / ".config/agent-hub"
+SHIM_DIR = HOME / ".local/lib/agent-hub/cred-bin"
+BIN_DIR = HOME / ".local/bin"
+INDEX_FILE = CONFIG_DIR / "cred-shims.json"
+MAP_CACHE = CONFIG_DIR / "tool-map.json"
+TIMEOUT = 10
+STATES = ("signed_in", "expired", "unknown", "needs_sign_in")  # best first, for a tool's overall state
+
+
+class Refused(Exception):
+    """A one-line reason the launch or command cannot go ahead. Never carries a value."""
+
+
+def _hub_url() -> str:
+    return os.environ.get("AGENT_HUB_URL", "http://127.0.0.1:8003").rstrip("/")
+
+
+def _token_file() -> Path:
+    return Path(os.environ.get("AGENT_HUB_HOST_TOKEN_FILE", CONFIG_DIR / "host-token"))
+
+
+def _token() -> str:
+    path = _token_file()
+    try:
+        info = path.stat()
+        token = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        raise Refused(f"no host token at {path} (run: agent-hub install --token-stdin)") from None
+    except OSError:
+        raise Refused(f"cannot read the host token at {path}") from None
+    if info.st_mode & 0o077:
+        raise Refused(f"host token {path} must be private (chmod 600)")
+    if not token:
+        raise Refused(f"host token {path} is empty")
+    return token
+
+
+def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(
+        _hub_url() + path, data=data, method=method,
+        headers={"Authorization": f"Bearer {_token()}", "Accept": "application/json",
+                 **({"Content-Type": "application/json"} if data else {})},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310 - fixed scheme from config
+            return json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        reasons = {
+            401: "this host's token is unknown or revoked",
+            403: "this host is not granted that tool",
+            404: "Agent Hub holds no current credential for that tool",
+        }
+        raise Refused(reasons.get(exc.code, f"Agent Hub answered HTTP {exc.code}")) from None
+    except (urllib.error.URLError, OSError):
+        raise Refused(f"Agent Hub unreachable at {_hub_url()} (is the ssh -R 8003 link up?)") from None
+    except ValueError:
+        raise Refused("Agent Hub sent an unreadable answer") from None
+
+
+# Launch ----------------------------------------------------------------------
+
+
+def _next_binary(command: str) -> str:
+    """The first `command` on PATH that is not this script (so not any cred-bin link)."""
+    me = Path(__file__).resolve()
+    for entry in os.environ.get("PATH", os.defpath).split(os.pathsep):
+        candidate = Path(entry or ".") / command
+        try:
+            if candidate.resolve() == me or not candidate.is_file() or not os.access(candidate, os.X_OK):
+                continue
+        except OSError:
+            continue
+        return str(candidate)
+    raise Refused(f"no {command} on PATH after the credential shim")
+
+
+def _runtime_dir(tool: str) -> Path:
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    if not base:
+        raise Refused("XDG_RUNTIME_DIR is not set; refusing to write a credential file to disk")
+    try:
+        info = os.stat(base)
+    except OSError:
+        raise Refused(f"{base} does not exist") from None
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        raise Refused(f"{base} is not a private runtime dir")
+    path = Path(base) / "agent-hub-creds" / tool
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for part in (path.parent, path):
+        os.chmod(part, 0o700)
+    return path
+
+
+def _place_file(tool: str, item: dict[str, Any]) -> None:
+    """Write the value to a private runtime file and link the tool's auth file to it."""
+    target = Path(os.path.expanduser(item["config_dir"])) / item["auth_file"]
+    source = _runtime_dir(tool) / f"{item['name']}-{Path(item['auth_file']).name}"
+    if target.is_symlink():
+        if Path(os.readlink(target)) != source:
+            raise Refused(f"{target} links somewhere else; leaving it alone")
+    elif target.exists():
+        raise Refused(f"{target} holds a login on this host; remove it or deny the tool in Agent Hub")
+    staging = source.with_name(source.name + ".tmp")
+    fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(item["value"])
+    os.replace(staging, source)
+    if not target.is_symlink():
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        link = target.with_name(f".{target.name}.agent-hub-link")
+        link.unlink(missing_ok=True)
+        os.symlink(source, link)
+        os.replace(link, target)
+
+
+def launch(tool: str, command: str, args: list[str]) -> NoReturn:
+    env = dict(os.environ)
+    if not (args and args[0] in PASSTHROUGH):
+        answer = _request("GET", f"/api/host-credentials/{urllib.parse.quote(tool, safe='')}")
+        items = answer.get("credentials") if isinstance(answer, dict) else None
+        if not items:
+            raise Refused("Agent Hub holds no current credential for that tool")
+        for item in items:
+            if item.get("env_var"):
+                env[item["env_var"]] = item["value"]
+            elif item.get("auth_file"):
+                _place_file(tool, item)
+            else:
+                raise Refused("Agent Hub sent a credential with no delivery")
+    binary = _next_binary(command)
+    os.execve(binary, [command, *args], env)
+    raise AssertionError("unreachable")
+
+
+def _index() -> dict[str, str]:
+    try:
+        data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+# Commands ------------------------------------------------------------------
+
+
+def _tool_map() -> dict[str, Any]:
+    answer = _request("GET", "/api/host-credentials/tools")
+    CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    MAP_CACHE.write_text(json.dumps(answer, indent=2) + "\n", encoding="utf-8")
+    return answer
+
+
+def _link(path: Path, source: Path) -> None:
+    if path.is_symlink() or not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.unlink(missing_ok=True)
+        path.symlink_to(source)
+    elif path.resolve() != source:
+        raise Refused(f"{path} exists and is not ours; leaving it alone")
+
+
+def install(token_stdin: bool) -> dict[str, Any]:
+    """Save the host token (from stdin), link the commands, and shim each granted served tool."""
+    me = Path(__file__).resolve()
+    if token_stdin:
+        token = sys.stdin.read().strip()
+        if not token:
+            raise Refused("no token on stdin")
+        path = _token_file()
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        staging = path.with_name(path.name + ".tmp")
+        fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(token + "\n")
+        os.replace(staging, path)
+    for name in ("agent-hub", "agent-hub-cred-exec"):
+        _link(BIN_DIR / name, me)
+    answer = _tool_map()
+    granted = set(answer.get("granted_tools", []))
+    shims: dict[str, str] = {}
+    for row in answer.get("credentials", []):
+        if row["tool_slug"] in granted and not row["rotates"]:
+            if shims.get(row["command"], row["tool_slug"]) != row["tool_slug"]:
+                raise Refused(f"two served tools use the command {row['command']}")
+            shims[row["command"]] = row["tool_slug"]
+    SHIM_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for stale in SHIM_DIR.iterdir():
+        if stale.is_symlink() and stale.resolve() == me and stale.name not in shims:
+            stale.unlink()
+    for command in shims:
+        _link(SHIM_DIR / command, me)
+    INDEX_FILE.write_text(json.dumps(shims, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"host": answer.get("host"), "shim_dir": str(SHIM_DIR), "shims": shims,
+            "note": f"{SHIM_DIR} must come first on PATH for agent sessions"}
+
+
+def push(tool: str, name: str | None, expires_at: str | None) -> dict[str, Any]:
+    rows = [row for row in _tool_map().get("credentials", []) if row["tool_slug"] == tool and not row["rotates"]]
+    if name is not None:
+        rows = [row for row in rows if row["name"] == name]
+    if len(rows) != 1:
+        names = ", ".join(row["name"] for row in rows) or "none"
+        raise Refused(f"pick one served credential of {tool} with --name (served: {names})")
+    value = (getpass.getpass(f"Paste the {tool} {rows[0]['name']} credential (hidden): ")
+             if sys.stdin.isatty() else sys.stdin.read()).strip()
+    if not value:
+        raise Refused("no credential given")
+    quoted = "/".join(urllib.parse.quote(part, safe="") for part in (tool, rows[0]["name"]))
+    state = _request("PUT", f"/api/host-credentials/{quoted}", {"value": value, "expires_at": expires_at})
+    return {"tool": tool, "name": rows[0]["name"], "stored": True, "expires_at": state.get("expires_at")}
+
+
+def _local_state(row: dict[str, Any]) -> dict[str, Any]:
+    path = Path(os.path.expanduser(row["config_dir"])) / row["auth_file"]
+    source = f"host:{path}"
+    if not path.exists():
+        return {"state": "needs_sign_in", "source": source}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"state": "unknown", "source": source, "detail": "login file unreadable"}
+    return {"state": "signed_in" if data else "needs_sign_in", "source": source}
+
+
+def _served_state(row: dict[str, Any], granted: set[str] | None) -> dict[str, Any]:
+    if granted is None:
+        return {"state": "unknown", "source": "agent-hub", "detail": "Agent Hub unreachable"}
+    if row["tool_slug"] not in granted:
+        return {"state": "needs_sign_in", "source": "agent-hub", "detail": "not granted to this host"}
+    if row.get("undecodable"):
+        return {"state": "unknown", "source": "agent-hub", "detail": "stored value unreadable"}
+    if not row.get("stored"):
+        return {"state": "needs_sign_in", "source": "agent-hub"}
+    state = "expired" if row.get("expired") else "signed_in"
+    return {"state": state, "source": "agent-hub", "expires_at": row.get("expires_at")}
+
+
+def status() -> dict[str, Any]:
+    """Per tool: signed_in / needs_sign_in / expired / unknown, and where that comes from."""
+    try:
+        answer, reachable, error = _tool_map(), True, None
+    except Refused as exc:
+        reachable, error = False, str(exc)
+        try:
+            answer = json.loads(MAP_CACHE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            answer = {}
+    granted = set(answer.get("granted_tools", [])) if reachable else None
+    tools: dict[str, list[dict[str, Any]]] = {}
+    for row in answer.get("credentials", []):
+        detail = _local_state(row) if row["rotates"] else _served_state(row, granted)
+        tools.setdefault(row["tool_slug"], []).append({"name": row["name"], "rotates": row["rotates"], **detail})
+    report = []
+    for tool, credentials in sorted(tools.items()):
+        best = min(credentials, key=lambda item: STATES.index(item["state"]))
+        report.append({"tool": tool, "state": best["state"], "source": best["source"], "credentials": credentials})
+    return {"host": answer.get("host"), "agent_hub": "reachable" if reachable else error, "tools": report}
+
+
+def _cli(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="agent-hub", description="Agent Hub credentials on this host")
+    commands = parser.add_subparsers(dest="command", required=True)
+    setup = commands.add_parser("install", help="save the host token and install the credential shims")
+    setup.add_argument("--token-stdin", action="store_true", help="read this host's token from stdin")
+    credential = commands.add_parser("credential").add_subparsers(dest="action", required=True)
+    pushing = credential.add_parser("push", help="save a non-rotating credential created here (stdin or hidden prompt)")
+    pushing.add_argument("tool")
+    pushing.add_argument("--name")
+    pushing.add_argument("--expires-at", help="ISO time with timezone")
+    login = commands.add_parser("login").add_subparsers(dest="action", required=True)
+    login_status = login.add_parser("status", help="sign-in state per tool")
+    login_status.add_argument("--json", action="store_true")
+    native = commands.add_parser("native", help="run a tool without served credentials (e.g. to sign in)")
+    native.add_argument("tool_command")
+    native.add_argument("args", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    if args.command == "native":
+        os.execv(_next_binary(args.tool_command), [args.tool_command, *args.args])
+    if args.command == "install":
+        result = install(args.token_stdin)
+    elif args.command == "credential":
+        result = push(args.tool, args.name, args.expires_at)
+    else:
+        result = status()
+        if not args.json:
+            print(f"Agent Hub: {result['agent_hub']}")
+            for tool in result["tools"]:
+                print(f"{tool['tool']:<14} {tool['state']:<14} {tool['source']}")
+            return 0
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    name = Path(argv[0]).name
+    label = name
+    try:
+        if name == "agent-hub":
+            return _cli(argv[1:])
+        if name == "agent-hub-cred-exec":
+            if len(argv) < 2:
+                raise Refused("usage: agent-hub-cred-exec TOOL [ARGS...]")
+            label = argv[1]
+            commands = [command for command, slug in _index().items() if slug == label]
+            if len(commands) != 1:
+                raise Refused("no installed shim for this tool (run: agent-hub install)")
+            launch(label, commands[0], argv[2:])
+        tool = _index().get(name)
+        if tool is None:
+            raise Refused("no installed shim for this command (run: agent-hub install)")
+        label = tool
+        launch(tool, name, argv[1:])
+    except Refused as exc:
+        prefix = "agent-hub" if name == "agent-hub" else f"agent-hub-cred-exec: {label}"
+        print(f"{prefix}: {exc}", file=sys.stderr)
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

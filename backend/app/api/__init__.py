@@ -32,6 +32,8 @@ from app.api.project_agent_context import router as project_agent_context_router
 from app.api.project_permissions import router as project_permissions_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router
+from app.api.remote_hosts import host_router as host_credentials_router
+from app.api.remote_hosts import owner_router as remote_hosts_router
 from app.api.runtime_context import router as runtime_context_router
 from app.api.session_close_settings import router as session_close_settings_router
 from app.api.session_ingestion import router as session_ingestion_router
@@ -55,6 +57,8 @@ router.include_router(db_router)  # Has its own prefix /admin/db and tags
 router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
 router.include_router(lab_credentials_router, tags=["lab-credentials"])  # Owner-only agent logins
+router.include_router(remote_hosts_router, tags=["remote-hosts"])  # Owner-only hosts and tool credential map
+router.include_router(host_credentials_router, tags=["remote-hosts"])  # Host-token credential fetch/push
 router.include_router(session_close_settings_router)  # before /sessions/{id}
 router.include_router(sessions_router, tags=["sessions"])
 router.include_router(session_stream_router, tags=["sessions"])
