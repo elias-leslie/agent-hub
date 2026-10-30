@@ -297,6 +297,10 @@ class Settings(BaseSettings):
     # Silence on a streaming connection before a comment line keeps proxies from closing it.
     stream_heartbeat_seconds: float = Field(default=15.0, gt=0)
 
+    # Remote agent hosts send native transcripts (app/services/remote_host_sessions.py) in pieces of at most
+    # this many bytes, and Agent Hub keeps at most this much of one transcript.
+    host_transcript_chunk_max_bytes: int = Field(default=4 * 1024 * 1024, ge=1024)
+    host_transcript_max_bytes: int = Field(default=1024 * 1024 * 1024, ge=1024)
 
 
 @lru_cache

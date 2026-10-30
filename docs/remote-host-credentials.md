@@ -61,9 +61,16 @@ Host-token API (`Authorization: Bearer <token>`; dependency `require_host` in
   tool. Responses are sent `Cache-Control: no-store`.
 - `PUT /api/host-credentials/TOOL/NAME`: stores a non-rotating value for a granted
   tool.
+- `GET|POST /api/host-sessions/transcripts/SURFACE/SESSION?path=&offset=`: the
+  size of Agent Hub's copy of a host transcript, and appending raw bytes at that
+  offset (409 with the size when it differs). Pieces up to
+  `host_transcript_chunk_max_bytes`, copies up to `host_transcript_max_bytes`.
+- `POST /api/host-sessions/sync`, `/work-role`, `/retire-pi`: record a session
+  from its copy, bind a launch work role, finalize a retired workload's Pi
+  sessions. Each refuses a session recorded for another host.
 
-`/api/host-credentials/` is exempt from the access-control middleware, so these
-requests are never request-logged. Errors are fixed text. The host reaches Agent
+`/api/host-credentials/` and `/api/host-sessions/` are exempt from the
+access-control middleware, so these requests are never request-logged. Errors are fixed text. The host reaches Agent
 Hub on its own loopback through the link's `ssh -R 8003` forward.
 
 ## On the host

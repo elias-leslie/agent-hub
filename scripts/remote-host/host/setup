@@ -110,7 +110,7 @@ if ! cmp -s "$lib/sshd-agent-host.conf" "$sshd_dropin" || [[ -e /etc/ssh/sshd_co
     say "installed $sshd_dropin and reloaded sshd"
 fi
 units_changed=0
-for unit in agent-host-idle.service agent-host-idle.timer; do
+for unit in agent-host-idle.service agent-host-idle.timer agent-hub-codex-sync@.service agent-hub-codex-sync@.timer; do
     if ! cmp -s "$lib/systemd/$unit" "/etc/systemd/system/$unit"; then
         sudo -n install -m 0644 "$lib/systemd/$unit" "/etc/systemd/system/$unit"
         units_changed=1
@@ -119,6 +119,7 @@ for unit in agent-host-idle.service agent-host-idle.timer; do
 done
 ((units_changed)) && sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now --quiet agent-host-idle.timer
+sudo -n systemctl enable --now --quiet "agent-hub-codex-sync@$(id -un).timer"
 
 # --- toolchains the template lacks --------------------------------------
 # Rust for hunts and labs on Rust targets: Ubuntu's rustup with a minimal

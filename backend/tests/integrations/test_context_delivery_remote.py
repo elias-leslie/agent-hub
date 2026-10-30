@@ -105,7 +105,7 @@ def test_remote_cli_fails_clearly_without_a_token_or_a_reachable_hub(
     refused = _run({"AGENT_HUB_URL": url, "AGENT_HUB_HOST_TOKEN_FILE": str(wrong)}, "deliver", "--surface", "x")
     assert refused.returncode == 2 and "HTTP 401" in refused.stderr and "not-the-token" not in refused.stderr
 
-    local_only = _run({}, "sync-pi", "--session", "s")
+    local_only = _run({}, "maintenance", "--project", "agent-hub")
     assert local_only.returncode == 2 and "unavailable on a remote host" in local_only.stderr
 
 
@@ -121,7 +121,7 @@ async def test_host_route_records_which_host_asked(monkeypatch: pytest.MonkeyPat
         consumer_surface="claude_code", client_metadata={"remote_host": "spoofed", "source": "startup"}
     )
 
-    result = await host_context.deliver_host_context(request, HostIdentity("agent-work", ()), db=object())  # type: ignore[arg-type]
+    result = await host_context.deliver_host_context(request, HostIdentity("agent-work", ()), db=object())
 
     assert result == "delivered"
     assert built[0].client_metadata == {"remote_host": "agent-work", "source": "startup"}

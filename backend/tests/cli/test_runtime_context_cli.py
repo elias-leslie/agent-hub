@@ -133,7 +133,7 @@ async def test_native_work_role_binding_uses_canonical_upsert(monkeypatch, surfa
 
     from app.cli import runtime_context
     from app.services import runtime_context as service_context
-    from app.services import session_ingestion
+    from app.services.session_ingestion import native_work_role
 
     sid = "00000000-0000-4000-8000-000000000001"
     role = {"id": "implementation", "source": "tether:root:fixture"}
@@ -146,7 +146,7 @@ async def test_native_work_role_binding_uses_canonical_upsert(monkeypatch, surfa
     monkeypatch.setattr(runtime_context, "async_session", MagicMock(return_value=scope))
     monkeypatch.setattr(service_context, "_resolve_canonical_project_id", AsyncMock(return_value="fixture"))
     upsert = AsyncMock()
-    monkeypatch.setattr(session_ingestion, "upsert_session", upsert)
+    monkeypatch.setattr(native_work_role, "upsert_session", upsert)
     args = _build_parser().parse_args(["bind-native-work-role", "--surface", surface,
         "--session", sid, "--cwd", "/fixture", "--work-role-json", json.dumps(role)])
     await runtime_context._bind_native_work_role(args)

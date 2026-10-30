@@ -38,9 +38,19 @@ re-runnable: a second run changes nothing unless the workstation changed.
   `agent-hub-context` falls through to `agent-hub-context-remote`. It posts to
   Agent Hub's `/api/host-context/deliver` over the `-R 8003` forward, using the
   host token in `~/.config/agent-hub/host-token`. Delivery fails open, like on
-  the workstation. `sync-pi`, `bind-native-work-role` and the other subcommands
-  that write local session records report that they are unavailable. So host
-  transcripts are not ingested yet.
+  the workstation.
+- **Session records.** Host sessions are recorded in Agent Hub like local ones,
+  with `host` set to the host's name. `sync-pi` (Pi extension),
+  `sync-transcript` (Claude Code Stop hook), `sync-codex` (the
+  `agent-hub-codex-sync@<user>.timer`, every 2 minutes) and
+  `bind-native-work-role` (SessionStart hook) send the transcript's new bytes to
+  `/api/host-sessions/*` with the host token, then ask Agent Hub to ingest them.
+  Agent Hub keeps the copy under
+  `~/.local/state/agent-hub/host-homes/<host>/`, laid out like the host's home,
+  so transcript readers and analytics treat it as one more native home. A host
+  only reads and writes its own sessions. Like delivery, these fail open: the
+  harness keeps running and the CLI prints one line and exits 2. `maintenance`,
+  `feedback`, `render` and `status` still say they are workstation-only.
 - **`st`.** `~/bin/st` is a guard (`host/st`) in front of the mirrored
   SummitFlow launcher, with the backend env from `uv sync --locked`.
   - Commands listed in `host/st-workstation-only` are refused at once with a

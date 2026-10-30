@@ -183,6 +183,8 @@ export interface SessionListItem {
   attribution_label?: string | null
   attribution_detail?: string | null
   current_branch?: string | null
+  /** Machine the session ran on, when it was recorded. */
+  host?: string | null
   summary_oneliner?: string | null
   live_activity?: LiveActivity | null
   declared_scope_paths?: string[]

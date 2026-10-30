@@ -33,6 +33,7 @@ EXEMPT_PREFIXES = (
     "/api/memory/capture/stream",  # SSE stream (BaseHTTPMiddleware buffers streaming responses)
     "/api/host-credentials/",  # Remote host bearer token checked in the route; values never request-logged
     "/api/host-context/",  # Remote host bearer token checked in the route
+    "/api/host-sessions/",  # Remote host bearer token checked in the route; bodies are transcripts
 )
 
 # Path prefixes whose GET/HEAD reads bypass identification but still log requests.

@@ -36,7 +36,8 @@ async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
                           project_id: str, cwd: str, provider: str, model: str,
                           phase: str = "idle", aico_session_id: str | None = None,
                           work_role: dict[str, str] | None = None,
-                          retired_by_tether: bool = False) -> dict:
+                          retired_by_tether: bool = False,
+                          extra_metadata: dict[str, str] | None = None) -> dict:
     path, header = await asyncio.to_thread(pi_header, transcript, session_id)
     existing = (await db.execute(select(Session).where(Session.id == session_id))).scalar_one_or_none()
     if existing is not None:
@@ -49,6 +50,7 @@ async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
                            existing.models_used if existing is not None else None),
         session_type="pi", cwd=cwd, request_source="pi-extension",
         provider_metadata={
+            **(extra_metadata or {}),
             **({"work_role": work_role} if work_role is not None else {}),
             "transcript_path": str(path), "harness": "pi", "native_session_id": session_id,
             "aico_session_id": aico_session_id or ((existing.provider_metadata or {}).get("aico_session_id") if existing else None),
@@ -80,15 +82,21 @@ async def sync_pi_session(db: AsyncSession, *, session_id: str, transcript: str,
             "request_errors": (request_errors or {}).get("count", 0)}
 
 
-async def retire_pi_sessions(db: AsyncSession, aico_session_id: str) -> dict:
-    """Finalize retained transcripts after Tether retires this exact workload."""
+async def retire_pi_sessions(db: AsyncSession, aico_session_id: str, *, remote_host: str | None = None) -> dict:
+    """Finalize retained transcripts after Tether retires this exact workload.
+
+    With ``remote_host``, only that agent host's sessions are retired.
+    """
     if not re.fullmatch(r"aico-widget-[0-9a-f]{8}", aico_session_id):
         raise ValueError("An exact Tether ownership ID is required")
-    sessions = (await db.execute(select(Session).where(
+    query = select(Session).where(
         Session.session_type == "pi",
         Session.provider_metadata["harness"].as_string() == "pi",
         Session.provider_metadata["aico_session_id"].as_string() == aico_session_id,
-    ))).scalars().all()
+    )
+    if remote_host is not None:
+        query = query.where(Session.provider_metadata["remote_host"].as_string() == remote_host)
+    sessions = (await db.execute(query)).scalars().all()
     closed: list[str] = []
     unavailable: list[str] = []
     for session in sessions:

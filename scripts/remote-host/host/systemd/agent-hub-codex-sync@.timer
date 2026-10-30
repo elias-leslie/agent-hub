@@ -1,0 +1,10 @@
+[Unit]
+Description=Send %i's Codex transcripts to Agent Hub every two minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

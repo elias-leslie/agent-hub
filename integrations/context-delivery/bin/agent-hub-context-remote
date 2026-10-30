@@ -4,9 +4,15 @@
 A host has no Agent Hub database, so `agent-hub-context` execs this when the
 backend environment is absent. `deliver` takes the same arguments and prints
 the same contract as the database-backed CLI, fetched from
-`/api/host-context/deliver` with the host's bearer token. Commands that read
-local transcripts or write session records are unavailable here and say so;
-the client treats that as degraded, never as a block.
+`/api/host-context/deliver` with the host's bearer token.
+
+Session records go to `/api/host-sessions/`: `sync-pi`, `bind-native-work-role`
+and `retire-pi` take the database-backed CLI's arguments; `sync-transcript` is
+the Claude Code Stop hook's upsert, ingest, finalize and close; `sync-codex` is
+the host's codex-session-sync. Each sends the transcript's new bytes, then asks
+Agent Hub to record the session from its copy. Maintenance, feedback, render and
+status stay workstation-only and say so. Any failure is one line on stderr and
+exit 2, which the client treats as degraded, never as a block.
 """
 
 from __future__ import annotations
@@ -15,8 +21,11 @@ import argparse
 import http.client
 import json
 import os
+import subprocess
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -24,7 +33,14 @@ from typing import Any
 DEFAULT_URL = "http://127.0.0.1:8003"
 DEFAULT_TOKEN_FILE = "~/.config/agent-hub/host-token"
 DELIVER_PATH = "/api/host-context/deliver"
+SESSIONS_PATH = "/api/host-sessions"
 TIMEOUT_SECONDS = 10.0
+# Agent Hub's per-request limit (host_transcript_chunk_max_bytes) is 4 MiB; stay under it.
+CHUNK_BYTES = 2 * 1024 * 1024
+# Where each harness keeps transcripts under the home; Agent Hub mirrors the same layout.
+SURFACE_ROOTS = {"claude_code": ".claude/projects", "codex": ".codex/sessions", "pi": ".pi/agent/sessions"}
+CODEX_STATE = "~/.local/state/agent-hub/host-codex-sync.json"
+CODEX_RECENT_HOURS = 24
 # Never through a proxy from the environment: the request carries the host token.
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -45,12 +61,39 @@ def _parser() -> argparse.ArgumentParser:
         deliver.add_argument(option)
     deliver.add_argument("--optional-context", choices=("on", "off"), default="on")
     deliver.add_argument("--format", choices=("text", "json"), default="text")
+
+    # The database-backed CLI's arguments, so agent-hub-context-client runs either.
+    sync_pi = subparsers.add_parser("sync-pi")
+    for option in ("--session", "--transcript", "--cwd", "--provider", "--model"):
+        sync_pi.add_argument(option, required=True)
+    sync_pi.add_argument("--project")
+    sync_pi.add_argument("--phase", choices=("idle", "working", "shutdown"), default="idle")
+    sync_pi.add_argument("--aico-session")
+    sync_pi.add_argument("--work-role-json")
+    bind = subparsers.add_parser("bind-native-work-role")
+    bind.add_argument("--surface", required=True, choices=("codex", "claude_code"))
+    for option in ("--session", "--cwd", "--work-role-json"):
+        bind.add_argument(option, required=True)
+    bind.add_argument("--project")
+    bind.add_argument("--model")
+    retire = subparsers.add_parser("retire-pi")
+    retire.add_argument("--aico-session", required=True)
+
+    transcript = subparsers.add_parser("sync-transcript", help="Record a Claude Code or Codex session from its transcript.")
+    transcript.add_argument("--surface", required=True, choices=("claude_code", "codex"))
+    for option in ("--session", "--transcript", "--cwd"):
+        transcript.add_argument(option, required=True)
+    for option in ("--project", "--provider", "--model", "--branch", "--repo-root", "--transport-variant",
+                   "--git-context", "--aico-session", "--aico-widget", "--aico-project"):
+        transcript.add_argument(option)
+    transcript.add_argument("--finalize", action="store_true", help="Finalize and close, as the Stop hook does")
+    codex = subparsers.add_parser("sync-codex", help="Record recently written Codex rollouts (run by a timer).")
+    codex.add_argument("--recent-hours", type=float, default=CODEX_RECENT_HOURS)
     return parser
 
 
-# The database-backed CLI's other commands read local transcripts or write
-# session records; on a host they report that they are unavailable.
-LOCAL_ONLY = ("bind-native-work-role", "sync-pi", "retire-pi", "maintenance", "feedback", "render", "status")
+# Commands that inspect or render workstation context have no host route.
+LOCAL_ONLY = ("maintenance", "feedback", "render", "status")
 
 
 def _strip(value: str | None) -> str | None:
@@ -109,24 +152,271 @@ def _token() -> str:
     return token
 
 
-def _post(body: dict[str, Any]) -> dict[str, Any]:
-    url = (os.environ.get("AGENT_HUB_URL") or DEFAULT_URL).rstrip("/") + DELIVER_PATH
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {_token()}"},
-        method="POST",
-    )
+class HubRefused(RuntimeError):
+    """Agent Hub answered with an HTTP error: ``{"error": code, "message", "details"}``."""
+
+    def __init__(self, url: str, status: int, answer: Any) -> None:
+        answer = answer if isinstance(answer, dict) else {}
+        self.code = answer.get("error") if isinstance(answer.get("error"), str) else None
+        super().__init__(f"{url} answered HTTP {status}" + (f" ({self.code})" if self.code else ""))
+        self.status = status
+        details = answer.get("details")
+        self.details = details[0] if isinstance(details, list) and details and isinstance(details[0], dict) else {}
+
+
+def _call(path: str, body: Any = None, *, method: str = "POST", raw: bytes | None = None) -> Any:
+    url = (os.environ.get("AGENT_HUB_URL") or DEFAULT_URL).rstrip("/") + path
+    headers = {"Authorization": f"Bearer {_token()}"}
+    data = raw
+    if raw is not None:
+        headers["Content-Type"] = "application/octet-stream"
+    elif body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
-            return json.loads(response.read())
+            payload = response.read()
+            return json.loads(payload) if payload else None
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"{url} answered HTTP {exc.code}") from None
+        try:
+            answer = json.loads(exc.read())
+        except (ValueError, OSError, http.client.HTTPException):
+            answer = None
+        raise HubRefused(url, exc.code, answer) from None
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         reason = getattr(exc, "reason", exc)
         raise RuntimeError(f"{url} unreachable ({reason})") from None
     except http.client.HTTPException as exc:
         raise RuntimeError(f"{url} sent an unreadable answer ({type(exc).__name__})") from None
+
+
+def _post(body: dict[str, Any]) -> dict[str, Any]:
+    return _call(DELIVER_PATH, body)
+
+
+def _home() -> Path:
+    return Path(os.environ.get("HOME") or Path.home())
+
+
+def _relative(surface: str, transcript: str) -> str:
+    """The transcript's path under its harness root, which is how Agent Hub names its copy."""
+    root = (_home() / SURFACE_ROOTS[surface]).resolve()
+    path = Path(transcript).expanduser().resolve()
+    if not path.is_relative_to(root) or path.suffix != ".jsonl":
+        raise ValueError(f"{surface} transcript is outside {root}")
+    return path.relative_to(root).as_posix()
+
+
+def send_transcript(surface: str, session: str, transcript: str) -> str:
+    """Send the bytes Agent Hub's copy lacks; returns the path it knows the copy by."""
+    relative = _relative(surface, transcript)
+    base = f"{SESSIONS_PATH}/transcripts/{surface}/{urllib.parse.quote(session, safe='')}?"
+    query = urllib.parse.urlencode({"path": relative})
+    offset = int(_call(base + query, method="GET")["size"])
+    with open(transcript, "rb") as source:
+        end = os.fstat(source.fileno()).st_size  # what exists now; later lines go with the next sync
+        if offset > end:
+            raise RuntimeError("Agent Hub's copy is longer than this transcript")
+        source.seek(offset)
+        while offset < end:
+            chunk = source.read(min(CHUNK_BYTES, end - offset))
+            if not chunk:
+                break
+            try:
+                offset = int(_call(base + query + f"&offset={offset}", raw=chunk)["size"])
+            except HubRefused as exc:
+                size = exc.details.get("size") if exc.status == 409 else None
+                if not isinstance(size, int) or size > end:
+                    raise
+                offset = size  # another sync got there first; carry on from its end
+            source.seek(offset)
+    return relative
+
+
+def _role(raw: str | None) -> dict[str, Any] | None:
+    return json.loads(raw) if raw else None
+
+
+def _sync(body: dict[str, Any]) -> dict[str, Any]:
+    return _call(f"{SESSIONS_PATH}/sync", {key: value for key, value in body.items() if value is not None})
+
+
+def sync_pi(args: argparse.Namespace) -> dict[str, Any]:
+    relative = send_transcript("pi", args.session, args.transcript)
+    return _sync({"surface": "pi", "session_id": args.session, "path": relative, "cwd": args.cwd,
+                  "project": args.project, "provider": args.provider, "model": args.model, "phase": args.phase,
+                  "aico_session_id": args.aico_session, "work_role": _role(args.work_role_json)})
+
+
+def sync_transcript(args: argparse.Namespace) -> dict[str, Any]:
+    relative = send_transcript(args.surface, args.session, args.transcript)
+    return _sync({"surface": args.surface, "session_id": args.session, "path": relative, "cwd": args.cwd,
+                  "project": args.project, "provider": args.provider, "model": args.model, "branch": args.branch,
+                  "repo_root": args.repo_root, "transport_variant": args.transport_variant,
+                  "git_context": args.git_context, "aico_session_id": args.aico_session,
+                  "aico_widget_id": args.aico_widget, "aico_project_id": args.aico_project,
+                  "finalize": args.finalize})
+
+
+# Codex keeps its rollout open while the thread runs, so as on the workstation
+# (codex-session-sync), the process holding it carries the Aico launch identity,
+# and a rollout nobody holds any more is finalized and closed once.
+def _rollout_holders() -> dict[str, int]:
+    holders: dict[str, int] = {}
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            for fd in (proc / "fd").iterdir():
+                target = os.readlink(fd)
+                if target.endswith(".jsonl"):
+                    holders.setdefault(target, int(proc.name))
+        except OSError:
+            continue
+    return holders
+
+
+def _aico_environment(pid: int) -> dict[str, str]:
+    try:
+        raw = Path(f"/proc/{pid}/environ").read_bytes()
+    except OSError:
+        return {}
+    wanted = ("AICO_SESSION_ID", "AICO_WIDGET_ID", "AICO_PROJECT_ID")
+    pairs = (item.partition(b"=") for item in raw.split(b"\0"))
+    return {key.decode(): value.decode(errors="replace") for key, _, value in pairs if key.decode(errors="replace") in wanted}
+
+
+def _rollout_header(path: Path) -> dict[str, Any] | None:
+    try:
+        with path.open("rb") as source:
+            first = json.loads(source.readline(1024 * 1024))
+    except (OSError, ValueError):
+        return None
+    payload = first.get("payload") if isinstance(first, dict) and first.get("type") == "session_meta" else None
+    return payload if isinstance(payload, dict) and isinstance(payload.get("id"), str) else None
+
+
+def _git(cwd: str, *args: str) -> str | None:
+    try:
+        result = subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def _recent(path: Path, since: float) -> bool:
+    try:
+        return path.stat().st_mtime >= since
+    except OSError:
+        return False
+
+
+def sync_codex(args: argparse.Namespace) -> dict[str, Any]:
+    root = _home() / SURFACE_ROOTS["codex"]
+    state_path = Path(CODEX_STATE).expanduser()
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    since = time.time() - args.recent_hours * 3600
+    holders = _rollout_holders()
+    rollouts = []
+    for path in sorted(root.glob("*/*/*/rollout-*.jsonl")) if root.is_dir() else []:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        if stat.st_mtime < since:
+            continue
+        header = _rollout_header(path)
+        if header is None:
+            continue
+        rollouts.append((path, stat.st_size, header))
+    # A child thread is recorded after its parent, which Agent Hub must already know.
+    rollouts.sort(key=lambda item: item[2].get("parent_thread_id") is not None)
+    synced, failed = [], []
+    for path, size, header in rollouts:
+        key = str(path)
+        pid = holders.get(key)
+        open_now = pid is not None
+        previous = state.get(key) or {}
+        if previous.get("size") == size and previous.get("open") == open_now and (open_now or previous.get("closed")):
+            continue
+        cwd = header.get("cwd") if isinstance(header.get("cwd"), str) else None
+        if cwd is None:
+            continue
+        aico = _aico_environment(pid) if pid else {}
+        aico = aico or previous.get("aico") or {}
+        try:
+            result = sync_transcript(argparse.Namespace(
+                surface="codex", session=header["id"], transcript=key, cwd=cwd, project=None, provider=None,
+                model=None, branch=_git(cwd, "rev-parse", "--abbrev-ref", "HEAD"),
+                repo_root=_git(cwd, "rev-parse", "--show-toplevel"), transport_variant=None, git_context=None,
+                aico_session=aico.get("AICO_SESSION_ID"), aico_widget=aico.get("AICO_WIDGET_ID"),
+                aico_project=aico.get("AICO_PROJECT_ID"), finalize=not open_now))
+        except HubRefused as exc:
+            code = exc.code
+            if code == "unregistered_cwd":
+                # As on the workstation, a thread outside registered projects is not recorded.
+                state[key] = {"size": size, "open": open_now, "closed": True, "skipped": code}
+            else:
+                failed.append({"session_id": header["id"], "error": str(exc)})
+            continue
+        except (RuntimeError, ValueError, OSError) as exc:
+            failed.append({"session_id": header["id"], "error": str(exc)})
+            continue
+        state[key] = {"size": size, "open": open_now, "closed": not open_now, "aico": aico}
+        synced.append(result.get("session_id"))
+    state = {key: value for key, value in state.items() if _recent(Path(key), since)}
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = state_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=1, sort_keys=True), encoding="utf-8")
+    temporary.replace(state_path)
+    return {"synced": synced, "failed": failed}
+
+
+def bind_work_role(args: argparse.Namespace) -> None:
+    _call(f"{SESSIONS_PATH}/work-role", {"surface": args.surface, "session_id": args.session, "cwd": args.cwd,
+          "project": args.project, "model": args.model, "work_role": _role(args.work_role_json)})
+
+
+# What each session command reports on failure, matching the database-backed CLI.
+UNAVAILABLE = {
+    "sync-pi": "Pi session sync unavailable",
+    "bind-native-work-role": "Native session work role registration unavailable",
+    "retire-pi": "Pi retirement sync unavailable",
+    "sync-transcript": "Session transcript sync unavailable",
+    "sync-codex": "Codex session sync unavailable",
+}
+
+
+def run_session_command(args: argparse.Namespace) -> int:
+    try:
+        if args.command == "sync-pi":
+            result: Any = sync_pi(args)
+        elif args.command == "sync-transcript":
+            result = sync_transcript(args)
+        elif args.command == "sync-codex":
+            result = sync_codex(args)
+        elif args.command == "retire-pi":
+            result = _call(f"{SESSIONS_PATH}/retire-pi", {"aico_session_id": args.aico_session})
+        else:
+            bind_work_role(args)
+            return 0
+    except Exception as exc:  # one line and the documented exit 2, never a traceback
+        reason = str(exc) if isinstance(exc, RuntimeError | ValueError) else type(exc).__name__
+        print(f"{UNAVAILABLE[args.command]}: {reason}", file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    if args.command == "retire-pi" and result.get("unavailable_session_ids"):
+        print(UNAVAILABLE["retire-pi"], file=sys.stderr)
+        return 2
+    if args.command == "sync-codex" and result.get("failed"):
+        for failure in result["failed"]:
+            print(f"{UNAVAILABLE['sync-codex']}: {failure['session_id']}: {failure['error']}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,6 +425,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"agent-hub-context {argv[0]}: unavailable on a remote host (no Agent Hub database here)", file=sys.stderr)
         return 2
     args = _parser().parse_args(argv)
+    if args.command in UNAVAILABLE:
+        return run_session_command(args)
     try:
         response = _post(delivery_request(args))
     except (RuntimeError, ValueError) as exc:

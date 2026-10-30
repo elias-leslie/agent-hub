@@ -118,6 +118,7 @@ function Facts({
         <Fact label="branch">{source.current_branch}</Fact>
       ) : null}
       <Fact label="harness">{getSessionSourceLabel(source)}</Fact>
+      {source.host ? <Fact label="host">{source.host}</Fact> : null}
       <Fact label="model" title={identity.fallbackReason ?? undefined}>
         {identity.showRequested
           ? `${identity.requestedModel} → ${identity.effectiveModel}`

@@ -1,0 +1,10 @@
+[Unit]
+Description=Send %i's Codex transcripts to Agent Hub
+Documentation=file:///srv/workspaces/projects/agent-hub/scripts/remote-host/README.md
+
+# The host's codex-session-sync. A system unit running as the user, so the idle
+# check never counts a run as user work.
+[Service]
+Type=oneshot
+User=%i
+ExecStart=/usr/bin/python3 /srv/workspaces/projects/agent-hub/integrations/context-delivery/bin/agent-hub-context-remote sync-codex
