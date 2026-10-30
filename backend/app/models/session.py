@@ -422,7 +422,7 @@ class SessionEvent(Base):
 
     __table_args__ = (
         UniqueConstraint("session_id", "turn", "sequence", name="uq_session_turn_sequence"),
-        Index("ix_session_events_type", "event_type"),
+        Index("ix_session_events_type_created", "event_type", "created_at"),
         Index("ix_session_events_tool", "tool_name"),
         Index("ix_session_events_call_id", "session_id", "call_id"),
         Index("ix_session_events_session_type", "session_id", "event_type"),
