@@ -60,8 +60,27 @@ SH
     fi
     if [[ $host_head == "$head" ]]; then
         continue
-    elif [[ $host_head != none && ($host_head != "$synced" || $dirty != 0) ]]; then
-        say "kept $name: the host checkout has local changes or commits"
+    elif [[ $host_head != none && $host_head != "$synced" ]]; then
+        say "kept $name: the host checkout has local commits"
+    elif [[ $host_head != none && $dirty != 0 ]]; then
+        # Harnesses rewrite tracked settings (Claude Code's settings.json,
+        # Codex's hook trust in config.toml). Fast-forward around those edits;
+        # an edited file that the new commits already match is just dropped.
+        if out=$(on_host_stdin bash -s -- "$dest" "$ref" <<'SH' 2>&1
+set -e
+dest=$1 ref=$2
+cd "$dest"
+for f in $(git diff --name-only); do
+    git diff --quiet "$ref" -- "$f" && git checkout -q -- "$f"
+done
+git merge -q --ff-only "$ref"
+SH
+        ); then
+            kept=$(on_host git -C "$dest" diff --name-only | paste -sd, -)
+            say "$name at ${head:0:9}${kept:+ (kept the host's edits to $kept)}"
+        else
+            say "kept $name: the new commits change files the host edited ($(on_host git -C "$dest" diff --name-only | paste -sd, -))"
+        fi
     else
         on_host git -C "$dest" checkout -q -B "$branch" "$ref"
         say "$name at ${head:0:9}"

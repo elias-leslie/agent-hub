@@ -333,3 +333,47 @@ def test_home_links_map_a_deployed_release_to_the_mirrored_checkout(tmp_path: Pa
     assert links.release_source(source, {"summitflow"}) == checkout
     assert links.release_source(source, {"agent-hub"}) is None
     assert links.release_source(tmp_path / "elsewhere.ts", {"summitflow"}) is None
+
+
+def _fast_forward_script() -> str:
+    """The host-side step that moves a checkout with harness edits to the workstation's commit."""
+    text = (SCRIPTS / "bootstrap").read_text(encoding="utf-8")
+    start = text.index("<<'SH' 2>&1\n") + len("<<'SH' 2>&1\n")
+    return text[start:text.index("\nSH\n", start)]
+
+
+def _git(repo: Path, *args: str) -> str:
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@x"}
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True, env=env).stdout
+
+
+@pytest.mark.parametrize(
+    ("incoming", "moves", "edits_left"),
+    [
+        ({"hook.sh": "new\n"}, True, ["settings.json"]),  # new commit leaves the edited file alone
+        ({"settings.json": "harness\n"}, True, []),  # new commit already matches the edit
+        ({"settings.json": "other\n"}, False, ["settings.json"]),  # new commit changes the edited file
+    ],
+)
+def test_bootstrap_fast_forwards_around_harness_edits(
+    tmp_path: Path, incoming: dict[str, str], moves: bool, edits_left: list[str]
+) -> None:
+    work, host = tmp_path / "work", tmp_path / "host"
+    work.mkdir()
+    _git(work, "init", "-q", "-b", "main")
+    for name in ("settings.json", "hook.sh"):
+        (work / name).write_text("old\n")
+    _git(work, "add", ".")
+    _git(work, "commit", "-q", "-m", "one")
+    subprocess.run(["git", "clone", "-q", str(work), str(host)], check=True)
+    (host / "settings.json").write_text("harness\n")
+    for name, content in incoming.items():
+        (work / name).write_text(content)
+    _git(work, "commit", "-qam", "two")
+    _git(host, "fetch", "-q", "origin")
+    result = subprocess.run(["bash", "-c", _fast_forward_script(), "sh", str(host), "origin/main"],
+                            capture_output=True, text=True, timeout=10, check=False)
+    assert (result.returncode == 0) is moves, result.stderr
+    assert (_git(host, "rev-parse", "HEAD") == _git(work, "rev-parse", "HEAD")) is moves
+    assert _git(host, "diff", "--name-only").split() == edits_left

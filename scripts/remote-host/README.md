@@ -23,7 +23,11 @@ re-runnable: a second run changes nothing unless the workstation changed.
   - A new host gets a depth-1 clone. Later runs send a git bundle of only the
     new commits, never the history, and nothing is pushed.
   - Only tracked files travel: no `.env`, credstore or ignored files.
-  - A host checkout with local changes or commits is kept, and the run says so.
+  - A host checkout with local commits is kept, and the run says so. Local
+    edits alone (harnesses rewrite Claude Code's `settings.json` and Codex's
+    hook trust in `config.toml`) don't stop the update: the checkout is
+    fast-forwarded around them, and an edit the new commits already match is
+    dropped. Only when the new commits change an edited file is it kept.
 - **Harness CLIs at the workstation's versions:** claude, codex, pi, agy.
   - Each is copied from the workstation's install.
   - The Agent Hub context launchers in `~/.claude/bin` and `~/.codex/bin` and
@@ -34,6 +38,10 @@ re-runnable: a second run changes nothing unless the workstation changed.
     settings call.
   - No login is copied. Logins are served or signed in on the host, as
     described under Credentials.
+  - Claude Code's first-run screens are answered in `~/.claude.json`
+    (onboarding done, the mirrored checkouts and `/tmp/aico-blank-slate`
+    trusted), so an unattended launch doesn't stop at them. Codex's hook trust
+    comes with the mirrored `config.toml`.
 - **Context delivery.** With no backend environment on the host,
   `agent-hub-context` falls through to `agent-hub-context-remote`. It posts to
   Agent Hub's `/api/host-context/deliver` over the `-R 8003` forward, using the
