@@ -11,13 +11,16 @@ import {
   useState,
 } from 'react'
 import { cn } from '@/lib/utils'
-import { AccountingWindowLabel } from './components/AccountingControls'
 import { EmptyState } from './components/EmptyState'
 import { ErrorAlert } from './components/ErrorAlert'
 import { InfiniteScrollFooter } from './components/InfiniteScrollFooter'
 import { LoadingState } from './components/LoadingState'
 import { SessionInline } from './components/SessionInline'
-import { SessionListHeader, SessionRow } from './components/SessionRow'
+import {
+  adminSortOf,
+  SessionListHeader,
+  SessionRow,
+} from './components/SessionRow'
 import { SessionsToolbar } from './components/SessionsToolbar'
 import { useSessionKeyboard } from './hooks/useSessionKeyboard'
 import {
@@ -128,6 +131,7 @@ function SessionsView() {
   const ready = data.hasData && !data.error
   const showEmpty = ready && !data.isLoading && data.sessions.length === 0
   const filtersAreDefault = isDefaultFilterState(state)
+  const adminSort = adminSortOf(state.sort)
 
   return (
     <div className="page-shell bg-slate-950 text-slate-100">
@@ -152,11 +156,10 @@ function SessionsView() {
         <div className="page-container">
           <Link
             href={`/admin?${sessionScopeParams(state)}#activity`}
-            className="inline-block text-sm text-amber-300 underline focus-ring-amber my-3"
+            className="mx-3 mt-3 inline-block text-[13px] text-amber-300 underline focus-ring-amber md:mx-0"
           >
             Work and admin activity across projects
           </Link>
-          <AccountingWindowLabel window={data.accountingWindow} />
           <div className="min-w-0 py-3">
             {data.error ? (
               <ErrorAlert
@@ -193,7 +196,10 @@ function SessionsView() {
                   data.isPlaceholder && 'opacity-70',
                 )}
               >
-                <SessionListHeader />
+                <SessionListHeader
+                  adminSort={adminSort}
+                  accountingWindow={data.accountingWindow}
+                />
                 <div
                   ref={listRef}
                   aria-label="Sessions"
@@ -205,6 +211,7 @@ function SessionsView() {
                         session={session}
                         isCursor={session.id === activeId}
                         isSelected={session.id === selected}
+                        adminSort={adminSort}
                         onClick={handleRowClick}
                       />
                       {session.id === selected ? (
@@ -212,6 +219,7 @@ function SessionsView() {
                           key={session.id}
                           sessionId={session.id}
                           listRow={session}
+                          accountingWindow={data.accountingWindow}
                           onClose={collapse}
                           onSelect={select}
                           onFilterModel={filterModel}

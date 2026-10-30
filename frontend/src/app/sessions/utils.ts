@@ -189,17 +189,13 @@ export function formatDuration(startDate: string, endDate: string): string {
   )
 }
 
-type TitleSource = Pick<
-  SessionListItem,
-  'id' | 'title' | 'summary_oneliner' | 'current_branch'
->
+type TitleSource = Pick<SessionListItem, 'id' | 'title' | 'summary_oneliner'>
 
-/** Most distinguishing human label: first prompt, then summary, branch, id. */
+/** Most distinguishing human label: first prompt, then summary, then id (a branch is shared by most sessions). */
 export function getSessionTitle(session: TitleSource): string {
   return (
     session.title?.trim() ||
     session.summary_oneliner?.trim() ||
-    session.current_branch?.trim() ||
     `session ${session.id.slice(0, 8)}`
   )
 }

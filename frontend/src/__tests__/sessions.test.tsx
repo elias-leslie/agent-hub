@@ -8,6 +8,10 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  SessionListHeader,
+  SessionRow,
+} from '@/app/sessions/components/SessionRow'
+import {
   parseSessionListState,
   serializeSessionListState,
 } from '@/app/sessions/hooks/useSessionListState'
@@ -242,9 +246,15 @@ describe('SessionsPage', () => {
     mount()
     await screen.findByText('Fix the dispatcher retry loop')
     const rows = screen.getAllByTestId('session-row')
-    // The server order is authoritative, even when this page's shares increase.
-    expect(rows[0]).toHaveTextContent('Admin 0.0% · Other 100.0%')
-    expect(rows[1]).toHaveTextContent('Admin 100.0% · Other 0.0%')
+    // The server order is authoritative, even when this page's shares increase;
+    // the sorted admin value gets a column while it orders the list.
+    expect(rows[0]).toHaveTextContent('admin 0.0%')
+    expect(rows[1]).toHaveTextContent('admin 100.0%')
+    expect(screen.getByText('Admin share')).toBeInTheDocument()
+    // Its detail lives in the expanded session.
+    fireEvent.click(rows[1])
+    const facts = await screen.findByText('admin tool context')
+    expect(facts.parentElement).toHaveTextContent('100.0% of 10 est. tokens')
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
     await waitFor(() =>
       expect(querySessions).toHaveBeenCalledWith(
@@ -314,11 +324,17 @@ describe('SessionsPage', () => {
     await screen.findByText('Fix the dispatcher retry loop')
     const rows = screen.getAllByTestId('session-row')
     expect(rows[0]).toHaveTextContent('120.0K / 4.5K')
-    expect(rows[0]).toHaveTextContent('3')
+    expect(rows[0]).toHaveTextContent('3 sub')
+    expect(rows[0]).toHaveTextContent('coder · codex')
     expect(rows[0]).not.toHaveTextContent('fallback')
-    expect(rows[1]).toHaveTextContent('feature/sessions')
+    expect(rows[1]).toHaveTextContent('session c1a0de00')
+    expect(rows[1]).not.toHaveTextContent('feature/sessions')
     expect(rows[1]).toHaveTextContent('not captured')
     expect(rows[1]).toHaveTextContent('claude code')
+    // Activity accounting stays out of the list unless an admin sort orders it.
+    expect(
+      screen.queryByText(/Admin share|est\. tokens|retained text/),
+    ).toBeNull()
   })
 
   it('expands a row in place, pushing sel and loading its newest log window', async () => {
@@ -646,10 +662,101 @@ describe('session display helpers', () => {
     expect(getUsageSummary(claudeRow).label).toBe('not captured')
   })
 
-  it('falls back from title to summary to branch to short id', () => {
+  it('falls back from title to summary to short id, never the branch', () => {
     expect(getSessionTitle(row({ title: '  Hi  ' }))).toBe('Hi')
     expect(getSessionTitle(row({ summary_oneliner: 'sum' }))).toBe('sum')
-    expect(getSessionTitle(row({ current_branch: 'main' }))).toBe('main')
+    expect(getSessionTitle(row({ current_branch: 'main' }))).toBe(
+      'session aaaaaaaa',
+    )
     expect(getSessionTitle(row({}))).toBe('session aaaaaaaa')
+  })
+})
+
+describe('SessionRow columns', () => {
+  const context = {
+    admin_tokens_estimate: 1200,
+    other_tokens_estimate: 2800,
+    unknown_tokens_estimate: 0,
+    denominator_tokens_estimate: 4000,
+    argument_tokens_estimate: 4000,
+    returned_tokens_estimate: 0,
+    admin_share: 0.3,
+    other_share: 0.7,
+    unknown_share: 0,
+    tools_sampled: 4,
+    tools_missing_output: 1,
+    tokenized_argument_calls: 4,
+    estimated_argument_calls: 0,
+    events_truncated: false,
+    input_token_encoding: 'fixture',
+    output_characters_per_token: 4,
+  }
+  const accounting = {
+    context_split: context,
+    admin_seconds: 12,
+    other_seconds: 28,
+    denominator_seconds: 40,
+    admin_share: 0.3,
+    other_share: 0.7,
+    unknown_seconds: 0,
+    unknown_share: 0,
+    tools_sampled: 4,
+    tools_missing_duration: 0,
+    duration_coverage: 1,
+    events_truncated: false,
+  }
+  const measured = row({ activity_accounting: accounting })
+  const unmeasured = row({
+    activity_accounting: {
+      ...accounting,
+      context_split: { ...context, admin_share: null },
+      admin_share: null,
+    },
+  })
+
+  it.each([
+    ['admin_share', 'Admin share', '30.0%'],
+    ['admin_tokens', 'Admin tokens', '1,200'],
+    ['admin_duration', 'Admin time', '12s'],
+  ] as const)('%s adds its column; rows without a share show a dash', (sort, header, value) => {
+    render(<SessionListHeader adminSort={sort} />)
+    expect(screen.getByText(header)).toBeInTheDocument()
+    const { container } = render(
+      <>
+        <SessionRow
+          session={measured}
+          isCursor={false}
+          isSelected={false}
+          adminSort={sort}
+          onClick={() => {}}
+        />
+        <SessionRow
+          session={unmeasured}
+          isCursor={false}
+          isSelected={false}
+          adminSort={sort}
+          onClick={() => {}}
+        />
+      </>,
+    )
+    const [first, second] = container.querySelectorAll(
+      '[data-testid="session-row"]',
+    )
+    expect(first).toHaveTextContent(`admin ${value}partial`)
+    expect(second).toHaveTextContent('admin —')
+  })
+
+  it('shows the harness alone when no agent is named, and no admin column by default', () => {
+    render(
+      <SessionRow
+        session={row({ agent_slug: null, activity_accounting: accounting })}
+        isCursor={false}
+        isSelected={false}
+        onClick={() => {}}
+      />,
+    )
+    const cell = screen.getByTitle('codex')
+    expect(cell).toHaveTextContent(/^codex$/)
+    expect(screen.getByTestId('session-row')).not.toHaveTextContent('admin')
   })
 })

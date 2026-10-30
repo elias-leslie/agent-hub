@@ -2,6 +2,11 @@
 
 import { ArrowLeft, RefreshCw, Search, X } from 'lucide-react'
 import { type ReactNode, useRef, useState } from 'react'
+import { contextTokens } from '@/lib/api/context-split'
+import {
+  type AccountingWindow,
+  durationPercent,
+} from '@/lib/api/duration-split'
 import type { Session, SessionListItem } from '@/lib/api/sessions'
 import { cn } from '@/lib/utils'
 import { isLiveStatus, useSessionDetail } from '../hooks/useSessionLog'
@@ -18,6 +23,11 @@ import {
 import { CopyIdButton } from './CopyIdButton'
 import { RequestErrorsBadge, requestErrorsText } from './RequestErrorsBadge'
 import { hasText, isUsefulLiveSummary, liveWarnings } from './SessionEvidence'
+import {
+  accountingWindowText,
+  adminMetricTitle,
+  isPartialContext,
+} from './SessionRow'
 import { StatusCell } from './StatusCell'
 import { WorkflowOrigin, workflowRunIdOf } from './WorkflowOrigin'
 
@@ -74,11 +84,17 @@ function ToggleButton({
 
 function Facts({
   source,
+  listRow,
+  accountingWindow,
   onFilterModel,
 }: {
   source: Session | SessionListItem
+  /** Carries the activity accounting for the toolbar's accounting window. */
+  listRow: SessionListItem | null
+  accountingWindow: AccountingWindow | null
   onFilterModel: (model: string) => void
 }) {
+  const context = listRow?.activity_accounting?.context_split
   const identity = getExecutionIdentity(source)
   const usage = getUsageSummary({
     usage_known: source.usage_known,
@@ -142,6 +158,19 @@ function Facts({
           <span className="italic text-slate-500">usage not captured</span>
         )}
       </Fact>
+      {source.work_role ? (
+        <Fact label="role">{source.work_role.label}</Fact>
+      ) : null}
+      {listRow && context ? (
+        <Fact
+          label="admin tool context"
+          title={`${accountingWindowText(accountingWindow)} ${adminMetricTitle(listRow)}`}
+        >
+          {durationPercent(context.admin_share)} of{' '}
+          {contextTokens(context.denominator_tokens_estimate)}
+          {isPartialContext(listRow) ? ' · partial' : ''}
+        </Fact>
+      ) : null}
       {source.message_count !== undefined && source.message_count !== null ? (
         <Fact label="messages">{source.message_count.toLocaleString()}</Fact>
       ) : null}
@@ -201,6 +230,7 @@ function LiveLine({ session }: { session: Session }) {
 export function SessionInline({
   sessionId,
   listRow,
+  accountingWindow = null,
   onClose,
   onSelect,
   onFilterModel,
@@ -208,6 +238,8 @@ export function SessionInline({
   sessionId: string
   /** The list row, or null when the session is outside the loaded list. */
   listRow: SessionListItem | null
+  /** The list's accounting interval, which listRow's activity accounting covers. */
+  accountingWindow?: AccountingWindow | null
   onClose: () => void
   onSelect: (id: string) => void
   onFilterModel: (model: string) => void
@@ -322,7 +354,12 @@ export function SessionInline({
           />
         </label>
         {source ? (
-          <Facts source={source} onFilterModel={onFilterModel} />
+          <Facts
+            source={source}
+            listRow={listRow}
+            accountingWindow={accountingWindow}
+            onFilterModel={onFilterModel}
+          />
         ) : null}
         {source && workflowRunIdOf(source) ? (
           <WorkflowOrigin source={source} />
