@@ -268,6 +268,10 @@ and configuration pages remain available. Provider completions, web research,
 browser, and voice integrations require their corresponding
 configuration and should fail clearly when absent.
 
+Owner notifications (a failed scheduled job, sessions retention could not archive) go through Nightshift's
+notice contract v1 (`nightshift push --json`, see Nightshift's `docs/notify-contract.md`; sender:
+`backend/app/services/owner_notice.py`); without Nightshift installed they are logged and not sent.
+
 ## License
 
 Apache License 2.0. See [LICENSE](../LICENSE) and [NOTICE](../NOTICE).
