@@ -3,8 +3,9 @@ import type { ComponentPropsWithoutRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentActionsMenu } from '@/app/agents/components/AgentActionsMenu'
+import { AgentRow } from '@/app/agents/components/AgentRow'
 import { AgentsTable } from '@/app/agents/components/AgentsTable'
-import type { Agent } from '@/app/agents/lib/types'
+import type { Agent, AgentMetrics } from '@/app/agents/lib/types'
 
 vi.mock('next/link', () => ({
   default: ({
@@ -71,5 +72,39 @@ describe('agent browser UI', () => {
     expect(
       screen.getByRole('button', { name: 'Include inactive agents' }),
     ).toBeInTheDocument()
+  })
+
+  it('shows no latency for an idle agent and unknown metrics as a dash, not zero', () => {
+    const idle: AgentMetrics = {
+      slug: 'builder',
+      requests_24h: 0,
+      avg_latency_ms: 0,
+      success_rate: 0,
+      tokens_24h: 0,
+      cost_24h_usd: 0,
+      latency_trend: [0, 0, 0],
+      success_trend: [],
+    }
+    const { rerender } = render(
+      <AgentRow agent={baseAgent} metrics={idle} onArchive={vi.fn()} />,
+    )
+    const latency = screen.getByLabelText('Latency')
+    expect(latency).toHaveTextContent('—')
+    expect(latency).not.toHaveTextContent('ms')
+    expect(latency.querySelector('svg')).toBeNull()
+    expect(screen.getByText('$0.00')).toBeInTheDocument()
+
+    rerender(<AgentRow agent={baseAgent} metrics={null} onArchive={vi.fn()} />)
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
+
+    rerender(
+      <AgentRow
+        agent={baseAgent}
+        metrics={{ ...idle, requests_24h: 4, avg_latency_ms: 41.2 }}
+        onArchive={vi.fn()}
+      />,
+    )
+    expect(screen.getByLabelText('Latency')).toHaveTextContent('41ms')
   })
 })

@@ -14,12 +14,14 @@ export function AgentRow({
   metrics: AgentMetrics | null
   onArchive: (agent: Agent) => void
 }) {
+  // No metrics row (still loading, failed, or never measured) is unknown, not zero;
+  // with no requests there is no latency to show.
   const requests24h = metrics?.requests_24h ?? 0
   const successLabel =
     requests24h > 0
       ? `${(metrics?.success_rate ?? 0).toFixed(1)}% ok`
       : 'no data'
-  const cost24hUsd = metrics?.cost_24h_usd ?? 0
+  const hasLatency = requests24h > 0
 
   return (
     <div
@@ -74,7 +76,7 @@ export function AgentRow({
       {/* Requests 24h + success summary */}
       <div className="min-w-[90px]">
         <div className="text-xs font-semibold tabular-nums text-slate-300">
-          {requests24h}
+          {metrics ? requests24h : '—'}
         </div>
         <div className="text-[10px] text-slate-400 tabular-nums">
           {successLabel}
@@ -84,16 +86,16 @@ export function AgentRow({
       {/* Latency with sparkline */}
       <MetricCell
         label="Latency"
-        value={metrics?.avg_latency_ms?.toFixed(0) ?? '—'}
-        unit="ms"
-        trend={metrics?.latency_trend}
+        value={hasLatency ? (metrics?.avg_latency_ms.toFixed(0) ?? '—') : '—'}
+        unit={hasLatency ? 'ms' : undefined}
+        trend={hasLatency ? metrics?.latency_trend : undefined}
         color="amber"
       />
 
       {/* Cost 24h */}
       <div className="text-right">
         <span className="text-xs font-semibold tabular-nums text-slate-300">
-          ${cost24hUsd.toFixed(2)}
+          {metrics ? `$${metrics.cost_24h_usd.toFixed(2)}` : '—'}
         </span>
       </div>
 
