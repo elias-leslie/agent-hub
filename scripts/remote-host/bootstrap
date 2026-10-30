@@ -77,7 +77,8 @@ git merge -q --ff-only "$ref"
 SH
         ); then
             kept=$(on_host git -C "$dest" diff --name-only | paste -sd, -)
-            say "$name at ${head:0:9}${kept:+ (kept the host's edits to $kept)}"
+            note=${kept:+ (kept the host edits to $kept)}
+            say "$name at ${head:0:9}$note"
         else
             say "kept $name: the new commits change files the host edited ($(on_host git -C "$dest" diff --name-only | paste -sd, -))"
         fi
