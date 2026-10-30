@@ -363,13 +363,16 @@ async def test_list_items_carry_title_usage_and_last_active(api: httpx.AsyncClie
     assert silent["last_active_at"].startswith("2026-10-01T12:00:00")
 
 
-async def test_detail_without_events_matches_default_counts(api: httpx.AsyncClient, pg_db: AsyncSession) -> None:
+async def test_detail_without_events_matches_full_counts(api: httpx.AsyncClient, pg_db: AsyncSession) -> None:
     await _seed_conversation(pg_db, "conv")
 
-    full = (await api.get("/api/sessions/conv")).json()
+    full = (await api.get("/api/sessions/conv?include_events=true")).json()
     lean_response = await api.get("/api/sessions/conv?include_events=false")
     assert lean_response.status_code == 200, lean_response.text
     lean = lean_response.json()
+    # The default is the summary: every event is opt-in (a long session's events run to tens of MB).
+    default = (await api.get("/api/sessions/conv")).json()
+    assert default["messages"] == [] and default["message_count"] == 4
 
     assert full["messages"] and lean["messages"] == []
     for key in (
@@ -760,7 +763,7 @@ async def test_detail_carries_the_session_cost_tool_places_and_thinking_time(
     ])
     await pg_db.flush()
 
-    chat = (await api.get("/api/sessions/chat")).json()
+    chat = (await api.get("/api/sessions/chat?include_events=true")).json()
     answer = chat["messages"][1]
     assert chat["total_cost_usd"] == pytest.approx(0.01)
     assert [(t["name"], t["content_offset"]) for t in answer["tool_executions"]] == [("read", 11)]

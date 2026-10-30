@@ -214,7 +214,7 @@ async def test_the_prompt_is_stored_at_turn_start_so_a_second_client_sees_it_mid
         await asyncio.sleep(0.2)
 
         # A second client opens the session while the first client's turn is still running.
-        mid = (await api.get("/api/sessions/prompted")).json()
+        mid = (await api.get("/api/sessions/prompted", params={"include_events": "true"})).json()
         assert mid["turn_state"] == "running"
         assert [(m["role"], m["content"]) for m in mid["messages"]] == [("user", prompt)]
         attach = asyncio.create_task(api.get("/api/sessions/prompted/stream"))

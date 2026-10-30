@@ -228,7 +228,7 @@ class TestGetSession:
 
         mock_session.execute.side_effect = _execute_side_effect
 
-        response = client.get("/api/sessions/test-session-123")
+        response = client.get("/api/sessions/test-session-123?include_events=true")
 
         assert response.status_code == 200
         data = response.json()
@@ -261,6 +261,23 @@ class TestGetSession:
             f"Expected 11 DB queries, got {mock_session.execute.call_count} "
             "— update this test if a query was added or removed"
         )
+
+    @pytest.mark.parametrize(("query", "loads_events"), [("", False), ("?include_events=false", False), ("?include_events=true", True)])
+    def test_events_are_opt_in(self, client: APITestClient, query: str, loads_events: bool) -> None:
+        """A long session's events run to tens of MB, so a plain read returns the summary."""
+        row = MagicMock()
+        with (
+            patch("app.api.sessions.get_session_with_events", new_callable=AsyncMock, return_value=row) as with_events,
+            patch("app.api.sessions.get_session_or_404", new_callable=AsyncMock, return_value=row) as summary,
+            patch("app.api.sessions.build_full_session_response", new_callable=AsyncMock, return_value={
+                "id": "s1", "project_id": "p", "provider": "codex", "model": "m", "status": "active",
+                "created_at": "2026-10-30T12:00:00Z", "updated_at": "2026-10-30T12:00:00Z",
+            }) as build,
+        ):
+            assert client.get(f"/api/sessions/s1{query}").status_code == 200
+
+        assert (with_events.await_count, summary.await_count) == ((1, 0) if loads_events else (0, 1))
+        assert build.call_args.kwargs == {"include_events": loads_events}
 
     def test_get_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test 404 for non-existent session."""

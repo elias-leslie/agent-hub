@@ -289,7 +289,7 @@ class TestGetSession:
             mock_cost_result,           # fetch_session_cost_usd (nothing logged)
         ]
 
-        response = client.get("/api/sessions/session-portfolio-123")
+        response = client.get("/api/sessions/session-portfolio-123?include_events=true")
 
         assert response.status_code == 200
         data = response.json()

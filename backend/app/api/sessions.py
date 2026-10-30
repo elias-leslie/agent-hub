@@ -297,10 +297,10 @@ async def get_session(
     db: Annotated[AsyncSession, Depends(get_db)],
     include_events: Annotated[
         bool,
-        Query(description="Load events into messages (false returns SQL-aggregated counts only)"),
-    ] = True,
+        Query(description="Load events into messages (default false: SQL-aggregated counts only)"),
+    ] = False,
 ) -> SessionResponse:
-    """Get a session by ID, with all events unless include_events=false."""
+    """Get a session by ID; its events (messages) only with include_events=true."""
     try:
         if include_events:
             session = await get_session_with_events(db, session_id)
