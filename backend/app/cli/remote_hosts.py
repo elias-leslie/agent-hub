@@ -7,6 +7,7 @@ so it stays out of agent transcripts. Stored credential values never come back h
 from __future__ import annotations
 
 import asyncio
+import getpass
 import os
 import stat
 from datetime import datetime
@@ -49,7 +50,14 @@ def _create_private(path: Path) -> int:
 
 
 def _read_value(path: Path | None) -> str:
-    """A private regular file, or piped stdin; never a terminal or argv."""
+    """A private regular file, piped stdin, or a hidden prompt on a terminal; never argv."""
+    if path is None and os.isatty(0):
+        typed = getpass.getpass("Value (hidden): ")
+        if not typed:
+            raise RemoteHostError("No value entered")
+        if len(typed.encode("utf-8")) > MAX_VALUE_BYTES:
+            raise RemoteHostError("Credential value is too large")
+        return typed
     fd = os.dup(0) if path is None else os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())

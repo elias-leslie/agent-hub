@@ -369,3 +369,15 @@ def test_st_hosts_credential_set_reads_only_a_private_file(tmp_path: Path, monke
     saved = CliRunner().invoke(app, args)
     assert saved.exit_code == 0, saved.output
     assert SECRET not in saved.output and seen[0]["value"] == SECRET
+
+
+def test_credential_value_is_prompted_hidden_on_a_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.cli import remote_hosts as cli
+
+    prompts: list[str] = []
+    monkeypatch.setattr(cli.os, "isatty", lambda fd: fd == 0)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: prompts.append(prompt) or SECRET)
+    assert cli._read_value(None) == SECRET and prompts == ["Value (hidden): "]
+    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "")
+    with pytest.raises(cli.RemoteHostError, match="No value entered"):
+        cli._read_value(None)
