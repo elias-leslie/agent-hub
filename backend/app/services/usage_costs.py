@@ -179,7 +179,14 @@ async def _summary(db: AsyncSession, now: datetime) -> dict[str, Any]:
         return sum(usd for b, usd in series if start <= b < end)
 
     covered = (now - hist_start).total_seconds() / 86400
-    rate = spent(now - RATE_WINDOW, now) * (timedelta(hours=1) / RATE_WINDOW)
+    # The rate reads the last RATE_WINDOW exactly: from the 15-minute series it would count only the
+    # bucket in progress, near zero just after each quarter hour.
+    recent = (
+        await db.execute(
+            _SERIES_SQL, _params(now - RATE_WINDOW, now, bucket=RATE_WINDOW, origin=now - RATE_WINDOW)
+        )
+    ).all()
+    rate = sum(float(usd or 0) for _, usd in recent) * (timedelta(hours=1) / RATE_WINDOW)
     week_hours = min(covered, 7) * 24
     typical_rate = spent(now - timedelta(days=7), now) / week_hours if week_hours >= 6 else None
 

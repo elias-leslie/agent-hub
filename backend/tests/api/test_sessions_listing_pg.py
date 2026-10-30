@@ -525,6 +525,17 @@ async def test_spend_overview_ranks_sessions_and_routine_jobs(pg_db: AsyncSessio
     assert session["top_calls"][0]["usd"] == 5.0
 
 
+async def test_spending_now_reads_the_last_quarter_hour_across_a_bucket_boundary(pg_db: AsyncSession) -> None:
+    from app.services import usage_costs
+
+    # One minute into a new quarter hour: the $3 call ten minutes ago still counts toward the rate.
+    pg_db.add(_call("r1", "s-rate", minutes=6, usd=3.0))
+    await pg_db.flush()
+
+    data = await usage_costs.overview(pg_db, "1h", now=BASE + timedelta(minutes=16))
+    assert data["summary"]["rate_per_hour"] == 12.0
+
+
 async def test_work_role_is_fixed_across_upsert_resume_heartbeat_and_conflict(
     api: httpx.AsyncClient, pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
