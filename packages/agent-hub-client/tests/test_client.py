@@ -237,7 +237,7 @@ class TestAgentHubClient:
     def test_get_session(self, httpx_mock: HTTPXMock) -> None:
         """Test getting session by ID."""
         httpx_mock.add_response(
-            url="http://localhost:8003/api/sessions/test-session",
+            url="http://localhost:8003/api/sessions/test-session?include_events=true",
             method="GET",
             json={
                 "id": "test-session",
@@ -265,6 +265,28 @@ class TestAgentHubClient:
         assert session.id == "test-session"
         assert len(session.messages) == 1
         assert session.messages[0].content == "Hello"
+
+    def test_get_session_summary_only(self, httpx_mock: HTTPXMock) -> None:
+        """include_events=False asks for the summary; the server default is the summary too."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/sessions/test-session?include_events=false",
+            method="GET",
+            json={
+                "id": "test-session",
+                "project_id": "proj",
+                "provider": "claude",
+                "model": "legacy-direct-model",
+                "status": "active",
+                "created_at": "2026-01-06T12:00:00Z",
+                "updated_at": "2026-01-06T12:00:00Z",
+                "messages": [],
+            },
+        )
+
+        with AgentHubClient() as client:
+            session = client.get_session("test-session", include_events=False)
+
+        assert session.messages == []
 
     def test_list_sessions(self, httpx_mock: HTTPXMock) -> None:
         """Test listing sessions."""

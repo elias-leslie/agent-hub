@@ -82,6 +82,10 @@ server adds rather than dropping it.
 per-project execution permission). Compose `complete()` calls with an explicit
 `agent_slug` instead.
 
+0.8.1 adds `get_session(..., include_events=False)` for the summary only
+(counts, no messages). `get_session` always sends `include_events`, since the
+server's default is the summary; the SDK's default stays True.
+
 ### Model selection advice
 
 `await client.select_model("coding", mode="shadow", assigned_model="codex/gpt-6.1-sol")`

@@ -113,18 +113,25 @@ class SessionOperationsMixin:
             handle_error(response)
         return SessionResponse.model_validate(response.json())
 
-    def get_session(self, session_id: str) -> SessionResponse:
+    def get_session(
+        self, session_id: str, *, include_events: bool = True
+    ) -> SessionResponse:
         """Get a session by ID with all messages.
 
         Args:
             session_id: Session identifier.
+            include_events: False returns the summary only (counts, no messages).
 
         Returns:
             SessionResponse with session details and messages.
         """
         client = self._get_client()
         headers = self._inject_tracking_headers("sdk.get_session")
-        response = client.get(f"/api/sessions/{session_id}", headers=headers)
+        response = client.get(
+            f"/api/sessions/{session_id}",
+            params={"include_events": str(include_events).lower()},
+            headers=headers,
+        )
         if not response.is_success:
             handle_error(response)
         return SessionResponse.model_validate(response.json())
@@ -285,11 +292,20 @@ class AsyncSessionOperationsMixin:
             handle_error(response)
         return SessionResponse.model_validate(response.json())
 
-    async def get_session(self, session_id: str) -> SessionResponse:
-        """Get a session by ID with all messages asynchronously."""
+    async def get_session(
+        self, session_id: str, *, include_events: bool = True
+    ) -> SessionResponse:
+        """Get a session by ID with all messages asynchronously.
+
+        include_events=False returns the summary only (counts, no messages).
+        """
         client = await self._get_client()
         headers = self._inject_tracking_headers("sdk.get_session")
-        response = await client.get(f"/api/sessions/{session_id}", headers=headers)
+        response = await client.get(
+            f"/api/sessions/{session_id}",
+            params={"include_events": str(include_events).lower()},
+            headers=headers,
+        )
         if not response.is_success:
             handle_error(response)
         return SessionResponse.model_validate(response.json())

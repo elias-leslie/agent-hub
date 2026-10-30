@@ -56,7 +56,7 @@ describe('createClient', () => {
 describe('sessions, models, agents', () => {
     it('maps sessions calls to their routes', async () => {
         const fetch = mockFetch((req) =>
-            req.method === 'GET' && req.url.endsWith('/s%201')
+            req.method === 'GET' && req.url.includes('/s%201?')
                 ? jsonResponse({ id: 's 1', messages: [{ id: 'm1', role: 'user', content: 'hi', tokens: 1, created_at: 't' }] })
                 : jsonResponse({ id: 's 1', status: 'closed', message: 'ok' }),
         );
@@ -64,6 +64,7 @@ describe('sessions, models, agents', () => {
         await sessions.create({ project_id: 'p', provider: 'x', model: 'y' });
         await sessions.list({ project_id: 'p', page_size: 5, roots_only: true });
         await sessions.get('s 1', { includeMessages: false });
+        await sessions.get('s 1');
         await sessions.close('s 1');
         await sessions.events('s 1', { page_size: 50, order: 'desc' });
         await sessions.fork('s 1', { fork_at_turn: 2 });
@@ -72,10 +73,11 @@ describe('sessions, models, agents', () => {
             ['POST', '/api/sessions'],
             ['GET', '/api/sessions?project_id=p&page_size=5&roots_only=true'],
             ['GET', '/api/sessions/s%201?include_events=false'],
+            ['GET', '/api/sessions/s%201?include_events=true'],
             ['POST', '/api/sessions/s%201/close'],
             ['GET', '/api/sessions/s%201/events?page_size=50&order=desc'],
             ['POST', '/api/sessions/s%201/fork'],
-            ['GET', '/api/sessions/s%201'],
+            ['GET', '/api/sessions/s%201?include_events=true'],
         ]);
     });
 

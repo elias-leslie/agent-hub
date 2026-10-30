@@ -208,7 +208,9 @@ class SessionContext:
         """Create or resume session on context entry."""
         if self._session_id:
             # Resume existing session
-            session_data = await self._client.get_session(self._session_id)
+            session_data = await self._client.get_session(
+                self._session_id, include_events=False
+            )
             self._session = Session(
                 client=self._client,
                 session_id=session_data.id,

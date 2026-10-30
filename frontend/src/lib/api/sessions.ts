@@ -415,12 +415,14 @@ export async function fetchSessions(params?: {
   return response.json()
 }
 
+/** Callers say whether they need the events: they are the bulk of a long session's detail. */
 export async function fetchSession(
   id: string,
-  options?: { includeEvents?: boolean },
+  options: { includeEvents: boolean },
 ): Promise<Session> {
-  const suffix = options?.includeEvents === false ? '?include_events=false' : ''
-  const response = await fetchApi(`${API_BASE}/sessions/${id}${suffix}`)
+  const response = await fetchApi(
+    `${API_BASE}/sessions/${id}?include_events=${options.includeEvents}`,
+  )
   if (!response.ok) {
     throw new Error(`Session fetch failed: ${response.status}`)
   }

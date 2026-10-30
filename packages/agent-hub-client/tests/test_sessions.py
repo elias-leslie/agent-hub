@@ -75,7 +75,7 @@ class TestSession:
     async def test_session_get_history(self, httpx_mock: HTTPXMock) -> None:
         """Test getting history from server."""
         httpx_mock.add_response(
-            url="http://localhost:8003/api/sessions/test-session",
+            url="http://localhost:8003/api/sessions/test-session?include_events=true",
             method="GET",
             json={
                 "id": "test-session",
@@ -125,7 +125,7 @@ class TestSession:
     async def test_session_refresh(self, httpx_mock: HTTPXMock) -> None:
         """Test refreshing session from server."""
         httpx_mock.add_response(
-            url="http://localhost:8003/api/sessions/test-session",
+            url="http://localhost:8003/api/sessions/test-session?include_events=true",
             method="GET",
             json={
                 "id": "test-session",
@@ -209,7 +209,7 @@ class TestSessionContext:
     async def test_session_context_resume_session(self, httpx_mock: HTTPXMock) -> None:
         """Test resuming an existing session."""
         httpx_mock.add_response(
-            url="http://localhost:8003/api/sessions/existing-session",
+            url="http://localhost:8003/api/sessions/existing-session?include_events=false",
             method="GET",
             json={
                 "id": "existing-session",
@@ -397,7 +397,7 @@ class TestSessionPersistence:
 
         # Second client retrieves session (register upfront)
         httpx_mock.add_response(
-            url=f"http://localhost:8003/api/sessions/{session_id}",
+            url=f"http://localhost:8003/api/sessions/{session_id}?include_events=false",
             method="GET",
             json={
                 "id": session_id,
@@ -439,7 +439,7 @@ class TestSessionPersistence:
         # Resume from new client instance - uses GET mock registered above
         # Need second GET for get_history() call
         httpx_mock.add_response(
-            url=f"http://localhost:8003/api/sessions/{session_id}",
+            url=f"http://localhost:8003/api/sessions/{session_id}?include_events=true",
             method="GET",
             json={
                 "id": session_id,

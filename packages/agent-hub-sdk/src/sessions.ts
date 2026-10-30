@@ -19,7 +19,8 @@ interface CallOptions {
 export interface SessionsApi {
     /** Idempotent when `session_id` is given: an existing session is returned. */
     create(request: SessionCreateRequest, options?: CallOptions): Promise<Session>;
-    /** The session with its messages; `includeMessages: false` returns the summary only (counts, no messages). */
+    /** The session with its messages; `includeMessages: false` returns the summary only (counts, no messages).
+     * Always sends `include_events`: the server's own default is the summary. */
     get(id: string, options?: CallOptions & { includeMessages?: boolean }): Promise<Session>;
     list(params?: ListSessionsParams, options?: CallOptions): Promise<SessionList>;
     /** Idempotent. Also stops a turn that is still streaming for the session. */
@@ -39,7 +40,7 @@ export function createSessionsApi(transport: Transport): SessionsApi {
             transport.json('POST', '/api/sessions', { body: request, signal: options?.signal }),
         get: (id, options) =>
             transport.json('GET', base(id), {
-                query: options?.includeMessages === false ? { include_events: false } : undefined,
+                query: { include_events: options?.includeMessages !== false },
                 signal: options?.signal,
             }),
         list: (params, options) =>
@@ -48,7 +49,10 @@ export function createSessionsApi(transport: Transport): SessionsApi {
         fork: (id, request, options) =>
             transport.json('POST', `${base(id)}/fork`, { body: request ?? {}, signal: options?.signal }),
         async messages(id, options) {
-            const session = await transport.json<Session>('GET', base(id), { signal: options?.signal });
+            const session = await transport.json<Session>('GET', base(id), {
+                query: { include_events: true },
+                signal: options?.signal,
+            });
             return session.messages ?? [];
         },
         events: (id, params, options) =>

@@ -56,7 +56,7 @@ describe('loadSession', () => {
       { sessions: { get } } as never,
       'session-1',
     )
-    expect(get).toHaveBeenCalledWith('session-1')
+    expect(get).toHaveBeenCalledWith('session-1', { includeMessages: true })
 
     expect(loaded.messages[0]?.toolExecutions).toBeUndefined()
     expect(

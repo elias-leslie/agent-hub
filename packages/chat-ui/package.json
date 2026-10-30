@@ -1,6 +1,6 @@
 {
     "name": "@agent-hub/chat-ui",
-    "version": "0.4.6",
+    "version": "0.4.7",
     "license": "Apache-2.0",
     "type": "module",
     "main": "./dist/index.cjs",
@@ -44,7 +44,7 @@
     },
     "peerDependencies": {
         "@agent-hub/passport-client": ">=0.1.0",
-        "@agent-hub/sdk": ">=0.1.1",
+        "@agent-hub/sdk": ">=0.1.4",
         "react": ">=18 || ^19.0.0",
         "react-dom": ">=18 || ^19.0.0"
     },

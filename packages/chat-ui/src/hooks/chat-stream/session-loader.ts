@@ -87,7 +87,7 @@ export function readSessionStats(session: Awaited<ReturnType<ChatHubClient["sess
  * Loads an existing chat session through the client.
  */
 export async function loadSession(client: Pick<ChatHubClient, "sessions">, sessionId: string): Promise<LoadedSession> {
-  const session = await client.sessions.get(sessionId);
+  const session = await client.sessions.get(sessionId, { includeMessages: true });
   const turnState = session.turn_state === "running" ? "running" : "idle";
   const turnPhase = turnState === "running" ? (session.turn_phase ?? null) : null;
 
