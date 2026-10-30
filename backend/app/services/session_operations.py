@@ -547,8 +547,9 @@ async def fork_session_at_turn(
         create_forked_session,
         prepare_fork_data,
     )
+    from app.services.session_event_archive import session_events_with_archive
 
-    sorted_events = sorted(parent.events, key=lambda x: (x.turn, x.sequence))
+    sorted_events = await session_events_with_archive(db, parent)
     events_to_copy, fork_at = prepare_fork_data(sorted_events, fork_at_turn)
 
     new_session_id = str(uuid.uuid4())

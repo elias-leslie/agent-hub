@@ -53,6 +53,7 @@ from .session import (
     NativeContinuationTurn,
     Session,
     SessionEvent,
+    SessionEventArchive,
     SessionEventType,
     SessionSummarySegment,
 )
@@ -122,6 +123,7 @@ __all__ = [
     "SessionBinding",
     "SessionCloseSettings",
     "SessionEvent",
+    "SessionEventArchive",
     "SessionEventType",
     "SessionSummarySegment",
     "SubscriptionPlan",

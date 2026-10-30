@@ -209,22 +209,25 @@ class _Rows:
     def all(self) -> list[tuple]:
         return self._rows
 
+    def __iter__(self):
+        return iter(self._rows)
+
 
 class _FakeDb:
     def __init__(self, *responses: list[tuple]) -> None:
         self.responses = list(responses)
         self.params: list[dict] = []
 
-    async def execute(self, _stmt: object, params: dict) -> _Rows:
-        self.params.append(params)
+    async def execute(self, _stmt: object, params: dict | None = None) -> _Rows:
+        self.params.append(params or {})
         return _Rows(self.responses.pop(0))
 
 
 @pytest.mark.asyncio
 async def test_sessions_without_native_usage_fall_back_to_the_ledger() -> None:
-    db = _FakeDb([("native", 2, 10, 5, 1)], [("codex-parent", 3, 900, 60, 400)])
+    db = _FakeDb([("native", 2, 10, 5, 1)], [], [("codex-parent", 3, 900, 60, 400)])  # rows, archives, ledger
     rollups = await session_queries.fetch_session_usage_rollups(db, ["native", "codex-parent", "empty"])
-    assert db.params[1] == {"session_ids": ["codex-parent", "empty"]}
+    assert db.params[2] == {"session_ids": ["codex-parent", "empty"]}
     assert rollups["native"].input_tokens == 10
     assert rollups["codex-parent"].known and rollups["codex-parent"].input_tokens == 900
     assert "empty" not in rollups

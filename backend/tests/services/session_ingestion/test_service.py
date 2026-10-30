@@ -29,6 +29,9 @@ from app.services.session_ingestion.service import (
 # source files exist regardless of where CI clones the repo.
 REPO_ROOT = str(Path(__file__).resolve().parents[4])
 
+# After the advisory lock, ingestion checks for an event archive to restore.
+NO_ARCHIVE = MagicMock(scalar=lambda: False)
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -38,7 +41,7 @@ async def test_append_normalized_events_serializes_batches_by_session_id() -> No
     lock_result = MagicMock()
     existing_pairs = MagicMock()
     existing_pairs.all.return_value = []
-    db.execute = AsyncMock(side_effect=[lock_result, existing_pairs])
+    db.execute = AsyncMock(side_effect=[lock_result, NO_ARCHIVE, existing_pairs])
 
     stored_event = MagicMock()
     stored_event.id = "evt-locked"
@@ -173,7 +176,7 @@ async def test_append_normalized_events_skips_replayed_native_source_identity() 
     )
     source_events = MagicMock()
     source_events.scalars.return_value.all.return_value = [stored]
-    db.execute = AsyncMock(side_effect=[MagicMock(), pairs, source_events])
+    db.execute = AsyncMock(side_effect=[MagicMock(), NO_ARCHIVE, pairs, source_events])
 
     with (
         patch(
@@ -231,7 +234,7 @@ async def test_append_normalized_events_rejects_changed_native_source_identity()
     )
     source_events = MagicMock()
     source_events.scalars.return_value.all.return_value = [stored]
-    db.execute = AsyncMock(side_effect=[MagicMock(), pairs, source_events])
+    db.execute = AsyncMock(side_effect=[MagicMock(), NO_ARCHIVE, pairs, source_events])
 
     with (
         patch(
@@ -1136,6 +1139,7 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
     db.execute = AsyncMock(
         side_effect=[
             MagicMock(),  # Session ingestion advisory lock.
+            NO_ARCHIVE,
             MagicMock(
                 all=lambda: [
                     (

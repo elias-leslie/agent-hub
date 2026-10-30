@@ -24,7 +24,7 @@ from app.llm.providers.faux import (
     register_faux_provider,
 )
 from app.llm.types import Context, TextContent, ToolCall, ToolResultMessage, UserMessage
-from app.models import CostLog, Session, SessionEvent
+from app.models import CostLog, Session, SessionEvent, SessionEventArchive
 from app.services.workflow_runs.agent_hub_transcript import Transcript, record_transcript
 from app.services.workflow_runs.executor_agent_hub import LoopLog
 
@@ -46,7 +46,7 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
         await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
 
         def create_tables(sync_connection: object) -> None:
-            for table in (Session.__table__, SessionEvent.__table__, CostLog.__table__):
+            for table in (Session.__table__, SessionEvent.__table__, SessionEventArchive.__table__, CostLog.__table__):
                 for column in table.columns:
                     if isinstance(column.type, Enum):
                         column.type.create(sync_connection, checkfirst=True)

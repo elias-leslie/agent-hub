@@ -70,6 +70,7 @@ async def _store_as_session_event(
 
         from app.db import _get_session_factory
         from app.models import Session, SessionEvent
+        from app.services.session_event_archive import restore_archived_events
 
         session_factory = _get_session_factory()
         async with session_factory() as db:
@@ -80,6 +81,7 @@ async def _store_as_session_event(
                 logger.debug("Session %s not in DB, skipping event store", request.session_id)
                 return
 
+            await restore_archived_events(db, request.session_id)  # number against archived events too
             next_seq, current_turn = await _get_next_seq_and_turn(db, request.session_id)
             event_type = _OBS_TYPE_TO_EVENT_TYPE.get(request.type.value, "tool_use")
             tool_name = request.title[6:] if request.title.startswith("Tool: ") else None

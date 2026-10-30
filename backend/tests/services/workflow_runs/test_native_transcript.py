@@ -17,7 +17,7 @@ from sqlalchemy import Enum, func, make_url, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
-from app.models import CostLog, Session, SessionEvent
+from app.models import CostLog, Session, SessionEvent, SessionEventArchive
 from app.services.workflow_runs.native_transcript import ingest_attempt_transcript
 
 pytestmark = pytest.mark.integration
@@ -50,7 +50,7 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
         await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
 
         def create_tables(sync_connection: object) -> None:
-            for table in (Session.__table__, SessionEvent.__table__, CostLog.__table__):
+            for table in (Session.__table__, SessionEvent.__table__, SessionEventArchive.__table__, CostLog.__table__):
                 for column in table.columns:
                     if isinstance(column.type, Enum):
                         column.type.create(sync_connection, checkfirst=True)

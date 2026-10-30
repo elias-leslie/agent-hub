@@ -1,5 +1,6 @@
 """Session query filters and statistics."""
 
+import asyncio
 import base64
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
@@ -9,7 +10,6 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     ColumnElement,
-    Exists,
     Select,
     String,
     and_,
@@ -19,6 +19,7 @@ from sqlalchemy import (
     exists,
     false,
     func,
+    literal,
     literal_column,
     or_,
     select,
@@ -30,7 +31,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.constants.models import UNKNOWN_MODEL
-from app.models import Session, SessionEvent, SessionEventType
+from app.models import Session, SessionEvent, SessionEventArchive, SessionEventType
+from app.services.session_event_archive import (
+    fetch_archive_summaries,
+    has_archive,
+    merge_archived_events,
+)
 from app.services.session_live_activity import is_session_actionably_active
 
 _EMPTY_EVENT_SNAPSHOT = "empty"
@@ -185,6 +191,21 @@ async def fetch_session_statistics(
             token_stats[session_id]["input"] = tokens
         elif role == "assistant":
             token_stats[session_id]["output"] = tokens
+
+    for session_id, archived in (await fetch_archive_summaries(db, session_ids)).items():
+        by_type = archived.summary.get("by_type") or {}
+        archived_messages = int(by_type.get(SessionEventType.USER_MESSAGE, 0)) + int(
+            by_type.get(SessionEventType.ASSISTANT_MESSAGE, 0)
+        )
+        if archived_messages:
+            message_counts[session_id] = message_counts.get(session_id, 0) + archived_messages
+        if archived.event_count:
+            event_counts[session_id] = event_counts.get(session_id, 0) + archived.event_count
+        archived_tokens = archived.summary.get("tokens")
+        if archived_tokens:
+            stats = token_stats.setdefault(session_id, {"input": 0, "output": 0})
+            stats["input"] += int(archived_tokens.get("input", 0))
+            stats["output"] += int(archived_tokens.get("output", 0))
 
     child_result = await db.execute(
         select(Session).where(Session.parent_session_id.in_(session_ids))
@@ -369,13 +390,25 @@ def session_requested_model_expression() -> ColumnElement[str]:
     return literal_column(_REQUESTED_MODEL_SQL, type_=String)
 
 
-def _prompt_match(pattern: str) -> Exists:
+def _archived_prompt_match(pattern: str) -> ColumnElement[bool]:
+    """An archive's stored prompt prefixes (or its title) match, as its rows' prompts would."""
+    prompt = func.jsonb_array_elements_text(SessionEventArchive.summary["prompts"]).table_valued("value")
+    return or_(
+        SessionEventArchive.title.ilike(pattern, escape="\\"),
+        exists(select(literal(1)).select_from(prompt).where(prompt.c.value.ilike(pattern, escape="\\"))),
+    )
+
+
+def _prompt_match(pattern: str) -> ColumnElement[bool]:
     # The list's title is the first prompt, so search reads prompts too (not harness-injected context).
-    return exists().where(
-        SessionEvent.session_id == Session.id,
-        SessionEvent.event_type == SessionEventType.USER_MESSAGE,
-        func.left(SessionEvent.content, _TITLE_SOURCE_PREFIX_CHARS).ilike(pattern, escape="\\"),
-        ~SessionEvent.content.op("~*")(_HARNESS_SCAFFOLD_PATTERN),
+    return or_(
+        exists().where(
+            SessionEvent.session_id == Session.id,
+            SessionEvent.event_type == SessionEventType.USER_MESSAGE,
+            func.left(SessionEvent.content, _TITLE_SOURCE_PREFIX_CHARS).ilike(pattern, escape="\\"),
+            ~SessionEvent.content.op("~*")(_HARNESS_SCAFFOLD_PATTERN),
+        ),
+        exists().where(SessionEventArchive.session_id == Session.id, _archived_prompt_match(pattern)),
     )
 
 
@@ -383,14 +416,17 @@ async def resolve_prompt_search(db: AsyncSession, filters: SessionListFilters) -
     """Find prompt matches once per request instead of rescanning prompts in every list and facet query."""
     if not filters.q:
         return filters
+    pattern = _like_pattern(filters.q)
     rows = await db.execute(
         select(SessionEvent.session_id)
         .where(
             SessionEvent.event_type == SessionEventType.USER_MESSAGE,
-            func.left(SessionEvent.content, _TITLE_SOURCE_PREFIX_CHARS).ilike(_like_pattern(filters.q), escape="\\"),
+            func.left(SessionEvent.content, _TITLE_SOURCE_PREFIX_CHARS).ilike(pattern, escape="\\"),
             ~SessionEvent.content.op("~*")(_HARNESS_SCAFFOLD_PATTERN),
         )
-        .distinct()
+        .union(
+            select(SessionEventArchive.session_id).where(_archived_prompt_match(pattern))
+        )
     )
     return replace(filters, prompt_match_ids=tuple(str(sid) for sid in rows.scalars()))
 
@@ -553,6 +589,10 @@ async def fetch_session_titles(db: AsyncSession, session_ids: Sequence[str]) -> 
         title = normalize_session_title(content)
         if title:
             titles[str(session_id)] = title
+    # The archive holds a session's earliest events, so its first prompt is the title.
+    for session_id, archived in (await fetch_archive_summaries(db, session_ids)).items():
+        if archived.title:
+            titles[session_id] = archived.title
     return titles
 
 
@@ -649,14 +689,19 @@ def _optional_int(value: object) -> int | None:
     return None if value is None else int(value)
 
 
-async def fetch_session_usage_rollups(
+def _sum_known(*values: int | None) -> int | None:
+    known = [value for value in values if value is not None]
+    return sum(known) if known else None
+
+
+async def fetch_native_usage_rollups(
     db: AsyncSession, session_ids: Sequence[str]
 ) -> dict[str, SessionUsageRollup]:
-    """Roll up native usage for many sessions in one grouped query."""
+    """Native usage events' rollup per session from event rows only."""
     if not session_ids:
         return {}
     rows = (await db.execute(_USAGE_ROLLUP_SQL, {"session_ids": list(session_ids)})).all()
-    rollups = {
+    return {
         str(session_id): SessionUsageRollup(
             responses=int(responses),
             input_tokens=_optional_int(input_tokens),
@@ -665,6 +710,26 @@ async def fetch_session_usage_rollups(
         )
         for session_id, responses, input_tokens, output_tokens, cached_input_tokens in rows
     }
+
+
+async def fetch_session_usage_rollups(
+    db: AsyncSession, session_ids: Sequence[str]
+) -> dict[str, SessionUsageRollup]:
+    """Roll up native usage for many sessions (event rows plus archives), else their call ledgers."""
+    if not session_ids:
+        return {}
+    rollups = await fetch_native_usage_rollups(db, session_ids)
+    for session_id, archived in (await fetch_archive_summaries(db, session_ids)).items():
+        usage = archived.summary.get("usage")
+        if not usage:
+            continue
+        live = rollups.get(session_id, SessionUsageRollup())
+        rollups[session_id] = SessionUsageRollup(
+            responses=live.responses + int(usage.get("responses", 0)),
+            input_tokens=_sum_known(live.input_tokens, usage.get("input_tokens")),
+            output_tokens=_sum_known(live.output_tokens, usage.get("output_tokens")),
+            cached_input_tokens=_sum_known(live.cached_input_tokens, usage.get("cached_input_tokens")),
+        )
     missing = [sid for sid in session_ids if sid not in rollups]
     if missing:
         fallback = (await db.execute(_LEDGER_USAGE_SQL, {"session_ids": missing})).all()
@@ -702,7 +767,11 @@ async def fetch_session_event_type_counts(db: AsyncSession, session_id: str) -> 
             .group_by(SessionEvent.event_type)
         )
     ).all()
-    return {str(event_type): int(count) for event_type, count in rows}
+    counts = {str(event_type): int(count) for event_type, count in rows}
+    archived = (await fetch_archive_summaries(db, [session_id])).get(session_id)
+    for event_type, count in ((archived.summary.get("by_type") or {}) if archived else {}).items():
+        counts[event_type] = counts.get(event_type, 0) + int(count)
+    return counts
 
 
 @dataclass(frozen=True)
@@ -745,7 +814,7 @@ async def fetch_session_agent_token_aggregates(
             .order_by(first_position)
         )
     ).all()
-    return [
+    live = [
         AgentTokenAggregate(
             agent_key=str(key),
             agent_name=name,
@@ -755,6 +824,21 @@ async def fetch_session_agent_token_aggregates(
         )
         for key, name, input_tokens, output_tokens, count in rows
     ]
+    archived = (await fetch_archive_summaries(db, [session_id])).get(session_id)
+    if archived is None:
+        return live
+    # Archived events come first, so their agents lead and name the merged entries.
+    merged = {agent["agent_key"]: AgentTokenAggregate(**agent) for agent in archived.summary.get("agents") or []}
+    for agent in live:
+        earlier = merged.get(agent.agent_key)
+        merged[agent.agent_key] = agent if earlier is None else AgentTokenAggregate(
+            agent_key=agent.agent_key,
+            agent_name=earlier.agent_name,
+            input_tokens=earlier.input_tokens + agent.input_tokens,
+            output_tokens=earlier.output_tokens + agent.output_tokens,
+            event_count=earlier.event_count + agent.event_count,
+        )
+    return list(merged.values())
 
 
 @dataclass(frozen=True)
@@ -833,6 +917,15 @@ async def query_session_event_window(
     if order not in _EVENT_ORDERS:
         raise ValueError(f"Unsupported event order: {order}")
     after_key = decode_session_event_cursor(after, order) if after else None
+    if await has_archive(db, session_id):
+        return _page_event_window(
+            await _archived_event_window(
+                db, session_id, event_type=event_type, turn=turn, page=page, page_size=page_size,
+                snapshot=snapshot, exclude_types=exclude_types, q=q, after_key=after_key, order=order,
+            ),
+            page_size,
+            order,
+        )
 
     if snapshot is None:
         snapshot_result = await db.execute(
@@ -915,18 +1008,101 @@ async def query_session_event_window(
     query = query.limit(page_size + 1)
 
     result = await db.execute(query)
-    events = list(result.scalars().all())
-    next_after: str | None = None
-    if len(events) > page_size:
-        events = events[:page_size]
-        last = events[-1]
-        next_after = encode_session_event_cursor(order, int(last.turn), int(last.sequence))
+    return _page_event_window(
+        SessionEventWindow(
+            events=list(result.scalars().all()),
+            total=int(total),
+            max_turn=int(max_turn),
+            snapshot=snapshot,
+        ),
+        page_size,
+        order,
+    )
+
+
+def _page_event_window(window: SessionEventWindow, page_size: int, order: str) -> SessionEventWindow:
+    """Trim the one-extra lookahead row into a next_after cursor."""
+    if len(window.events) > page_size:
+        window.events = window.events[:page_size]
+        last = window.events[-1]
+        window.next_after = encode_session_event_cursor(order, int(last.turn), int(last.sequence))
+    return window
+
+
+async def _archived_event_window(
+    db: AsyncSession,
+    session_id: str,
+    *,
+    event_type: str | None,
+    turn: int | None,
+    page: int,
+    page_size: int,
+    snapshot: str | None,
+    exclude_types: Sequence[str],
+    q: str | None,
+    after_key: tuple[int, int] | None,
+    order: str,
+) -> SessionEventWindow:
+    """query_session_event_window's filters over an archived session's merged events, in Python."""
+    rows = (await db.execute(select(SessionEvent).where(SessionEvent.session_id == session_id))).scalars().all()
+    events = await merge_archived_events(db, session_id, list(rows))
+    return await asyncio.to_thread(
+        _filter_event_window, events, event_type=event_type, turn=turn, page=page, page_size=page_size,
+        snapshot=snapshot, exclude_types=exclude_types, q=q, after_key=after_key, order=order,
+    )
+
+
+def _filter_event_window(
+    events: list[SessionEvent],
+    *,
+    event_type: str | None,
+    turn: int | None,
+    page: int,
+    page_size: int,
+    snapshot: str | None,
+    exclude_types: Sequence[str],
+    q: str | None,
+    after_key: tuple[int, int] | None,
+    order: str,
+) -> SessionEventWindow:
+    if snapshot is None:
+        last = max(events, key=lambda e: (e.created_at, str(e.id)), default=None)
+        snapshot = (
+            _EMPTY_EVENT_SNAPSHOT if last is None else encode_session_event_snapshot(last.created_at, str(last.id))
+        )
+    boundary = _decode_session_event_snapshot(snapshot)
+    visible = [] if boundary is None else [e for e in events if (e.created_at, str(e.id)) <= boundary]
+    needle = q.strip().lower() if q and q.strip() else None
+    excluded = set(exclude_types)
+
+    def matches(event: SessionEvent) -> bool:
+        return (
+            (not event_type or event.event_type == event_type)
+            and event.event_type not in excluded
+            and (turn is None or event.turn == turn)
+            and (
+                needle is None
+                or needle in (event.content or "").lower()
+                or needle in (event.tool_name or "").lower()
+            )
+        )
+
+    matched = [event for event in visible if matches(event)]
+    total = len(matched)
+    if order == "desc":
+        matched.reverse()
+    if after_key is not None:
+        matched = [
+            e for e in matched
+            if ((e.turn, e.sequence) > after_key if order == "asc" else (e.turn, e.sequence) < after_key)
+        ]
+    else:
+        matched = matched[(page - 1) * page_size:]
     return SessionEventWindow(
-        events=events,
-        total=int(total),
-        max_turn=int(max_turn),
+        events=matched[: page_size + 1],
+        total=total,
+        max_turn=max((e.turn for e in visible), default=0),
         snapshot=snapshot,
-        next_after=next_after,
     )
 
 

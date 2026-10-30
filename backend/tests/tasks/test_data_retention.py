@@ -6,15 +6,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services.session_event_archive import CompactionResult
 from app.tasks.data_retention import (
     _BATCH_SIZE,
     MEMORY_INJECTION_METRICS_RETENTION_DAYS,
     REQUEST_LOGS_RETENTION_DAYS,
-    SESSION_EVENTS_RETENTION_DAYS,
     USAGE_STATS_RETENTION_DAYS,
+    archive_old_session_events,
     purge_old_memory_injection_metrics,
     purge_old_request_logs,
-    purge_old_session_events,
     purge_old_usage_stats,
     run_data_retention,
 )
@@ -57,20 +57,26 @@ async def test_purge_old_usage_stats_single_batch() -> None:
 
 
 @pytest.mark.asyncio
-async def test_purge_old_session_events_respects_safety_gates() -> None:
-    """Verify the CTE joins on closed sessions and session activity age."""
+async def test_archive_old_session_events_uses_configured_window_and_vacuums_after_work() -> None:
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=_make_result(2_000))
+    archived = CompactionResult(sessions=2, events=40, raw_bytes=9000, stored_bytes=900)
+    with (
+        patch("app.tasks.data_retention.settings.session_events_archive_after_days", 90),
+        patch("app.tasks.data_retention.compact_old_sessions", return_value=archived) as compact,
+        patch("app.tasks.data_retention.vacuum_session_events") as vacuum,
+    ):
+        result = await archive_old_session_events(db)
 
-    deleted = await purge_old_session_events(db, retention_days=45)
-    assert deleted == 2_000
+    compact.assert_awaited_once_with(db, 90)
+    vacuum.assert_awaited_once_with(db)
+    assert result["sessions"] == 2 and result["stored_bytes"] == 900
 
-    # Verify the SQL contains the safety gates
-    sql_arg = str(db.execute.call_args_list[0][0][0])
-    assert "s.status = " in sql_arg or "status" in sql_arg
-    assert "completed" in sql_arg
-    assert "failed" in sql_arg
-    assert "last_activity_at" in sql_arg
+    with (
+        patch("app.tasks.data_retention.compact_old_sessions", return_value=CompactionResult()),
+        patch("app.tasks.data_retention.vacuum_session_events") as vacuum,
+    ):
+        await archive_old_session_events(db)
+    vacuum.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -90,7 +96,10 @@ async def test_run_data_retention_returns_all_counts() -> None:
     with (
         patch("app.tasks.data_retention.purge_old_request_logs", return_value=100) as mock_rl,
         patch("app.tasks.data_retention.purge_old_usage_stats", return_value=200) as mock_us,
-        patch("app.tasks.data_retention.purge_old_session_events", return_value=300) as mock_se,
+        patch(
+            "app.tasks.data_retention.archive_old_session_events",
+            return_value=CompactionResult(sessions=3, events=300, raw_bytes=10, stored_bytes=1).as_dict(),
+        ) as mock_se,
         patch(
             "app.tasks.data_retention.purge_old_memory_injection_metrics",
             return_value=400,
@@ -101,7 +110,12 @@ async def test_run_data_retention_returns_all_counts() -> None:
     assert result == {
         "request_logs_deleted": 100,
         "usage_stats_deleted": 200,
-        "session_events_deleted": 300,
+        "sessions_archived": 3,
+        "session_events_archived": 300,
+        "session_events_archive_raw_bytes": 10,
+        "session_events_archive_stored_bytes": 1,
+        "session_archive_skipped": [],
+        "session_archive_failed": [],
         "memory_injection_metrics_deleted": 400,
     }
     mock_rl.assert_awaited_once_with(db)
@@ -114,6 +128,5 @@ def test_retention_constants() -> None:
     """Verify retention windows match documented policy."""
     assert REQUEST_LOGS_RETENTION_DAYS == 14
     assert USAGE_STATS_RETENTION_DAYS == 30
-    assert SESSION_EVENTS_RETENTION_DAYS == 45
     assert MEMORY_INJECTION_METRICS_RETENTION_DAYS == 90
     assert _BATCH_SIZE == 10_000

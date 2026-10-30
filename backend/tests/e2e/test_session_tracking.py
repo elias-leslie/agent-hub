@@ -15,6 +15,19 @@ from tests.conftest import APITestClient
 from tests.model_ids import CLAUDE_SONNET, DEFAULT_GEMINI_MODEL
 
 
+class _NoArchives:
+    """The event-archive lookups' result when no session is archived."""
+
+    def __iter__(self):
+        return iter(())
+
+    def first(self) -> None:
+        return None
+
+
+NO_ARCHIVES = _NoArchives()
+
+
 @pytest.fixture
 def mock_session():
     """Create a mock async database session."""
@@ -112,9 +125,12 @@ class TestSessionsApiFiltering:
                 mock_msg_count_result,
                 mock_event_count_result,
                 mock_token_stats_result,
+                NO_ARCHIVES,            # archived sessions' counts
                 mock_child_result,
                 mock_rollup_title,     # fetch_session_titles
+                NO_ARCHIVES,            # archived titles
                 mock_rollup_usage,     # fetch_session_usage_rollups
+                NO_ARCHIVES,            # archived usage
                 mock_ownership_result,      # _fetch_candidate_sessions
                 mock_specialists_result,    # _fetch_active_specialists
             ]
@@ -280,11 +296,14 @@ class TestGetSession:
             mock_session_result,
             mock_token_result,
             mock_context_result,
+            NO_ARCHIVES,                # session_events_with_archive
             mock_ownership_result,      # _fetch_candidate_sessions
             mock_specialists_result,    # _fetch_active_specialists
             mock_child_result,
             mock_title_result,          # fetch_session_titles
+            NO_ARCHIVES,                # archived titles
             mock_usage_result,          # fetch_session_usage_rollups (native events)
+            NO_ARCHIVES,                # archived usage
             mock_usage_result,          # fetch_session_usage_rollups (ledger / cost-log fallback)
             mock_cost_result,           # fetch_session_cost_usd (nothing logged)
         ]
@@ -298,7 +317,7 @@ class TestGetSession:
         assert data["title"] is None
         assert data["usage_known"] is False
         assert data["total_cost_usd"] is None
-        assert mock_session.execute.call_count == 10
+        assert mock_session.execute.call_count == 13
 
 
 class TestMultiProjectScenario:
@@ -360,9 +379,12 @@ class TestMultiProjectScenario:
                 mock_msg_count_1,
                 mock_event_count_1,
                 mock_token_stats_1,
+                NO_ARCHIVES,            # archived sessions' counts
                 mock_child_result_1,
                 mock_rollup_1_title,     # fetch_session_titles
+                NO_ARCHIVES,            # archived titles
                 mock_rollup_1_usage,     # fetch_session_usage_rollups
+                NO_ARCHIVES,            # archived usage
                 mock_ownership_1,       # _fetch_candidate_sessions
                 mock_specialists_1,     # _fetch_active_specialists
             ]
@@ -432,9 +454,12 @@ class TestMultiProjectScenario:
                 mock_msg_count,
                 mock_event_count,
                 mock_token_stats,
+                NO_ARCHIVES,            # archived sessions' counts
                 mock_child_result,
                 mock_rollup_p_title,     # fetch_session_titles
+                NO_ARCHIVES,            # archived titles
                 mock_rollup_p_usage,     # fetch_session_usage_rollups
+                NO_ARCHIVES,            # archived usage
                 mock_ownership,         # _fetch_candidate_sessions
                 mock_specialists,       # _fetch_active_specialists
             ]

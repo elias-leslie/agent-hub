@@ -54,14 +54,17 @@ def _mock_session_exists(mock_db: AsyncMock) -> None:
     session_result = MagicMock()
     session_result.scalar_one_or_none.return_value = mock_session_obj
 
-    # get_session_or_404 calls execute once, then get_max_turn and get_max_sequence
+    # get_session_or_404 calls execute once, then the event-archive check, get_max_turn and get_max_sequence
     turn_result = MagicMock()
     turn_result.scalar_one_or_none.return_value = 3  # current turn
 
     seq_result = MagicMock()
     seq_result.scalar_one_or_none.return_value = 5  # current max sequence
 
-    mock_db.execute = AsyncMock(side_effect=[session_result, turn_result, seq_result])
+    no_archive = MagicMock()
+    no_archive.scalar.return_value = False
+
+    mock_db.execute = AsyncMock(side_effect=[session_result, no_archive, turn_result, seq_result])
 
 
 @pytest.mark.unit

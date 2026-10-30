@@ -14,6 +14,7 @@ from app.config import settings
 from app.db import async_session
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.event_storage import known_model
+from app.services.session_event_archive import session_events_with_archive
 from app.services.session_live_activity import is_session_actionably_active
 
 if TYPE_CHECKING:
@@ -226,7 +227,7 @@ async def build_full_session_response(
     """Build complete session response with context usage and token breakdown.
 
     With ``include_events`` the session must have ``events`` loaded and the
-    response carries messages. Without it, nothing touches ``session.events``;
+    response carries messages, archived events included. Without it, nothing touches ``session.events``;
     counts and the agent token breakdown come from SQL aggregates.
     """
     # Deferred import to avoid circular import via app.api.__init__
@@ -243,13 +244,12 @@ async def build_full_session_response(
     )
 
     if include_events:
-        agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(
-            session.events
-        )
-        agent_names = await _resolve_agent_display_names(db, session.events)
-        messages = convert_messages_to_response(session.events, agent_display_names=agent_names)
-        message_count = _message_count(session.events)
-        event_count = len(session.events)
+        events = await session_events_with_archive(db, session)
+        agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(events)
+        agent_names = await _resolve_agent_display_names(db, events)
+        messages = convert_messages_to_response(events, agent_display_names=agent_names)
+        message_count = _message_count(events)
+        event_count = len(events)
     else:
         by_type = await fetch_session_event_type_counts(db, session.id)
         message_count = by_type.get(SessionEventType.USER_MESSAGE, 0) + by_type.get(

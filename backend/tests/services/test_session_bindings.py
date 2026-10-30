@@ -42,6 +42,7 @@ async def test_child_session_lifecycle_event_is_stored_on_parent_with_source_met
         patch(
             "app.services.event_storage.get_max_sequence", new_callable=AsyncMock
         ) as max_sequence,
+        patch("app.services.event_storage.lock_session_event_ingestion", new_callable=AsyncMock),
         patch("app.services.event_storage.store_event", new_callable=AsyncMock) as mock_store,
     ):
         max_turn.return_value = 19
@@ -67,6 +68,35 @@ async def test_child_session_lifecycle_event_is_stored_on_parent_with_source_met
     assert kwargs["tool_output"]["observed_write_paths"] == [
         "frontend/src/app/work-chats/page.tsx"
     ]
+
+
+@pytest.mark.asyncio
+async def test_child_update_points_at_child_event_with_a_short_preview() -> None:
+    child = SimpleNamespace(
+        id="child-session", parent_session_id="parent-session", status="active", agent_slug="coder",
+        project_id="summitflow", external_id=None, summary_oneliner=None, workstream_status=None,
+        current_branch=None, observed_write_paths=[], health_detail=None, provider_metadata={},
+    )
+    child_event = SimpleNamespace(
+        id="child-event", event_type=SessionEventType.TOOL_RESULT, content="x" * 5000, tool_name="Bash"
+    )
+
+    with (
+        patch("app.services.event_storage.get_max_turn", new_callable=AsyncMock, return_value=1),
+        patch("app.services.event_storage.get_max_sequence", new_callable=AsyncMock, return_value=0),
+        patch("app.services.event_storage.lock_session_event_ingestion", new_callable=AsyncMock),
+        patch("app.services.event_storage.settings.child_session_update_preview_chars", 300),
+        patch("app.services.event_storage.store_event", new_callable=AsyncMock) as mock_store,
+    ):
+        await store_child_session_lifecycle_event(
+            AsyncMock(), child, SessionEventType.CHILD_SESSION_UPDATE, child_event=child_event
+        )
+
+    assert mock_store.await_args is not None
+    kwargs = mock_store.await_args.kwargs
+    assert kwargs["content"] == "Child session child-session update: " + "x" * 300
+    assert kwargs["tool_output"]["child_event_id"] == "child-event"
+    assert "child_event_content" not in kwargs["tool_output"]
 
 
 def _db_with_existing(binding: SessionBinding | None) -> AsyncMock:

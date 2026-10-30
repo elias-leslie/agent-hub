@@ -21,7 +21,15 @@ from sqlalchemy.schema import CreateTable
 
 from app.db import get_db
 from app.main import app
-from app.models import CostLog, Session, SessionBinding, SessionEvent, UsageCall, UsageSession
+from app.models import (
+    CostLog,
+    Session,
+    SessionBinding,
+    SessionEvent,
+    SessionEventArchive,
+    UsageCall,
+    UsageSession,
+)
 from app.models.agent import Agent
 from tests.conftest import TEST_HEADERS
 
@@ -45,7 +53,7 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
         await connection.execute(text(f"SET LOCAL search_path TO {schema}"))
 
         def create_tables(sync_connection: Any) -> None:
-            for table in (Session.__table__, SessionEvent.__table__, CostLog.__table__, Agent.__table__,
+            for table in (Session.__table__, SessionEvent.__table__, SessionEventArchive.__table__, CostLog.__table__, Agent.__table__,
                           UsageCall.__table__, UsageSession.__table__, SessionBinding.__table__):
                 for column in table.columns:
                     if isinstance(column.type, Enum):

@@ -24,6 +24,7 @@ from app.models import (
     CostLog,
     Session,
     SessionEvent,
+    SessionEventArchive,
     SubscriptionUsageSnapshot,
     WorkflowStep,
 )
@@ -84,6 +85,7 @@ async def pg_db() -> AsyncGenerator[AsyncSession]:
             for table in (
                 Session.__table__,
                 SessionEvent.__table__,
+                SessionEventArchive.__table__,
                 WorkflowStep.__table__,
                 CostLog.__table__,
                 SubscriptionUsageSnapshot.__table__,
@@ -3092,7 +3094,10 @@ async def live_pg() -> AsyncGenerator[Any]:
         await connection.execute(text(f"CREATE SCHEMA {schema}"))
 
         def create_tables(sync_connection: Any) -> None:
-            for table in (Session.__table__, SessionEvent.__table__, WorkflowStep.__table__, CostLog.__table__, SubscriptionUsageSnapshot.__table__):
+            for table in (
+                Session.__table__, SessionEvent.__table__, SessionEventArchive.__table__, WorkflowStep.__table__,
+                CostLog.__table__, SubscriptionUsageSnapshot.__table__,
+            ):
                 for column in table.columns:
                     if isinstance(column.type, Enum):
                         column.type.create(sync_connection, checkfirst=True)

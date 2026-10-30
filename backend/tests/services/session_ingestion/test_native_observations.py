@@ -23,6 +23,7 @@ from app.models import (
     NativeObservationReceipt,
     Session,
     SessionEvent,
+    SessionEventArchive,
 )
 from app.services.session_ingestion.app_server_observations import (
     SUPPORTED_VERSION,
@@ -80,7 +81,7 @@ async def isolated_native_db():
             op.execute(sa.text(f'SET LOCAL search_path TO "{schema}"'))
             # Minimal isolated baseline uses current columns but excludes unrelated FKs.
             # All DDL is executed through the migration fixture.
-            for model in (Session, SessionEvent):
+            for model in (Session, SessionEvent, SessionEventArchive):
                 columns = [sa.Column(column.name, column.type, primary_key=column.primary_key, nullable=column.nullable, server_default=column.server_default) for column in model.__table__.columns]
                 constraints = [sa.UniqueConstraint("session_id", "turn", "sequence", name="uq_isolated_session_position")] if model is SessionEvent else []
                 op.create_table(model.__tablename__, *columns, *constraints)

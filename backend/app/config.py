@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     local_history_catch_up_idle_minutes: float = Field(default=60, ge=0)
     # Codex threads are removed through its own CLI so its thread stores drop them too.
     local_history_codex_bin: str = "codex"
+    # A finished session idle this many days keeps its events as one compressed archive row instead of raw rows
+    # (app/services/session_event_archive.py); reads return them unchanged.
+    session_events_archive_after_days: float = Field(default=90, gt=0)
+    # A parent's child_session_update keeps this many characters of the child event's text; the child keeps it all.
+    child_session_update_preview_chars: int = Field(default=300, ge=0)
 
     @field_validator("agent_hub_db_url")
     @classmethod

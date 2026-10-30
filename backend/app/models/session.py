@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -20,7 +22,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -434,6 +436,30 @@ class SessionEvent(Base):
 
     def __repr__(self) -> str:
         return f"<SessionEvent id={self.id!r} type={self.event_type!r} turn={self.turn}>"
+
+
+class SessionEventArchive(Base):
+    """A finished session's events, compacted into one compressed JSONL payload.
+
+    ``summary`` keeps what lists and detail headers read without the events
+    (counts, token totals, native usage, per-agent tokens); ``title`` is the
+    first prompt the list shows. See app/services/session_event_archive.py.
+    """
+
+    __tablename__ = "session_event_archives"
+
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    format: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    raw_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    first_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 @event.listens_for(SessionEvent, "before_insert")

@@ -78,7 +78,7 @@ SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
     WorkflowScheduleDefinition(
         schedule_id="data_retention",
         label="Data retention",
-        description="Deletes expired telemetry and request log data.",
+        description="Deletes expired telemetry and request logs; archives old finished sessions' events.",
         cron="0 4 * * *",
         category="maintenance",
     ),

@@ -21,6 +21,9 @@ from app.services.event_storage import (
 # source files exist regardless of where CI clones the repo.
 REPO_ROOT = str(Path(__file__).resolve().parents[3])
 
+# A new session's first event checks for an event archive before numbering against its rows.
+NO_ARCHIVE = MagicMock(scalar=lambda: False)
+
 
 def _mock_parent_session(provider_metadata: dict[str, object] | None = None) -> MagicMock:
     session = MagicMock()
@@ -173,7 +176,7 @@ class TestMemoryInjectEvent:
         original_metadata: dict[str, object] = {"cwd": "/tmp/example"}
         parent_session = _mock_parent_session(original_metadata)
         db.get = AsyncMock(return_value=parent_session)
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: 2), MagicMock(scalar_one_or_none=lambda: 7), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: 2), MagicMock(scalar_one_or_none=lambda: 7), None])
         sequencer = get_sequencer()
         sequencer._sessions.clear()
 
@@ -187,7 +190,7 @@ class TestMemoryInjectEvent:
 
         assert event.turn == 2
         assert event.sequence == 8
-        assert db.execute.await_count == 2
+        assert db.execute.await_count == 3
         assert parent_session.provider_metadata["live_activity"]["phase"] == "finalizing"
         assert parent_session.provider_metadata is not original_metadata
 
@@ -196,7 +199,7 @@ class TestMemoryInjectEvent:
         db = MagicMock()
         parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
 
         await store_event(
@@ -207,7 +210,7 @@ class TestMemoryInjectEvent:
             content="hello",
         )
 
-        assert db.execute.await_count == 1
+        assert db.execute.await_count == 2
         assert parent_session.updated_at is not None
         db.get.assert_awaited_once_with(Session, "sess-1")
 
@@ -215,7 +218,7 @@ class TestMemoryInjectEvent:
     async def test_store_event_uses_provided_session_without_reloading(self) -> None:
         db = MagicMock()
         db.get = AsyncMock()
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None])
         parent_session = _mock_parent_session()
         get_sequencer()._sessions.clear()
 
@@ -237,7 +240,7 @@ class TestMemoryInjectEvent:
         db = MagicMock()
         parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
 
         await store_event(
@@ -264,7 +267,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_updates_session_model_and_observed_scope_paths(self) -> None:
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None, None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None, None])
         db.get = AsyncMock()
         session = Session(
             id="sess-scope",
@@ -312,7 +315,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_infers_scope_from_exec_command_and_apply_patch(self) -> None:
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None, None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None, None])
         db.get = AsyncMock()
         session = Session(
             id="sess-command-scope",
@@ -368,7 +371,7 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_tracks_subagent_model_without_overwriting_primary_model(self) -> None:
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None])
         db.get = AsyncMock()
         session = Session(
             id="sess-subagent",
@@ -406,7 +409,7 @@ class TestMemoryInjectEvent:
         db = MagicMock()
         parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
 
         event = await store_event(
@@ -441,7 +444,7 @@ class TestMemoryInjectEvent:
         db = MagicMock()
         parent_session = _mock_parent_session()
         db.get = AsyncMock(return_value=parent_session)
-        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.execute = AsyncMock(side_effect=[NO_ARCHIVE, MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
 
         event = await store_memory_inject_event(

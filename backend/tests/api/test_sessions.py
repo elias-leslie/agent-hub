@@ -197,6 +197,10 @@ class TestGetSession:
         mock_latest_context_result = MagicMock()
         mock_latest_context_result.scalar_one_or_none.return_value = None
 
+        # Event archive lookup result (None - the session's events are all rows)
+        mock_no_archive_result = MagicMock()
+        mock_no_archive_result.first.return_value = None
+
         # Agent display name resolution query result
         mock_agent_names_result = MagicMock()
         mock_agent_names_result.all.return_value = []
@@ -207,20 +211,28 @@ class TestGetSession:
         #       (called inside calculate_context_usage)
         #   (3) latest CostLog input_tokens     — scalar_one_or_none → int | None
         #       (called inside calculate_context_usage)
+        #  (3b) session_events_with_archive     — .first() → archive row | None
         #   (4) _resolve_agent_display_names    — .all() → list[Row]
         #   (5) child session count query       — scalars().all() → list[Session]
         #   (6) query_project_ownership         — .all() → list[Row]
         #   (7) query_project_active_specialists — .all() → list[Row]
-        #   (8) fetch_session_titles            — .all() → list[Row]
-        #   (9) fetch_session_usage_rollups     — .all() → list[Row]
+        #   (8) fetch_session_titles            — .all() → list[Row], then archived titles
+        #   (9) fetch_session_usage_rollups     — .all() → list[Row], then archived usage
         #  (10) session cost                    — scalar() → float | None
         #  (11) usage ledger / cost-log fallback — .all() → list[Row] (no native usage)
+        #  (3b, 8, 9 each add one event-archive lookup: 14 in all)
         #
         # Using a deque-based dispatcher keeps the ordered responses explicit and avoids
         # StopIteration when _resolve_agent_display_names is invoked more than once — any
         # extra calls fall back to mock_agent_names_result instead of exhausting the queue.
         _call_queue: deque[MagicMock] = deque(
-            [mock_session_result, mock_token_totals_result, mock_latest_context_result, mock_agent_names_result]
+            [
+                mock_session_result,
+                mock_token_totals_result,
+                mock_latest_context_result,
+                mock_no_archive_result,
+                mock_agent_names_result,
+            ]
         )
 
         def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
@@ -257,8 +269,8 @@ class TestGetSession:
         assert data["context_usage"]["limit_tokens"] == 272000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
-        assert mock_session.execute.call_count == 11, (
-            f"Expected 11 DB queries, got {mock_session.execute.call_count} "
+        assert mock_session.execute.call_count == 14, (
+            f"Expected 14 DB queries, got {mock_session.execute.call_count} "
             "— update this test if a query was added or removed"
         )
 

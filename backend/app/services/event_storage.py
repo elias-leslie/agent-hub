@@ -9,13 +9,15 @@ from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.constants.models import UNKNOWN_MODEL
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.narration_extraction import extract_narration_from_event
 from app.services.secret_redaction import redact_secrets
+from app.services.session_event_archive import lock_session_events, restore_archived_events
 from app.services.session_live_activity import update_live_activity_for_event
 from app.services.session_scope import (
     apply_scope_state,
@@ -203,11 +205,11 @@ def _child_session_payload(
         "observed_write_paths": child_session.observed_write_paths or [],
     }
     if child_event is not None:
+        # The child session keeps the event itself; the parent's copy points at it.
         payload.update(
             {
                 "child_event_id": child_event.id,
                 "child_event_type": child_event.event_type,
-                "child_event_content": child_event.content,
                 "tool_name": child_event.tool_name,
             }
         )
@@ -229,6 +231,8 @@ def _child_session_summary(
         detail = child_session.summary_oneliner or child_session.health_detail or child_session.status
         return f"Child session {child_session.id} result: {detail}"
     detail = child_event.content if child_event is not None and child_event.content else child_session.health_detail
+    if detail:
+        detail = detail[: settings.child_session_update_preview_chars]
     return f"Child session {child_session.id} update: {detail or child_label}"
 
 
@@ -306,6 +310,7 @@ async def _resolve_turn_sequence(db: AsyncSession, session_id: str) -> tuple[int
     """Sync sequencer from DB if needed, return (turn, sequence)."""
     sequencer = get_sequencer()
     if session_id not in sequencer._sessions:
+        await restore_archived_events(db, session_id)
         current_turn = await get_max_turn(db, session_id)
         current_sequence = (
             await get_max_sequence(db, session_id, current_turn) if current_turn else 0
@@ -316,11 +321,12 @@ async def _resolve_turn_sequence(db: AsyncSession, session_id: str) -> tuple[int
 
 
 async def lock_session_event_ingestion(db: AsyncSession, session_id: str) -> None:
-    """Serialize explicit batches and derived child events for one session."""
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
-        {"lock_key": f"session-events:{session_id}"},
-    )
+    """Serialize explicit batches and derived child events for one session.
+
+    An archived session's events come back as rows first, so ingestion dedupes and numbers against them.
+    """
+    await lock_session_events(db, session_id)
+    await restore_archived_events(db, session_id)
 
 
 def _touch_session(parent_session: Session, event: SessionEvent) -> None:

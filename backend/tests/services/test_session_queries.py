@@ -7,6 +7,8 @@ import pytest
 
 from app.services.session_queries import encode_session_event_snapshot, query_session_events
 
+NO_ARCHIVE = MagicMock(scalar=lambda: False)  # the session has no event archive
+
 
 @pytest.mark.asyncio
 async def test_query_session_events_returns_max_turn_not_total_pages() -> None:
@@ -28,7 +30,7 @@ async def test_query_session_events_returns_max_turn_not_total_pages() -> None:
     events_result.scalars.return_value.all.return_value = []
 
     db.execute = AsyncMock(
-        side_effect=[snapshot_result, count_result, max_turn_result, events_result]
+        side_effect=[NO_ARCHIVE, snapshot_result, count_result, max_turn_result, events_result]
     )
 
     events, total, max_turn, snapshot = await query_session_events(
@@ -56,7 +58,7 @@ async def test_query_session_events_reuses_fixed_snapshot_without_reanchoring() 
     max_turn_result.scalar.return_value = 1
     events_result = MagicMock()
     events_result.scalars.return_value.all.return_value = []
-    db.execute = AsyncMock(side_effect=[count_result, max_turn_result, events_result])
+    db.execute = AsyncMock(side_effect=[NO_ARCHIVE, count_result, max_turn_result, events_result])
     snapshot = encode_session_event_snapshot(
         datetime(2026, 9, 29, 15, 0, tzinfo=UTC),
         "10000000-0000-0000-0000-000000000002",
@@ -74,7 +76,7 @@ async def test_query_session_events_reuses_fixed_snapshot_without_reanchoring() 
     assert total == 2
     assert max_turn == 1
     assert returned_snapshot == snapshot
-    assert db.execute.await_count == 3
+    assert db.execute.await_count == 4
 
 
 def test_benchmark_exclusion_mirrors_attribution_metadata_rule() -> None:

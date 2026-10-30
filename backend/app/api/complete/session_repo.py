@@ -22,6 +22,7 @@ from app.models import SessionEventType
 from app.services.event_storage import get_sequencer, store_child_session_lifecycle_event
 from app.services.events import publish_session_start
 from app.services.llm_messages import Message
+from app.services.session_event_archive import restore_archived_events
 from app.services.session_ingestion import SessionUpsertRequest, upsert_session
 from app.services.session_live_activity import (
     mark_session_execution_start,
@@ -194,6 +195,8 @@ async def get_or_create_session(
     )
     await _validate_project(req.project_id)
     if req.session_id:
+        # A resumed archived session needs its history back as rows before the turn adds to it.
+        await restore_archived_events(db, req.session_id)
         result = await db.execute(
             select(DBSession).options(selectinload(DBSession.events))
             .where(DBSession.id == req.session_id)
