@@ -150,9 +150,22 @@ class TestLinearScan:
     def test_many_unclosed_opening_tags_are_linear(self) -> None:
         import time
 
-        content = "<private>" * 50_000 + "<memory>" * 50_000
-        started = time.monotonic()
+        def scan_seconds(tags: int) -> float:
+            content = "<private>" * tags + "<memory>" * tags
+            best = float("inf")
+            for _ in range(5):
+                started = time.perf_counter()
+                strip_private_tags(content)
+                strip_memory_tags(content)
+                best = min(best, time.perf_counter() - started)
+            return best
+
+        # Growth ratio, not a wall-clock bound, so host load does not matter: 8x the
+        # unclosed tags costs ~4-8x when linear and ~30x when every opening tag rescans
+        # to the end of the input.
+        assert scan_seconds(8_000) / scan_seconds(1_000) < 16
+
+        content = "<private>" * 8_000 + "<memory>" * 8_000
         result, stats = apply_privacy_filter(content)
-        assert time.monotonic() - started < 1.0
         assert result == content
         assert stats == {"private_tags_stripped": 0, "memory_tags_stripped": 0, "secrets_redacted": 0}
