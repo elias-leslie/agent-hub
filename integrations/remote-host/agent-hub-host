@@ -12,8 +12,8 @@ One file, three names (by the name it runs as):
 The shim fetches the tool's non-rotating credentials from Agent Hub with this host's
 token, sets the env var or writes a 0600 file under ``$XDG_RUNTIME_DIR`` linked into
 the tool's real config dir, then execs the next ``<command>`` on PATH (the context
-launcher). It fails closed with a one-line reason; ``--version`` and ``--help`` pass
-straight through. Rotating logins (Codex, Pi OAuth, agy) stay on this host's disk and
+launcher). It fails closed with a one-line reason; ``--version``, ``--help``, ``-v`` and
+``-h`` pass straight through. Rotating logins (Codex, Pi OAuth, agy) stay on this host's disk and
 are only read for status. Standard library only: the host has no Agent Hub install.
 """
 
@@ -21,17 +21,19 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import http.client
 import json
 import os
 import stat
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, NoReturn
 
-PASSTHROUGH = {"--version", "--help"}
+PASSTHROUGH = {"--version", "--help", "-v", "-h"}
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config/agent-hub"
 SHIM_DIR = HOME / ".local/lib/agent-hub/cred-bin"
@@ -40,6 +42,8 @@ BIN_DIR = HOME / ".local/bin"
 INDEX_FILE = CONFIG_DIR / "cred-shims.json"
 MAP_CACHE = CONFIG_DIR / "tool-map.json"
 TIMEOUT = 10
+# Never through a proxy from the environment: requests carry the host token.
+OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 STATES = ("signed_in", "expired", "unknown", "needs_sign_in")  # best first, for a tool's overall state
 
 
@@ -71,15 +75,15 @@ def _token() -> str:
     return token
 
 
-def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+def _request(method: str, path: str, body: dict[str, Any] | None = None, token: str | None = None) -> Any:
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
         _hub_url() + path, data=data, method=method,
-        headers={"Authorization": f"Bearer {_token()}", "Accept": "application/json",
+        headers={"Authorization": f"Bearer {token or _token()}", "Accept": "application/json",
                  **({"Content-Type": "application/json"} if data else {})},
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:  # noqa: S310 - fixed scheme from config
+        with OPENER.open(request, timeout=TIMEOUT) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as exc:
         reasons = {
@@ -90,7 +94,7 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         raise Refused(reasons.get(exc.code, f"Agent Hub answered HTTP {exc.code}")) from None
     except (urllib.error.URLError, OSError):
         raise Refused(f"Agent Hub unreachable at {_hub_url()} (is the ssh -R 8003 link up?)") from None
-    except ValueError:
+    except (http.client.HTTPException, ValueError):
         raise Refused("Agent Hub sent an unreadable answer") from None
 
 
@@ -128,26 +132,50 @@ def _runtime_dir(tool: str) -> Path:
     return path
 
 
+def _check_target(target: Path, source: Path) -> bool:
+    """Whether the tool's auth file already links to `source`; refuse anything else there."""
+    try:
+        info = os.lstat(target)
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISLNK(info.st_mode):
+        raise Refused(f"{target} holds a login on this host; remove it or deny the tool in Agent Hub")
+    if Path(os.readlink(target)) != source:
+        raise Refused(f"{target} links somewhere else; leaving it alone")
+    return True
+
+
 def _place_file(tool: str, item: dict[str, Any]) -> None:
-    """Write the value to a private runtime file and link the tool's auth file to it."""
+    """Write the value to a private runtime file and link the tool's auth file to it.
+
+    Parallel launches of the same tool are safe: each stages its own file, an unchanged
+    value is not rewritten, and a link another launch just made is accepted.
+    """
     target = Path(os.path.expanduser(item["config_dir"])) / item["auth_file"]
     source = _runtime_dir(tool) / f"{item['name']}-{Path(item['auth_file']).name}"
-    if target.is_symlink():
-        if Path(os.readlink(target)) != source:
-            raise Refused(f"{target} links somewhere else; leaving it alone")
-    elif target.exists():
-        raise Refused(f"{target} holds a login on this host; remove it or deny the tool in Agent Hub")
-    staging = source.with_name(source.name + ".tmp")
-    fd = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(item["value"])
-    os.replace(staging, source)
-    if not target.is_symlink():
-        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        link = target.with_name(f".{target.name}.agent-hub-link")
-        link.unlink(missing_ok=True)
-        os.symlink(source, link)
-        os.replace(link, target)
+    try:
+        linked = _check_target(target, source)
+        try:
+            current = source.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            current = None
+        if current != item["value"]:
+            fd, staging = tempfile.mkstemp(dir=source.parent, prefix=f".{source.name}.")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    handle.write(item["value"])
+                os.replace(staging, source)
+            except BaseException:
+                Path(staging).unlink(missing_ok=True)
+                raise
+        if not linked:
+            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            try:
+                os.symlink(source, target)
+            except FileExistsError:
+                _check_target(target, source)  # another launch linked it first
+    except OSError as exc:
+        raise Refused(f"cannot place the credential file for {target} ({exc.strerror or type(exc).__name__})") from None
 
 
 def launch(tool: str, command: str, args: list[str]) -> NoReturn:
@@ -180,8 +208,8 @@ def _index() -> dict[str, str]:
 # Commands ------------------------------------------------------------------
 
 
-def _tool_map() -> dict[str, Any]:
-    answer = _request("GET", "/api/host-credentials/tools")
+def _tool_map(token: str | None = None) -> dict[str, Any]:
+    answer = _request("GET", "/api/host-credentials/tools", token=token)
     CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     MAP_CACHE.write_text(json.dumps(answer, indent=2) + "\n", encoding="utf-8")
     return answer
@@ -203,6 +231,7 @@ def install(token_stdin: bool) -> dict[str, Any]:
         token = sys.stdin.read().strip()
         if not token:
             raise Refused("no token on stdin")
+        answer = _tool_map(token)  # a token Agent Hub refuses never replaces the working one
         path = _token_file()
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         staging = path.with_name(path.name + ".tmp")
@@ -210,9 +239,10 @@ def install(token_stdin: bool) -> dict[str, Any]:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(token + "\n")
         os.replace(staging, path)
+    else:
+        answer = _tool_map()
     for name in ("agent-hub", "agent-hub-cred-exec"):
         _link(BIN_DIR / name, me)
-    answer = _tool_map()
     granted = set(answer.get("granted_tools", []))
     shims: dict[str, str] = {}
     for row in answer.get("credentials", []):
@@ -348,9 +378,16 @@ def main(argv: list[str]) -> int:
         label = tool
         launch(tool, name, argv[1:])
     except Refused as exc:
-        prefix = "agent-hub" if name in CLI_NAMES else f"agent-hub-cred-exec: {label}"
-        print(f"{prefix}: {exc}", file=sys.stderr)
+        print(f"{_prefix(name, label)}: {exc}", file=sys.stderr)
         return 1
+    except Exception as exc:  # one line, never a traceback; the type and OS reason carry no value
+        reason = f"{exc.strerror} ({exc.filename})" if isinstance(exc, OSError) and exc.strerror else type(exc).__name__
+        print(f"{_prefix(name, label)}: failed: {reason}", file=sys.stderr)
+        return 1
+
+
+def _prefix(name: str, label: str) -> str:
+    return "agent-hub" if name in CLI_NAMES else f"agent-hub-cred-exec: {label}"
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

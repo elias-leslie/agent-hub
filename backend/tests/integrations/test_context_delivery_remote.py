@@ -168,3 +168,49 @@ async def test_host_route_is_served_through_the_app_only_with_a_host_token(monke
     assert is_path_exempt("/api/host-context/deliver")
     assert refused.status_code == 401
     assert served.status_code == 418 and "agent-work" in served.text
+
+
+@pytest.fixture
+def truncating_hub() -> Iterator[str]:
+    """An HTTP server that promises a longer body than it sends, then hangs up."""
+    import socket
+
+    server = socket.create_server(("127.0.0.1", 0))
+
+    def serve() -> None:
+        while True:
+            try:
+                conn, _ = server.accept()
+            except OSError:
+                return
+            with conn:
+                conn.recv(65536)
+                conn.sendall(b'HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{"status": "o')
+
+    threading.Thread(target=serve, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.getsockname()[1]}"
+    finally:
+        server.close()
+
+
+def test_remote_cli_answers_a_truncated_reply_with_one_line_and_exit_2(tmp_path: Path, truncating_hub: str) -> None:
+    token_file = tmp_path / "host-token"
+    token_file.write_text(TOKEN, encoding="utf-8")
+    result = _run({"AGENT_HUB_URL": truncating_hub, "AGENT_HUB_HOST_TOKEN_FILE": str(token_file)}, "deliver", "--surface", "x")
+    assert result.returncode == 2
+    assert len(result.stderr.strip().splitlines()) == 1 and "Traceback" not in result.stderr
+
+
+def test_remote_cli_never_sends_the_host_token_through_an_environment_proxy(
+    tmp_path: Path, agent_hub: tuple[str, list[dict[str, Any]]]
+) -> None:
+    url, seen = agent_hub
+    token_file = tmp_path / "host-token"
+    token_file.write_text(TOKEN, encoding="utf-8")
+    proxy = "http://127.0.0.1:9"  # nothing listens: a proxied request would fail
+    env = {"AGENT_HUB_URL": url, "AGENT_HUB_HOST_TOKEN_FILE": str(token_file), "PATH": "/usr/bin:/bin",
+           "http_proxy": proxy, "HTTP_PROXY": proxy, "all_proxy": proxy}
+    result = _run(env, "deliver", "--surface", "claude_code")
+    assert result.returncode == 0, result.stderr
+    assert seen[0]["auth"] == f"Bearer {TOKEN}"

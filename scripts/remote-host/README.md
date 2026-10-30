@@ -59,6 +59,12 @@ re-runnable: a second run changes nothing unless the workstation changed.
     shims, installed by `agent-hub install`.
   - The same PATH is set in `~/.profile` (managed block) and in the
     `tether@default` drop-in `remote.conf`. Tether puts its own shims in front.
+- **sshd:** `/etc/ssh/sshd_config.d/50-agent-host.conf` (`host/sshd-agent-host.conf`)
+  allows 100 sessions per connection, since every remote terminal, paste and
+  health check is one session on the Tether link's single connection (the
+  OpenSSH default of 10 refuses the 11th). It also drops a dead link within
+  about 45 s. Setup checks it with `sshd -t` and reloads sshd, which keeps open
+  connections.
 - **Tether:** the workstation's bundle in `~/.local/lib/tether` and
   `tether@.service` from the aico checkout.
   - The drop-in sets headless mode, the projects dir and the PATH.
@@ -68,10 +74,16 @@ re-runnable: a second run changes nothing unless the workstation changed.
     Restarting never stops a pane.
 - **Idle poweroff:** `agent-host-idle.timer` runs every 5 min as root.
   - The host powers off once it has been idle for `IDLE_MINUTES`. Idle means
-    no Tether sessions, no pending wakes, load below `LOAD_MAX`, and no ssh
-    connection that runs a shell or command (the Tether link is `ssh -N`).
+    no Tether sessions, no pending wakes, load below `LOAD_MAX`, no ssh
+    connection that runs a shell or command (the Tether link is `ssh -N`), and
+    no user work.
+  - User work is any process left in a user slice, however little CPU it uses:
+    a `setsid -f`/`nohup` job, a stray tmux, a `systemd-run --user` unit, or
+    something left running after a Tether session ended. Tether's own units,
+    the user manager and the usual user daemons (`IGNORE_UNITS`) and sshd's own
+    processes (`IGNORE_COMMANDS`) don't count.
   - The thresholds are in `/etc/agent-host/idle.conf`. Re-runs never overwrite
-    it, and `ENABLED=0` turns poweroff off.
+    it; they only add keys it lacks. `ENABLED=0` turns poweroff off.
   - Anything that can't be read counts as busy.
   - Each run logs its decision: `journalctl -u agent-host-idle`.
   - To check without changing anything:
@@ -85,7 +97,8 @@ scripts/remote-host/snapshot-clean agent-work 200 agent-host-ready
 
 The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot.
 - The host step refuses while anything runs: Tether sessions, tmux servers,
-  root requests or wakes, running containers, or another ssh session.
+  root requests or wakes, running containers, another ssh session, or user
+  work (as for idle poweroff).
 - Otherwise it clears Tether's state, the per-session context artifacts and
   `/work/scratch`, then restarts Tether empty.
 - Logins on the host are kept, so a snapshot taken after sign-in keeps them.
@@ -95,13 +108,18 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
 
 1. Make a VM, either way:
    - From VM 200's clean snapshot, which already has everything:
-     `st vm clone 200 <newid> <name>`.
+     `st vm clone 200 <newid> <name>`. The clone carries agent-work's Agent Hub
+     token and tool map. Remove both before anything else
+     (`rm ~/.config/agent-hub/host-token ~/.config/agent-hub/tool-map.json` on
+     the clone) and enrol it fresh in step 4. The bootstrap refuses to run
+     while a token for another host is there.
    - From the template: `st vm clone 9001 <newid> <name>`
      (`ubuntu-2404-agent-ready`), then run the bootstrap.
 2. Add an ssh Host alias for it in `~/.ssh/config`. Use the alias everywhere,
    never the IP.
 3. Run `scripts/remote-host/bootstrap <alias>`.
-4. Register it with Agent Hub. Write the token straight to a file and copy it
+4. Register it with Agent Hub under its ssh alias (the bootstrap checks that
+   the host token belongs to that name). Write the token straight to a file and copy it
    to the host's `~/.config/agent-hub/host-token` (0600). Never print it.
    ```
    st agents hosts add <name> --token-out FILE

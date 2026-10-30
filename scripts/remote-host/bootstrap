@@ -13,7 +13,10 @@ mapfile -t mirrored < <(grep -v '^[[:space:]]*\(#\|$\)' "$here/mirror.list")
 
 say() { printf 'bootstrap %s: %s\n' "$host" "$*"; }
 # shellcheck disable=SC2029 # callers pass workstation-expanded arguments on purpose
-on_host() { ssh "${ssh_opts[@]}" "$host" "$@"; }
+# -n: never read the caller's stdin, which may be a loop's input list.
+on_host() { ssh -n "${ssh_opts[@]}" "$host" "$@"; }
+# shellcheck disable=SC2029
+on_host_stdin() { ssh "${ssh_opts[@]}" "$host" "$@"; }
 copy() { rsync -a --delete -e "ssh ${ssh_opts[*]}" "$@"; }
 
 [[ $(on_host uname -m) == "$(uname -m)" ]] || { say "architecture differs from the workstation"; exit 1; }
@@ -34,7 +37,7 @@ for name in "${mirrored[@]}"; do
     branch=$(git -C "$src" symbolic-ref --short HEAD)
     head=$(git -C "$src" rev-parse HEAD)
     ref=refs/remotes/workstation/$branch
-    read -r synced host_head dirty < <(on_host bash -s -- "$dest" "$ref" <<'SH'
+    read -r synced host_head dirty < <(on_host_stdin bash -s -- "$dest" "$ref" <<'SH'
 set -e
 dest=$1 ref=$2
 [ -d "$dest/.git" ] || git init -q "$dest"
@@ -80,7 +83,7 @@ say "harness CLIs copied (claude $claude_version, pi $pi_version)"
 
 # --- 3. Tether bundle, the host scripts, plain hook files ------------------
 copy --exclude __pycache__ ~/.local/lib/tether/ "$host:.local/lib/tether/"
-copy --rsync-path="sudo -n rsync" --chown=root:root "$here/host/" "$host:/usr/local/lib/agent-host/"
+copy --exclude __pycache__ --delete-excluded --rsync-path="sudo -n rsync" --chown=root:root "$here/host/" "$host:/usr/local/lib/agent-host/"
 links=$("$here/home-links" "${mirrored[@]}")
 while IFS=$'\t' read -r kind path _; do
     [[ $kind == file ]] || continue
@@ -96,4 +99,4 @@ on_host mkdir -p .config/tether
 copy "$scratch/projects.json" "$host:.config/tether/projects.json"
 
 # --- 4. Host half ----------------------------------------------------------
-on_host /usr/local/lib/agent-host/setup "$claude_version" "$pi_version" <<<"$links"
+on_host_stdin /usr/local/lib/agent-host/setup "$claude_version" "$pi_version" "$host" <<<"$links"

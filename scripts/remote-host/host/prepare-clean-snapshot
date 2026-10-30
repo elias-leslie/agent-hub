@@ -2,8 +2,9 @@
 """Clear an agent host's Tether state, context artifacts and scratch for a clean snapshot.
 
 Refuses unless nothing is running: an empty Tether catalog (no sessions, tmux
-servers, root requests or wakes), no tmux servers, no running containers and
-no ssh session besides the caller's own. Logins on the host's disk are kept:
+servers, root requests or wakes), no tmux servers, no running containers, no
+ssh session besides the caller's own, and no user work (a detached job or
+`systemd-run --user` unit; see agent-host-idle's user_work). Logins on the host's disk are kept:
 a clean snapshot taken after sign-in keeps them on rollback.
 Run on the host as its user; `snapshot-clean` on the workstation calls it and
 then takes the snapshot.
@@ -52,6 +53,8 @@ def refusals(config) -> list[str]:
     # This command's own ssh session is one; anything more is someone else.
     if (ssh := idle.ssh_sessions()) > 1:
         found.append(f"{ssh - 1} other ssh session(s)")
+    if work := idle.user_work(config, exclude_cgroup=idle.own_cgroup()):
+        found.append(f"{len(work)} user process(es) outside Tether ({', '.join(sorted(set(work))[:5])})")
     return found
 
 
@@ -99,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         cleared = 0
         for entry in SCRATCH.iterdir():
             if entry.is_dir() and not entry.is_symlink():
-                shutil.rmtree(entry)
+                _remove_tree(entry)
             else:
                 entry.unlink()
             cleared += 1

@@ -5,9 +5,26 @@
 set -euo pipefail
 here=$(dirname -- "$(readlink -f -- "$0")")
 launcher=/srv/workspaces/projects/summitflow/scripts/st
-command=${1-} subcommand=''
-[[ ${2-} != -* ]] && subcommand=${2-}
-if [[ -n $command && $command != -* ]]; then
+# Global options come before the command (st --help), so skip them before
+# reading it: `st -P x vm start` is still `vm`. An option the guard does not
+# know could hide the command, so it is refused.
+args=("$@") i=0 command='' subcommand=''
+while ((i < ${#args[@]})); do
+    case ${args[i]} in
+        -P | --project) i=$((i + 2)) ;;
+        -P?* | --project=* | --human | -c | --compact | --no-compact | --progress-only) i=$((i + 1)) ;;
+        --help | --install-completion | --show-completion) break ;;
+        --) command=${args[i + 1]-} i=$((i + 1)) && break ;;
+        -*)
+            printf 'st: unknown global option %s on this agent host; put it after the command.\n' "${args[i]}" >&2
+            exit 2
+            ;;
+        *) command=${args[i]} && break ;;
+    esac
+done
+next=${args[i + 1]-}
+[[ -n $command && $next != -* ]] && subcommand=$next
+if [[ -n $command ]]; then
     reason='' label=$command label_sub_matched=''
     while read -r name rest; do
         if [[ $name == "$command" && -z $label_sub_matched ]]; then

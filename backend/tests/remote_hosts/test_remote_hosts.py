@@ -318,6 +318,34 @@ def test_st_hosts_add_writes_the_token_to_a_private_file_and_never_prints_it(
     assert again.exit_code == 1 and "ahh_" not in again.output
 
 
+def test_st_hosts_add_never_registers_a_host_whose_token_it_cannot_keep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from agent_hub_st.agents import app
+    from typer.testing import CliRunner
+
+    from app.cli import remote_hosts as cli
+
+    calls: list[str] = []
+
+    async def fake_action(action: str, arguments: dict[str, Any]) -> Any:
+        calls.append(arguments["name"])
+        if arguments["name"] == "taken":
+            raise cli.RemoteHostError("Remote host already registered; revoke it first")
+        return "ahh_" + "t" * 43
+
+    monkeypatch.setattr(cli, "_database_action", fake_action)
+    unwritable = tmp_path / "missing-dir" / "token"
+    result = CliRunner().invoke(app, ["hosts", "add", "agent-work", "--token-out", str(unwritable)])
+    assert result.exit_code == 1 and "Cannot create the token file" in result.output
+    assert calls == []  # the host was never registered
+
+    out = tmp_path / "token"
+    failed = CliRunner().invoke(app, ["hosts", "add", "taken", "--token-out", str(out)])
+    assert failed.exit_code == 1 and calls == ["taken"]
+    assert not out.exists()  # no empty token file left behind
+
+
 def test_st_hosts_credential_set_reads_only_a_private_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from agent_hub_st.agents import app
     from typer.testing import CliRunner

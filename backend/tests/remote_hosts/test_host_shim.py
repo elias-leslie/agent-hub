@@ -34,6 +34,7 @@ ROWS = [
 class FakeHub:
     def __init__(self) -> None:
         self.granted = ["dummy", "filed"]
+        self.truncate = False  # promise more body than is sent, like a dropped forward
         self.requests: list[tuple[str, str, str | None, Any]] = []
         hub = self
 
@@ -45,7 +46,7 @@ class FakeHub:
                 data = json.dumps(body).encode()
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Content-Length", str(len(data) + 50 * hub.truncate))
                 self.end_headers()
                 self.wfile.write(data)
 
@@ -242,3 +243,83 @@ def test_login_status_reports_served_and_host_logins(host: dict[str, Any], hub: 
     states = {tool["tool"]: tool["state"] for tool in offline["tools"]}
     assert states == {"dummy": "unknown", "filed": "unknown", "codex": "signed_in"}
     assert "unreachable" in offline["agent_hub"]
+
+
+def test_parallel_launches_of_a_file_tool_all_start(host: dict[str, Any]) -> None:
+    _install(host)
+    procs = [subprocess.Popen(["filed-tool"], env=host["env"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True) for _ in range(30)]
+    results = [(proc.wait(timeout=30), proc.stderr.read()) for proc in procs]  # type: ignore[union-attr]
+    assert [rc for rc, _ in results] == [0] * 30, [err for rc, err in results if rc]
+    source = Path(os.readlink(host["home"] / ".filed/auth/creds.json"))
+    assert source.read_text() == SECRET
+    assert sorted(path.name for path in source.parent.iterdir()) == [source.name]  # no staging files left
+
+
+def test_placing_the_file_concurrently_never_fails_or_refuses(
+    host: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from importlib.machinery import SourceFileLoader
+
+    monkeypatch.setenv("HOME", str(host["home"]))
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(host["runtime"]))
+    module = SourceFileLoader("agent_hub_host_race", str(SCRIPT)).load_module()
+    item = {"name": "main", "config_dir": str(host["home"] / ".cfg"), "auth_file": "tokens/fake", "value": SECRET}
+    errors: list[str] = []
+
+    def worker() -> None:
+        for _ in range(200):
+            try:
+                module._place_file("faketool", item)
+            except Exception as exc:  # every failure is the finding
+                errors.append(f"{type(exc).__name__}: {exc}")
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+
+
+def test_a_file_that_cannot_be_placed_is_one_line_and_the_tool_never_runs(host: dict[str, Any]) -> None:
+    _install(host)
+    (host["home"] / ".filed").write_text("not a directory")
+    result = _run(host, "filed-tool")
+    assert result.returncode == 1 and len(result.stderr.strip().splitlines()) == 1
+    assert result.stderr.startswith("agent-hub-cred-exec: filed: cannot place the credential file")
+    assert not host["report"].exists()
+
+
+def test_short_flags_pass_straight_through_without_a_fetch(host: dict[str, Any], hub: FakeHub) -> None:
+    _install(host)
+    before = len(hub.requests)
+    for flag in ("-v", "-h"):
+        assert _run(host, "dummy-tool", flag, env={"AGENT_HUB_URL": "http://127.0.0.1:9"}).returncode == 0
+        assert json.loads(host["report"].read_text())["key"] is None
+    assert len(hub.requests) == before
+
+
+def test_a_rejected_install_keeps_the_working_token(host: dict[str, Any]) -> None:
+    _install(host)
+    token = host["home"] / ".config/agent-hub/host-token"
+    result = _run(host, str(SCRIPT), "install", "--token-stdin", stdin="ahh_TYPO\n")
+    assert result.returncode == 1 and "unknown or revoked" in result.stderr
+    assert token.read_text().strip() == TOKEN
+    assert _run(host, "dummy-tool").returncode == 0
+
+
+def test_a_truncated_answer_is_one_line_and_never_a_traceback(host: dict[str, Any], hub: FakeHub) -> None:
+    _install(host)
+    hub.truncate = True
+    result = _run(host, "dummy-tool")
+    assert result.returncode == 1 and len(result.stderr.strip().splitlines()) == 1
+    assert "Traceback" not in result.stderr and not host["report"].exists()
+
+
+def test_the_host_token_never_goes_through_an_environment_proxy(host: dict[str, Any], hub: FakeHub) -> None:
+    _install(host)
+    proxy = "http://127.0.0.1:9"  # nothing listens: a proxied request would fail
+    result = _run(host, "dummy-tool", env={"http_proxy": proxy, "HTTP_PROXY": proxy, "all_proxy": proxy})
+    assert result.returncode == 0, result.stderr
+    assert hub.requests[-1][2] == f"Bearer {TOKEN}"

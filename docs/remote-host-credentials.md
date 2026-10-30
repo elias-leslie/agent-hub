@@ -91,7 +91,7 @@ The shim:
    session files there.
 3. Execs the next `<command>` on PATH, which is the context launcher.
 
-`--version` and `--help` skip the fetch.
+`--version`, `--help`, `-v` and `-h` skip the fetch. Requests to Agent Hub never go through a proxy from the environment, since they carry the host token.
 
 The shim fails closed with one line on stderr in these cases:
 

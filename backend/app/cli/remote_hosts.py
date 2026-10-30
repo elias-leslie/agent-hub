@@ -38,11 +38,14 @@ def _host(host: Any) -> dict[str, Any]:
             "revoked_at": _iso(host.revoked_at), "last_seen_at": _iso(host.last_seen_at)}
 
 
-def _write_private(path: Path, token: str) -> None:
-    """Create the token file 0600; never overwrite an existing one."""
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(token + "\n")
+def _create_private(path: Path) -> int:
+    """Create the empty 0600 token file before the host exists; never overwrite one."""
+    try:
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    except FileExistsError:
+        raise RemoteHostError("Token file already exists") from None
+    except OSError:
+        raise RemoteHostError("Cannot create the token file") from None
 
 
 def _read_value(path: Path | None) -> str:
@@ -99,11 +102,15 @@ async def _database_action(action: str, arguments: dict[str, Any]) -> Any:
 def run_remote_host_operation(action: str, **arguments: Any) -> dict[str, Any]:
     """Synchronous CLI boundary; the caller prints only fixed errors."""
     if action == "add":
+        # The file comes first: a host registered without its token can only be revoked.
         token_out = Path(arguments.pop("token_out"))
-        if token_out.exists() or token_out.is_symlink():
-            raise RemoteHostError("Token file already exists")
-        token = asyncio.run(_database_action("add", arguments))
-        _write_private(token_out, token)
+        fd = _create_private(token_out)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(asyncio.run(_database_action("add", arguments)) + "\n")
+        except BaseException:
+            token_out.unlink(missing_ok=True)
+            raise
         return {"name": arguments["name"], "token_file": str(token_out)}
     if action == "credential-set":
         input_file = arguments.pop("input_file")

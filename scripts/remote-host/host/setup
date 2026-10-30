@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Host half of scripts/remote-host/bootstrap; runs on the agent host as its
 # user (sudo for the system parts). Re-runnable: every step converges.
-# Usage: setup <claude-version> <pi-version> < home-links.tsv
+# Usage: setup <claude-version> <pi-version> <host-name> < home-links.tsv
 set -euo pipefail
 
-claude_version=$1 pi_version=$2
+claude_version=$1 pi_version=$2 host_name=$3
 lib=/usr/local/lib/agent-host
 projects=/srv/workspaces/projects
 cred_bin=$HOME/.local/lib/agent-hub/cred-bin
@@ -37,6 +37,21 @@ link() {
     say "linked ${path/#$HOME/\~} -> $target"
 }
 
+# --- Agent Hub identity ---------------------------------------------------
+# A clone of another host's snapshot carries that host's Agent Hub token. Its
+# host name comes from Agent Hub, or from the tool map cached with that token
+# while Agent Hub is unreachable.
+if [[ -s $HOME/.config/agent-hub/host-token ]]; then
+    token_host=$("$projects/agent-hub/integrations/remote-host/agent-hub-host" login status --json 2>/dev/null \
+        | python3 -c 'import json, sys; print(json.load(sys.stdin).get("host") or "")' || true)
+    if [[ -n $token_host && $token_host != "$host_name" ]]; then
+        # shellcheck disable=SC2088 # a path shown to the reader, not expanded
+        say "The host token (~/.config/agent-hub/host-token) belongs to host $token_host, not $host_name."
+        say "Enrol this host fresh: rm ~/.config/agent-hub/host-token ~/.config/agent-hub/tool-map.json, then README step 4."
+        exit 1
+    fi
+fi
+
 # --- system: shared paths, idle poweroff ---------------------------------
 # The checkouts must really live at the workstation's path: git and getcwd
 # report resolved paths, and Agent Hub matches those against its project
@@ -57,6 +72,41 @@ sudo -n install -d -m 0755 /etc/agent-host
 if [[ ! -f /etc/agent-host/idle.conf ]]; then
     sudo -n install -m 0644 "$lib/idle.conf" /etc/agent-host/idle.conf
     say "installed /etc/agent-host/idle.conf"
+else
+    # Keep the host's edits; add only the keys (with their comments) it lacks.
+    added=$(python3 - "$lib/idle.conf" /etc/agent-host/idle.conf <<'PY'
+import sys
+shipped, current = (open(path, encoding="utf-8").read().splitlines() for path in sys.argv[1:])
+have = {line.partition("=")[0].strip() for line in current if "=" in line and not line.lstrip().startswith("#")}
+block: list[str] = []
+for line in shipped:
+    block.append(line)
+    if "=" in line and not line.lstrip().startswith("#"):
+        if line.partition("=")[0].strip() not in have:
+            print("\n".join(block))
+        block = []
+PY
+    )
+    if [[ -n $added ]]; then
+        printf '%s\n' "$added" | sudo -n tee -a /etc/agent-host/idle.conf >/dev/null
+        say "added new keys to /etc/agent-host/idle.conf: $(grep -v '^#' <<<"$added" | cut -d= -f1 | xargs)"
+    fi
+fi
+
+# sshd: room for every terminal on the link's one connection, and dead-link
+# detection. Validated before the reload; a reload keeps open connections.
+sshd_dropin=/etc/ssh/sshd_config.d/50-agent-host.conf
+if ! cmp -s "$lib/sshd-agent-host.conf" "$sshd_dropin" || [[ -e /etc/ssh/sshd_config.d/50-agent-work.conf ]]; then
+    sudo -n install -m 0644 "$lib/sshd-agent-host.conf" "$sshd_dropin"
+    # The hand-written drop-in it replaces (ClientAlive lines only).
+    sudo -n rm -f /etc/ssh/sshd_config.d/50-agent-work.conf
+    if ! sudo -n sshd -t; then
+        sudo -n rm -f "$sshd_dropin"
+        say "sshd rejected $sshd_dropin; removed it"
+        exit 1
+    fi
+    sudo -n systemctl reload ssh.service
+    say "installed $sshd_dropin and reloaded sshd"
 fi
 units_changed=0
 for unit in agent-host-idle.service agent-host-idle.timer; do

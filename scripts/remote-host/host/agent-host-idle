@@ -2,9 +2,13 @@
 """Power an agent host off once it has been idle long enough.
 
 Run by agent-host-idle.timer as root. Idle means all of these at once:
-zero Tether sessions, no pending Tether wakes, load below the limit, and no
+zero Tether sessions, no pending Tether wakes, load below the limit, no
 ssh connection carrying a command or shell (the Tether link is `ssh -N`, so
-its sshd process has no children). Thresholds come from the config file.
+its sshd process has no children), and no user work: no process left in a
+user slice outside Tether's own units and the usual user-manager daemons, so
+a detached `setsid`/`nohup` job, a stray tmux or a `systemd-run --user` unit
+keeps the host up however little CPU it uses. Thresholds and the ignored
+units and commands come from the config file.
 Anything that cannot be read counts as busy: unknown is never idle.
 Every run logs one line saying why the host stays up or powers off.
 """
@@ -15,15 +19,20 @@ import argparse
 import http.client
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 DEFAULT_CONFIG = Path("/etc/agent-host/idle.conf")
 STATE_DIR = Path("/run/agent-host-idle")
+# An unprivileged per-connection sshd process: `sshd: user...` before OpenSSH
+# 9.8, `sshd-session: user...` from 9.8 on.
+SSHD_CONNECTION = re.compile(r"^sshd(-session)?: ")
 
 
 @dataclass(frozen=True)
@@ -33,6 +42,8 @@ class Config:
     load_max: float
     load_window: int
     tether_socket: str
+    ignore_units: tuple[str, ...] = ()
+    ignore_commands: tuple[str, ...] = ()
 
 
 def load_config(path: Path) -> Config:
@@ -53,6 +64,8 @@ def load_config(path: Path) -> Config:
         load_max=float(values["LOAD_MAX"]),
         load_window=window,
         tether_socket=values["TETHER_SOCKET"],
+        ignore_units=tuple(values["IGNORE_UNITS"].split()),
+        ignore_commands=tuple(values["IGNORE_COMMANDS"].split()),
     )
 
 
@@ -89,7 +102,7 @@ def load_average(window: int) -> float:
 def ssh_sessions(proc: Path = Path("/proc")) -> int:
     """Count ssh connections that run a command or shell.
 
-    Each connection has an unprivileged `sshd: user...` process. `ssh -N`
+    Each connection has an unprivileged `sshd[-session]: user...` process. `ssh -N`
     (the Tether link) never forks under it; a shell, command or multiplexed
     session does.
     """
@@ -106,10 +119,54 @@ def ssh_sessions(proc: Path = Path("/proc")) -> int:
         ppid = int(stat.rsplit(")", 1)[1].split()[1])
         pid = int(entry.name)
         parents[pid] = ppid
-        if cmdline.startswith("sshd: ") and not cmdline.endswith(("[priv]", "[net]")) and "[listener]" not in cmdline:
+        if SSHD_CONNECTION.match(cmdline) and not cmdline.endswith(("[priv]", "[net]")) and "[listener]" not in cmdline:
             connections.add(pid)
     busy = {ppid for ppid in parents.values() if ppid in connections}
     return len(busy)
+
+
+def own_cgroup() -> str | None:
+    """This process's cgroup, so a check run over ssh leaves its own session out."""
+    try:
+        return _cgroup(Path("/proc/self"))
+    except OSError:
+        return None
+
+
+def _cgroup(entry: Path) -> str:
+    for line in (entry / "cgroup").read_text(encoding="utf-8").splitlines():
+        if line.startswith("0::"):
+            return line[3:]
+    return ""
+
+
+def user_work(config: Config, proc: Path = Path("/proc"), exclude_cgroup: str | None = None) -> list[str]:
+    """Command names of processes in a user slice that count as work.
+
+    Left out: Tether's own units (its sessions are counted on their own), the
+    user manager and its daemons (IGNORE_UNITS, matched against each unit in
+    the process's cgroup path), sshd's own processes (IGNORE_COMMANDS; the
+    ssh check covers connections), zombies and `exclude_cgroup`.
+    """
+    found: list[str] = []
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cgroup = _cgroup(entry)
+            if not cgroup.startswith("/user.slice/") or cgroup == exclude_cgroup:
+                continue
+            comm = (entry / "comm").read_text(encoding="utf-8", errors="replace").strip()
+            state = (entry / "stat").read_text(encoding="utf-8", errors="replace").rsplit(")", 1)[1].split()[0]
+        except (OSError, IndexError):
+            continue  # gone while we looked
+        if state == "Z" or comm in config.ignore_commands:
+            continue
+        units = cgroup.split("/")
+        if any(fnmatchcase(unit, pattern) for unit in units for pattern in config.ignore_units):
+            continue
+        found.append(comm)
+    return sorted(found)
 
 
 @dataclass(frozen=True)
@@ -119,16 +176,18 @@ class Reading:
     load: float | None
     ssh: int | None
     errors: tuple[str, ...]
+    work: tuple[str, ...] = ()
 
 
-def read_host(config: Config) -> Reading:
+def read_host(config: Config, exclude_cgroup: str | None = None) -> Reading:
     errors: list[str] = []
     sessions = wakes = ssh = None
     load = None
+    work: tuple[str, ...] = ()
     try:
         sessions = len(tether_get(config.tether_socket, "/v1/sessions")["items"])
         wakes = len(tether_get(config.tether_socket, "/v1/wakes")["items"])
-    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, http.client.HTTPException, RuntimeError, ValueError, KeyError, TypeError) as exc:
         errors.append(f"Tether unreadable ({type(exc).__name__}: {exc})")
     try:
         load = load_average(config.load_window)
@@ -138,7 +197,11 @@ def read_host(config: Config) -> Reading:
         ssh = ssh_sessions()
     except OSError as exc:
         errors.append(f"ssh sessions unreadable ({exc})")
-    return Reading(sessions, wakes, load, ssh, tuple(errors))
+    try:
+        work = tuple(user_work(config, exclude_cgroup=exclude_cgroup))
+    except OSError as exc:
+        errors.append(f"user processes unreadable ({exc})")
+    return Reading(sessions, wakes, load, ssh, tuple(errors), work)
 
 
 def busy_reasons(reading: Reading, config: Config) -> list[str]:
@@ -151,6 +214,10 @@ def busy_reasons(reading: Reading, config: Config) -> list[str]:
         reasons.append(f"load {reading.load:.2f} >= {config.load_max:g}")
     if reading.ssh:
         reasons.append(f"{reading.ssh} ssh session(s) besides the link")
+    if reading.work:
+        names = sorted(set(reading.work))
+        shown = ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
+        reasons.append(f"{len(reading.work)} user process(es) outside Tether ({shown})")
     return reasons
 
 
@@ -163,7 +230,7 @@ def decide(reading: Reading, config: Config, idle_since: float | None, now: floa
         return "busy", "stay up: " + "; ".join(reasons)
     summary = (
         f"0 sessions, 0 wakes, load {reading.load:.2f} < {config.load_max:g}, "
-        "no ssh sessions besides the link"
+        "no ssh sessions besides the link, no user processes"
     )
     idle_minutes = 0.0 if idle_since is None else (now - idle_since) / 60
     if idle_minutes >= config.idle_minutes:
@@ -190,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     since_file = STATE_DIR / "idle-since"
     now = time.time()
-    reading = read_host(config)
+    reading = read_host(config, exclude_cgroup=own_cgroup())
     action, message = decide(reading, config, _read_since(since_file), now)
     if args.dry_run:
         print(f"dry run: {message}")
