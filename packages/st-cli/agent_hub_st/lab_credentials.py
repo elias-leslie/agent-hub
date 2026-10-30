@@ -67,8 +67,8 @@ def refresh(
 
 
 @app.command("refs")
-@usage(surface="st.agents.credentials.refs", cmd="st agents credentials refs --target TARGET", when="list lab target/actor references without reading encrypted values", on_demand="agent administration")
-def refs(target: Annotated[str, typer.Option("--target")]) -> None:
+@usage(surface="st.agents.credentials.refs", cmd="st agents credentials refs [--target TARGET]", when="list lab target/actor references (all targets without --target) without reading encrypted values", on_demand="agent administration")
+def refs(target: Annotated[str | None, typer.Option("--target", help="One target; omit for every saved target")] = None) -> None:
     """List identity metadata only; presence does not establish validity."""
     _emit("refs", target=target)
 

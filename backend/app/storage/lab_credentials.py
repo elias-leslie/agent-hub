@@ -372,17 +372,20 @@ async def list_lab_credentials(
     return summaries
 
 
-async def list_lab_credential_refs(db: AsyncSession, target: str) -> list[str]:
-    """Read identity columns only; never fetch ciphertext or decrypt values."""
-    provider = _provider(target)
-    result = await db.execute(select(Credential.provider, Credential.credential_type).where(
-        Credential.provider == provider,
-    ).order_by(Credential.credential_type))
+async def list_lab_credential_refs(db: AsyncSession, target: str | None) -> list[str]:
+    """Read identity columns only; never fetch ciphertext or decrypt values. No target: every lab target."""
+    provider = _provider(target) if target is not None else None
+    scope = (Credential.provider == provider if provider is not None
+             else Credential.provider.startswith(LAB_PROVIDER_PREFIX, autoescape=True))
+    result = await db.execute(select(Credential.provider, Credential.credential_type).where(scope)
+                              .order_by(Credential.provider, Credential.credential_type))
     refs: list[str] = []
     for row_provider, actor in result.all():
-        if row_provider != provider:
+        if provider is not None and row_provider != provider:
             raise LabCredentialError("Lab credential outside target scope")
-        reference = lab_reference(target, actor)
+        if not row_provider.startswith(LAB_PROVIDER_PREFIX):
+            raise LabCredentialError("Lab credential outside target scope")
+        reference = lab_reference(row_provider[len(LAB_PROVIDER_PREFIX):], actor)
         if reference in refs:
             raise LabCredentialError("Lab credential lookup ambiguous or outside scope")
         refs.append(reference)

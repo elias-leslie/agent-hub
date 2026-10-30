@@ -113,6 +113,15 @@ async def test_metadata_listing_selects_no_ciphertext(synthetic_settings, monkey
     assert {column.name for column in db.execute.call_args.args[0].selected_columns} == {"provider", "credential_type"}
 
 
+@pytest.mark.asyncio
+async def test_metadata_listing_without_target_names_every_lab_target(synthetic_settings, monkeypatch):
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=MagicMock(all=lambda: [("_lab_example-local", "viewer"), ("_lab_other", "default")]))
+    monkeypatch.setattr(synthetic_settings, "decrypt_value", MagicMock(side_effect=AssertionError("no decryption")))
+    assert await list_lab_credential_refs(db, None) == [REF, "secret://lab/other/default"]
+    assert {column.name for column in db.execute.call_args.args[0].selected_columns} == {"provider", "credential_type"}
+
+
 @pytest.mark.parametrize("rows", [
     [("_lab_example-local", "viewer"), ("_lab_example-local", "viewer")],
     [("_lab_other", "viewer")], [("_lab_example-local", "bad/actor")],

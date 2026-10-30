@@ -96,7 +96,7 @@ def _handoff(target: str, resolved: list[ResolvedLabCredential], command: list[s
         writer.close()
 
 
-async def _database_action(action: str, target: str, **arguments: Any) -> Any:
+async def _database_action(action: str, target: str | None, **arguments: Any) -> Any:
     # Only the trusted owner operation loads Agent Hub's existing DB/key config.
     from app.db import async_session
 
@@ -112,7 +112,7 @@ async def _database_action(action: str, target: str, **arguments: Any) -> Any:
     raise LabCredentialError("Unknown local lab credential operation")
 
 
-def run_lab_operation(action: str, *, target: str, **arguments: Any) -> dict[str, Any]:
+def run_lab_operation(action: str, *, target: str | None, **arguments: Any) -> dict[str, Any]:
     """Synchronous local CLI boundary; all errors are sanitized by its caller.
 
     File reads and child waits stay outside the async database runtime. Resolved

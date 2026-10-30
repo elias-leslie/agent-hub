@@ -27,7 +27,7 @@
     "credentials": "Usage: agents credentials [OPTIONS] COMMAND [ARGS]...\n\n  Authorized local lab enrollment, refresh, refs and trusted handoff\n\nOptions:\n  --help  Show this message and exit.\n\nCommands:\n  enroll   Insert an authorized lab actor once; use refresh for known...\n  refresh  Replace an existing synthetic bundle in full; never reset a...\n  refs     List identity metadata only; presence does not establish...\n  run      Launch one trusted local adapter with selected fields;...",
     "credentials enroll": "Usage: agents credentials enroll [OPTIONS]\n\n  Insert an authorized lab actor once; use refresh for known synthetic actors.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --kind <str>        [required]\n  --input <str>       Current-user-owned private JSON file, or - for piped\n                      stdin  [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
     "credentials refresh": "Usage: agents credentials refresh [OPTIONS]\n\n  Replace an existing synthetic bundle in full; never reset a target account.\n\nOptions:\n  --target <str>      [required]\n  --actor <str>       [required]\n  --input <str>       Current-user-owned private JSON file, or - for piped\n                      stdin  [required]\n  --expires-at <str>\n  --help              Show this message and exit.",
-    "credentials refs": "Usage: agents credentials refs [OPTIONS]\n\n  List identity metadata only; presence does not establish validity.\n\nOptions:\n  --target <str>  [required]\n  --help          Show this message and exit.",
+    "credentials refs": "Usage: agents credentials refs [OPTIONS]\n\n  List identity metadata only; presence does not establish validity.\n\nOptions:\n  --target <str>  One target; omit for every saved target\n  --help          Show this message and exit.",
     "credentials run": "Usage: agents credentials run [OPTIONS] {command}...\n\n  Launch one trusted local adapter with selected fields; suppress its output.\n\n  Read JSON through EOF from the descriptor in AGENT_HUB_LAB_CREDENTIAL_FD:\n  {schema_version: 1, target: TARGET, credentials: [{reference: REF, values:\n  FIELDS}]}. Only PATH and the descriptor number reach the child's\n  environment. Close the descriptor after reading. A trusted login adapter may\n  drive an isolated browser; an API token does not establish its browser\n  session. Never use a shell, model harness or general browser executable as\n  the recipient.\n\nArguments:\n  command...  Absolute trusted child executable and nonsecret arguments\n              [required]\n\nOptions:\n  --target <str>    [required]\n  --request <path>  [required]\n  --help            Show this message and exit."
   },
   "usage": [
@@ -92,8 +92,8 @@
     {
       "surface": "st.agents.credentials.refs",
       "tier": "reference",
-      "cmd": "st agents credentials refs --target TARGET",
-      "when": "list lab target/actor references without reading encrypted values",
+      "cmd": "st agents credentials refs [--target TARGET]",
+      "when": "list lab target/actor references (all targets without --target) without reading encrypted values",
       "on_demand": "agent administration"
     },
     {

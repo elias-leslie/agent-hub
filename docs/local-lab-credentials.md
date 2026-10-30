@@ -5,7 +5,7 @@ Neri owns the target grant; the native operator owns account setup and login.
 These commands neither grant target authority nor authenticate the human owner.
 
 ```text
-st agents credentials refs --target TARGET
+st agents credentials refs [--target TARGET]   # no --target: every saved target
 st agents credentials enroll --target TARGET --actor ACTOR --kind synthetic|temporary|account --input FILE|- [--expires-at ISO]
 st agents credentials run --target TARGET --request selections.json -- /absolute/trusted-child [NONSECRET_ARGS]
 st agents credentials refresh --target TARGET --actor ACTOR --input FILE|- [--expires-at ISO]
