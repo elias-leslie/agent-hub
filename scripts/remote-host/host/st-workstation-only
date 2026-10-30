@@ -33,3 +33,4 @@ bugout       lab runs from the workstation
 bugout-deployment lab runs from the workstation
 ominull      production observation runs from the workstation
 ominull-backup production backups run from the workstation
+neri         Neri state and case data stay on the workstation
