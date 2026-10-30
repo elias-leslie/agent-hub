@@ -45,6 +45,7 @@ re-runnable: a second run changes nothing unless the workstation changed.
   `agent-hub-codex-sync@<user>.timer`, every 2 minutes) and
   `bind-native-work-role` (SessionStart hook) send the transcript's new bytes to
   `/api/host-sessions/*` with the host token, then ask Agent Hub to ingest them.
+  The Codex timer is a system unit: `systemctl list-timers | grep codex-sync`.
   Agent Hub keeps the copy under
   `~/.local/state/agent-hub/host-homes/<host>/`, laid out like the host's home,
   so transcript readers and analytics treat it as one more native home. A host
@@ -60,9 +61,10 @@ re-runnable: a second run changes nothing unless the workstation changed.
     authenticates with the agent token that Agent Hub serves through the `st`
     credential shim.
   - The SummitFlow database is never forwarded. Settings get a placeholder
-    `DATABASE_URL` that nothing listens on. DB-backed parts of a command (such
-    as some `st pulse` sections) report "connection refused" after
-    SummitFlow's 30 s pool wait. API-backed parts answer normally.
+    `DATABASE_URL` that nothing listens on. A command that needs the database
+    (such as `st context`) stops at once with "this needs the SummitFlow
+    database, which is only on the workstation" and exit 2. API-backed
+    commands answer normally.
 - **Toolchains:** the template brings clang/lld, cmake/ninja, bazelisk, docker,
   node and uv. Setup adds Rust (Ubuntu's `rustup`, minimal stable toolchain); a
   rustup already in `~/.cargo` is kept.
