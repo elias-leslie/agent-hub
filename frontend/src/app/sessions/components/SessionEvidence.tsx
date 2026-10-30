@@ -69,12 +69,45 @@ export function ScopeLine({
   )
 }
 
+// Termination codes the backend writes; anything else is an error message or a status.
+const TERMINATION_TEXT: Record<string, string> = {
+  session_closed_helper: 'Closed when its work finished',
+  turn_interrupted: 'Stopped: the turn was interrupted',
+  completion_cached: 'Answered from cache',
+  consultation_cancelled: 'Stopped: the consultation was cancelled',
+  workflow_completed: 'Closed when its workflow finished',
+  workflow_attempt_completed: 'Closed when its workflow step finished',
+  session_reaper_completion_timeout: 'Closed after the reply went idle',
+  session_reaper_dead_transcript_sync:
+    'Closed: its transcript stopped updating',
+  session_reaper_global_timeout: 'Closed after going idle',
+}
+
+// Ordinary endings: the status already says the session finished, so they are no warning.
+const NORMAL_ENDINGS = new Set([
+  'session_closed_helper',
+  'completion_cached',
+  'workflow_completed',
+  'workflow_attempt_completed',
+])
+
+export function terminationText(reason: string): string {
+  const known = TERMINATION_TEXT[reason]
+  if (known) return known
+  // Snake-case codes (cleanup reasons, joined dead signals) read as words; messages stay as written.
+  if (/^[a-z0-9_:+]+$/.test(reason))
+    return `Ended: ${reason.replace(/[_+]/g, ' ').replace(/:/g, ', ')}`
+  return `Ended: ${reason}`
+}
+
 /** Stall, termination, tool-failure and reap notes from the live projection. */
 export function liveWarnings(session: Session): string[] {
   const live = session.live_activity
   return [
     live?.stall_reason,
-    live?.termination_reason ? `terminated: ${live.termination_reason}` : null,
+    live?.termination_reason && !NORMAL_ENDINGS.has(live.termination_reason)
+      ? terminationText(live.termination_reason)
+      : null,
     live?.last_tool_error
       ? `last tool failed${live.last_tool_name ? `: ${live.last_tool_name}` : ''}`
       : null,

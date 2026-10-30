@@ -95,7 +95,11 @@ function Alerts({ alerts }: { alerts: CostAlert[] }) {
           )}
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{alert.message}</span>
+          <span>
+            {alert.message}
+            {timeUntil(alert.resets_at ?? null) &&
+              `; resets ${timeUntil(alert.resets_at ?? null)}`}
+          </span>
         </li>
       ))}
     </ul>

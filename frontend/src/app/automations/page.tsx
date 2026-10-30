@@ -59,7 +59,39 @@ function scheduleText(profile: AutomationProfile): string {
     return `Every ${Number(profile.schedule_value) / 60000} minutes`
   if (profile.schedule_type === 'at')
     return `Once at ${timestamp(profile.schedule_value)}`
-  return `${profile.schedule_value} (${profile.schedule_timezone})`
+  const cron = `${profile.schedule_value} (${profile.schedule_timezone})`
+  const local =
+    profile.schedule_timezone === 'UTC'
+      ? utcCronLocalText(profile.schedule_value)
+      : null
+  return local ? `${local} · ${cron}` : cron
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// Common UTC cron shapes in the viewer's local time; null leaves the raw cron alone.
+function utcCronLocalText(cron: string): string | null {
+  const [minute, hour, dayOfMonth, month, weekday, ...rest] = cron
+    .trim()
+    .split(/\s+/)
+  if (rest.length || dayOfMonth !== '*' || month !== '*') return null
+  const every = /^\*\/(\d+)$/.exec(minute)
+  if (every && hour === '*' && weekday === '*')
+    return `Every ${every[1]} minutes`
+  if (!/^\d+$/.test(minute)) return null
+  if (hour === '*' && weekday === '*')
+    return `Hourly at :${minute.padStart(2, '0')}`
+  if (!/^\d+$/.test(hour) || !/^(\*|[0-6])$/.test(weekday)) return null
+  // Any date works for the time; the weekday needs a date that falls on it in UTC.
+  const at = new Date(Date.UTC(2026, 0, 4, Number(hour), Number(minute)))
+  if (weekday !== '*') at.setUTCDate(at.getUTCDate() + Number(weekday))
+  const time = at.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+  return weekday === '*'
+    ? `Daily at ${time} your time`
+    : `${WEEKDAYS[at.getDay()]} at ${time} your time`
 }
 
 function localDateTime(value: string): string {
@@ -958,7 +990,8 @@ export default function AutomationsPage() {
                               </span>
                               {profile.unreviewed_count > 0 && (
                                 <span className="mt-2 block text-xs font-medium text-amber-300">
-                                  {profile.unreviewed_count} unreviewed runs
+                                  {profile.unreviewed_count} runs since last
+                                  marked reviewed
                                 </span>
                               )}
                             </span>

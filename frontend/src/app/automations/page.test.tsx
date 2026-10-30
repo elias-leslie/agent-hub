@@ -185,4 +185,68 @@ describe('Automations project policy', () => {
       screen.queryByText(new Date('2026-10-19T03:15:00Z').toLocaleString()),
     ).not.toBeInTheDocument()
   })
+
+  it('shows UTC cron schedules in local time and says what unreviewed runs means', async () => {
+    const base = {
+      project_id: 'agent-hub',
+      subject_id: null,
+      workflow_key: 'agent-hub.example',
+      definition_version: 1,
+      schedule_type: 'cron' as const,
+      schedule_timezone: 'UTC',
+      config: {},
+      enabled: true,
+      effective_enabled: true,
+      gate_reasons: [],
+      clock_owner: 'central' as const,
+      next_run_at: null,
+      last_run_at: null,
+      unreviewed_count: 0,
+      last_reviewed_at: null,
+      revision: 1,
+    }
+    vi.mocked(fetchAutomationProfiles).mockResolvedValue({
+      items: [
+        {
+          ...base,
+          id: 'a',
+          label: 'Daily job',
+          schedule_value: '15 3 * * *',
+          unreviewed_count: 5,
+        },
+        {
+          ...base,
+          id: 'b',
+          label: 'Weekly job',
+          schedule_value: '30 13 * * 6',
+        },
+        { ...base, id: 'c', label: 'Yearly job', schedule_value: '0 0 1 1 *' },
+      ],
+      total: 3,
+    })
+    render(<AutomationsPage />, { wrapper })
+    const time = (iso: string) =>
+      new Date(iso).toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    const saturday = new Date('2026-01-10T13:30:00Z')
+    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
+      saturday.getDay()
+    ]
+    expect(
+      await screen.findByText(
+        `Daily at ${time('2026-01-04T03:15:00Z')} your time · 15 3 * * * (UTC)`,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        `${weekday} at ${time('2026-01-10T13:30:00Z')} your time · 30 13 * * 6 (UTC)`,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('0 0 1 1 * (UTC)')).toBeInTheDocument()
+    expect(
+      screen.getByText(/5 runs since last\s+marked reviewed/),
+    ).toBeInTheDocument()
+  })
 })
