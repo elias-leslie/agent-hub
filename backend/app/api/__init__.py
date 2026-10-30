@@ -19,6 +19,7 @@ from app.api.db import router as db_router
 from app.api.endpoints.voice import router as voice_router
 from app.api.events import router as events_router
 from app.api.health import router as health_router
+from app.api.host_context import router as host_context_router
 from app.api.image import router as image_router
 from app.api.lab_credentials import router as lab_credentials_router
 from app.api.memory import router as memory_router
@@ -59,6 +60,7 @@ router.include_router(credentials_router, tags=["credentials"])
 router.include_router(lab_credentials_router, tags=["lab-credentials"])  # Owner-only agent logins
 router.include_router(remote_hosts_router, tags=["remote-hosts"])  # Owner-only hosts and tool credential map
 router.include_router(host_credentials_router, tags=["remote-hosts"])  # Host-token credential fetch/push
+router.include_router(host_context_router)  # Host-token context delivery for remote agent hosts
 router.include_router(session_close_settings_router)  # before /sessions/{id}
 router.include_router(sessions_router, tags=["sessions"])
 router.include_router(session_stream_router, tags=["sessions"])

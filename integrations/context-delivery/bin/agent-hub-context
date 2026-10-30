@@ -6,6 +6,10 @@ SOURCE="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(cd "$(dirname "$SOURCE")/../../.." && pwd)"
 PYTHON="$ROOT/backend/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
+    # A remote agent host has no backend: deliver over the API with its host token.
+    if [[ -f "$ROOT/integrations/context-delivery/bin/agent-hub-context-remote" && ! -d "$ROOT/backend/.venv" ]]; then
+        exec python3 "$ROOT/integrations/context-delivery/bin/agent-hub-context-remote" "$@"
+    fi
     echo "agent-hub-context: backend Python runtime missing at $PYTHON" >&2
     exit 127
 fi

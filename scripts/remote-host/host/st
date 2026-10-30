@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# st on an agent host: refuse workstation-only commands at once, run the rest
+# through the mirrored SummitFlow launcher (same shape as the workstation's
+# ~/bin/st). The list lives next to this file.
+set -euo pipefail
+here=$(dirname -- "$(readlink -f -- "$0")")
+launcher=/srv/workspaces/projects/summitflow/scripts/st
+command=${1-} subcommand=''
+[[ ${2-} != -* ]] && subcommand=${2-}
+if [[ -n $command && $command != -* ]]; then
+    reason='' label=$command label_sub_matched=''
+    while read -r name rest; do
+        if [[ $name == "$command" && -z $label_sub_matched ]]; then
+            reason=$rest
+        elif [[ -n $subcommand && $name == "$command:$subcommand" ]]; then
+            reason=$rest label="$command $subcommand" label_sub_matched=1
+        fi
+    done < <(grep -v '^[[:space:]]*\(#\|$\)' "$here/st-workstation-only")
+    if [[ -n $reason && $reason != allow ]]; then
+        printf 'st %s: workstation-only on this agent host (%s). Run it on the workstation.\n' "$label" "$reason" >&2
+        exit 2
+    fi
+fi
+# The SummitFlow database is never forwarded and its URL is a credential.
+# SummitFlow's settings refuse to load without one, which would cost every
+# command its options, so give it an address nothing listens on: API-backed
+# commands work, and DB-backed parts fail with "connection refused".
+export DATABASE_URL=${DATABASE_URL:-postgresql://st-remote-host@127.0.0.1:1/unavailable}
+exec "$launcher" "$@"

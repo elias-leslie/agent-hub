@@ -1,0 +1,35 @@
+# st commands that only make sense on the workstation. On an agent host the
+# st guard refuses them at once instead of acting on the wrong machine or
+# waiting on a service that is not forwarded. One command per line, then the
+# reason. "command:subcommand" names one subcommand and wins over its command;
+# "allow" instead of a reason re-allows that subcommand.
+snap         Btrfs snapshots of workstation projects
+snaps        Btrfs snapshots of workstation projects
+recover      Btrfs snapshots of workstation projects
+rollback     Btrfs snapshots of workstation projects
+prune        Btrfs snapshots of workstation projects
+abandon      rolls back through workstation snapshots
+backup       workstation backups
+service      builds and restarts workstation services
+runtime      workstation service runtime
+logs         workstation service journals
+monitor      workstation host monitor
+docker       workstation Docker stacks
+setup        workstation host setup
+vm           Proxmox control runs from the workstation
+db           the SummitFlow database is not forwarded
+cleanup      workstation workspace residue
+checkpoints  workstation checkpoint artifacts
+elevate      owner taps run on the workstation
+browser      managed browsers run on the workstation lab
+ui           the desktop is on the workstation
+selection    the desktop is on the workstation
+show         shows files to the owner through the workstation's Tether
+tether       this host's Tether is reached through the workstation hub
+aico         Aico runs on the workstation; create remote agents with --host there
+aico:wake    allow
+wiki         the Vault lives on the workstation
+bugout       lab runs from the workstation
+bugout-deployment lab runs from the workstation
+ominull      production observation runs from the workstation
+ominull-backup production backups run from the workstation

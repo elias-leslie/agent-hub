@@ -1,0 +1,9 @@
+# Checkouts every agent host mirrors at the workstation path
+# /srv/workspaces/projects/<name>: harness settings and hooks, Agent Hub's
+# context adapters, the Tether scripts, st, and the shared skills.
+claude-config
+codex-config
+agent-hub
+aico
+summitflow
+agent-skills

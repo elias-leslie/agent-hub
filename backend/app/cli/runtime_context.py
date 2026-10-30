@@ -159,7 +159,8 @@ def _parse_metadata(values: list[str]) -> dict[str, str]:
     return metadata
 
 
-async def _deliver(args: argparse.Namespace):
+def delivery_request(args: argparse.Namespace) -> CanonicalContextDeliveryRequest:
+    """The request `deliver` sends; agent-hub-context-remote must build the same one."""
     client_metadata = _parse_metadata(args.metadata)
     for key, value in (
         ("hook_event_name", args.hook_event),
@@ -171,7 +172,7 @@ async def _deliver(args: argparse.Namespace):
         if value:
             client_metadata[key] = value
 
-    request = CanonicalContextDeliveryRequest(
+    return CanonicalContextDeliveryRequest(
         consumer_surface=args.surface,
         consumer_profile=args.consumer_profile,
         capabilities=args.capability,
@@ -198,6 +199,10 @@ async def _deliver(args: argparse.Namespace):
         include_tool_capabilities=args.optional_context != "off",
         include_continuity=args.optional_context != "off",
     )
+
+
+async def _deliver(args: argparse.Namespace):
+    request = delivery_request(args)
     async with async_session() as db:
         return await build_canonical_context_delivery(db, request)
 

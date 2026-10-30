@@ -1,0 +1,7 @@
+[Unit]
+Description=Power the agent host off when it has been idle
+Documentation=file:///srv/workspaces/projects/agent-hub/scripts/remote-host/README.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/agent-host/agent-host-idle

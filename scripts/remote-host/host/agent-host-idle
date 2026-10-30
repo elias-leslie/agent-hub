@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""Power an agent host off once it has been idle long enough.
+
+Run by agent-host-idle.timer as root. Idle means all of these at once:
+zero Tether sessions, no pending Tether wakes, load below the limit, and no
+ssh connection carrying a command or shell (the Tether link is `ssh -N`, so
+its sshd process has no children). Thresholds come from the config file.
+Anything that cannot be read counts as busy: unknown is never idle.
+Every run logs one line saying why the host stays up or powers off.
+"""
+
+from __future__ import annotations
+
+import argparse
+import http.client
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+DEFAULT_CONFIG = Path("/etc/agent-host/idle.conf")
+STATE_DIR = Path("/run/agent-host-idle")
+
+
+@dataclass(frozen=True)
+class Config:
+    enabled: bool
+    idle_minutes: float
+    load_max: float
+    load_window: int
+    tether_socket: str
+
+
+def load_config(path: Path) -> Config:
+    values: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, sep, value = line.partition("=")
+        if sep:
+            values[key.strip()] = value.strip().strip('"')
+    window = int(values.get("LOAD_WINDOW", "5"))
+    if window not in (1, 5, 15):
+        raise ValueError(f"LOAD_WINDOW must be 1, 5 or 15, not {window}")
+    return Config(
+        enabled=values.get("ENABLED", "1") == "1",
+        idle_minutes=float(values["IDLE_MINUTES"]),
+        load_max=float(values["LOAD_MAX"]),
+        load_window=window,
+        tether_socket=values["TETHER_SOCKET"],
+    )
+
+
+class _UnixHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, path: str, timeout: float) -> None:
+        super().__init__("tether", timeout=timeout)
+        self._path = path
+
+    def connect(self) -> None:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(self.timeout)
+        sock.connect(self._path)
+        self.sock = sock
+
+
+def tether_get(socket_path: str, path: str, timeout: float = 5.0) -> dict:
+    conn = _UnixHTTPConnection(socket_path, timeout)
+    try:
+        conn.request("GET", path)
+        response = conn.getresponse()
+        body = response.read()
+        if response.status != 200:
+            raise RuntimeError(f"{path} answered HTTP {response.status}")
+        return json.loads(body)
+    finally:
+        conn.close()
+
+
+def load_average(window: int) -> float:
+    fields = Path("/proc/loadavg").read_text(encoding="ascii").split()
+    return float(fields[{1: 0, 5: 1, 15: 2}[window]])
+
+
+def ssh_sessions(proc: Path = Path("/proc")) -> int:
+    """Count ssh connections that run a command or shell.
+
+    Each connection has an unprivileged `sshd: user...` process. `ssh -N`
+    (the Tether link) never forks under it; a shell, command or multiplexed
+    session does.
+    """
+    parents: dict[int, int] = {}
+    connections: set[int] = set()
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / "stat").read_text(encoding="utf-8", errors="replace")
+            cmdline = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+        except OSError:
+            continue
+        ppid = int(stat.rsplit(")", 1)[1].split()[1])
+        pid = int(entry.name)
+        parents[pid] = ppid
+        if cmdline.startswith("sshd: ") and not cmdline.endswith(("[priv]", "[net]")) and "[listener]" not in cmdline:
+            connections.add(pid)
+    busy = {ppid for ppid in parents.values() if ppid in connections}
+    return len(busy)
+
+
+@dataclass(frozen=True)
+class Reading:
+    sessions: int | None
+    wakes: int | None
+    load: float | None
+    ssh: int | None
+    errors: tuple[str, ...]
+
+
+def read_host(config: Config) -> Reading:
+    errors: list[str] = []
+    sessions = wakes = ssh = None
+    load = None
+    try:
+        sessions = len(tether_get(config.tether_socket, "/v1/sessions")["items"])
+        wakes = len(tether_get(config.tether_socket, "/v1/wakes")["items"])
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError) as exc:
+        errors.append(f"Tether unreadable ({type(exc).__name__}: {exc})")
+    try:
+        load = load_average(config.load_window)
+    except (OSError, ValueError) as exc:
+        errors.append(f"load unreadable ({exc})")
+    try:
+        ssh = ssh_sessions()
+    except OSError as exc:
+        errors.append(f"ssh sessions unreadable ({exc})")
+    return Reading(sessions, wakes, load, ssh, tuple(errors))
+
+
+def busy_reasons(reading: Reading, config: Config) -> list[str]:
+    reasons = list(reading.errors)
+    if reading.sessions:
+        reasons.append(f"{reading.sessions} Tether session(s)")
+    if reading.wakes:
+        reasons.append(f"{reading.wakes} pending wake(s)")
+    if reading.load is not None and reading.load >= config.load_max:
+        reasons.append(f"load {reading.load:.2f} >= {config.load_max:g}")
+    if reading.ssh:
+        reasons.append(f"{reading.ssh} ssh session(s) besides the link")
+    return reasons
+
+
+def decide(reading: Reading, config: Config, idle_since: float | None, now: float) -> tuple[str, str]:
+    """Return (action, message); action is busy, idle or poweroff."""
+    if not config.enabled:
+        return "busy", "stay up: idle poweroff is disabled (ENABLED=0)"
+    reasons = busy_reasons(reading, config)
+    if reasons:
+        return "busy", "stay up: " + "; ".join(reasons)
+    summary = (
+        f"0 sessions, 0 wakes, load {reading.load:.2f} < {config.load_max:g}, "
+        "no ssh sessions besides the link"
+    )
+    idle_minutes = 0.0 if idle_since is None else (now - idle_since) / 60
+    if idle_minutes >= config.idle_minutes:
+        return "poweroff", f"power off: idle {idle_minutes:.0f} min ({summary})"
+    return "idle", f"stay up: idle {idle_minutes:.0f} of {config.idle_minutes:g} min ({summary})"
+
+
+def _read_since(path: Path) -> float | None:
+    try:
+        return float(path.read_text(encoding="ascii").strip())
+    except (OSError, ValueError):
+        return None
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--dry-run", action="store_true", help="Print the decision; change nothing.")
+    args = parser.parse_args(argv)
+    try:
+        config = load_config(args.config)
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"stay up: config {args.config} unreadable ({exc})")
+        return 1
+    since_file = STATE_DIR / "idle-since"
+    now = time.time()
+    reading = read_host(config)
+    action, message = decide(reading, config, _read_since(since_file), now)
+    if args.dry_run:
+        print(f"dry run: {message}")
+        return 0
+    if action == "busy":
+        since_file.unlink(missing_ok=True)
+    elif not since_file.exists():
+        STATE_DIR.mkdir(mode=0o700, exist_ok=True)
+        since_file.write_text(f"{now}\n", encoding="ascii")
+    print(message, flush=True)
+    if action == "poweroff":
+        since_file.unlink(missing_ok=True)
+        os.sync()
+        return subprocess.run(["systemctl", "poweroff", "--no-ask-password"], check=False).returncode
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

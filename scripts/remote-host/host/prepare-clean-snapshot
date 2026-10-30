@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Clear an agent host's Tether state and scratch so a snapshot of it is clean.
+
+Refuses unless nothing is running: an empty Tether catalog (no sessions, tmux
+servers, root requests or wakes), no tmux servers, no running containers and
+no ssh session besides the caller's own. Logins on the host's disk are kept:
+a clean snapshot taken after sign-in keeps them on rollback.
+Run on the host as its user; `snapshot-clean` on the workstation calls it and
+then takes the snapshot.
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import sys
+import time
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+idle = SourceFileLoader("agent_host_idle", str(HERE / "agent-host-idle")).load_module()
+
+STATE_DIR = Path.home() / ".local/state/tether/default"
+SCRATCH = Path("/work/scratch")
+UNIT = "tether@default.service"
+
+
+def refusals(config) -> list[str]:
+    found: list[str] = []
+    try:
+        catalog = idle.tether_get(config.tether_socket, "/v1/health")["catalog"]
+        wakes = len(idle.tether_get(config.tether_socket, "/v1/wakes")["items"])
+    except Exception as exc:  # any unreadable catalog is a refusal
+        return [f"Tether catalog unreadable ({type(exc).__name__}: {exc})"]
+    for key, label in (("sessions", "Tether session(s)"), ("tmuxServersActive", "tmux server(s)"), ("rootRequests", "root request(s)")):
+        if catalog.get(key):
+            found.append(f"{catalog[key]} {label}")
+    if wakes:
+        found.append(f"{wakes} pending wake(s)")
+    if subprocess.run(["pgrep", "-u", str(Path.home().owner()), "-x", "tmux: server"], capture_output=True).returncode == 0:
+        found.append("a tmux server is running")
+    docker = subprocess.run(["docker", "ps", "-q"], capture_output=True, text=True)
+    if docker.returncode != 0:
+        found.append("docker unreadable")
+    elif docker.stdout.strip():
+        found.append(f"{len(docker.stdout.split())} running container(s)")
+    # This command's own ssh session is one; anything more is someone else.
+    if (ssh := idle.ssh_sessions()) > 1:
+        found.append(f"{ssh - 1} other ssh session(s)")
+    return found
+
+
+def _wait_healthy(config, timeout: float = 30.0) -> dict:
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            health = idle.tether_get(config.tether_socket, "/v1/health")
+            if health.get("lifecycle") == "ready":
+                return health
+        except Exception:  # still starting
+            if time.monotonic() > deadline:
+                raise
+        if time.monotonic() > deadline:
+            raise TimeoutError("Tether did not become ready")
+        time.sleep(0.5)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--config", type=Path, default=idle.DEFAULT_CONFIG)
+    parser.add_argument("--check", action="store_true", help="Only report whether the host is clean enough.")
+    args = parser.parse_args(argv)
+    config = idle.load_config(args.config)
+    found = refusals(config)
+    if found:
+        print("prepare-clean-snapshot: refused: " + "; ".join(found), file=sys.stderr)
+        return 1
+    if args.check:
+        print("prepare-clean-snapshot: nothing running; ready to clean")
+        return 0
+    subprocess.run(["systemctl", "--user", "stop", UNIT], check=True)
+    try:
+        shutil.rmtree(STATE_DIR, ignore_errors=False) if STATE_DIR.exists() else None
+        cleared = 0
+        for entry in SCRATCH.iterdir():
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink()
+            cleared += 1
+    finally:
+        subprocess.run(["systemctl", "--user", "start", UNIT], check=True)
+    health = _wait_healthy(config)
+    print(
+        f"prepare-clean-snapshot: cleared Tether state and {cleared} scratch item(s); "
+        f"Tether ready with {health['catalog']['sessions']} sessions"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

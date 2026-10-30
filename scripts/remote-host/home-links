@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""List the workstation's home entries an agent host must mirror.
+
+Prints tab-separated lines on stdout:
+  link <path> <target>   a symlink whose target resolves into a mirrored checkout
+  file <path>            a hook script Claude or Codex settings call that is a plain file
+Paths are relative to HOME. The scan is one level deep in the directories
+below, so it never walks the home tree.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+PROJECTS = Path("/srv/workspaces/projects")
+SCAN_DIRS = (
+    ".",
+    "bin",
+    ".local/bin",
+    ".claude",
+    ".claude/bin",
+    ".claude/hooks",
+    ".claude/skills",
+    ".claude/commands",
+    ".codex",
+    ".codex/bin",
+    ".codex/skills",
+    ".pi/agent",
+    ".pi/agent/extensions",
+    ".pi/agent/skills",
+    ".agents/skills",
+)
+# The agent host installs its own st guard in place of the workstation launcher.
+HOST_OWNED = {"bin/st"}
+HOOK_REF = re.compile(r"(?:~|\$HOME|\"\$HOME\")/(\.(?:claude|codex)/hooks/[\w.-]+)")
+
+
+def links(mirrored: set[str]) -> list[tuple[str, str]]:
+    found = []
+    roots = [PROJECTS / name for name in mirrored]
+    for rel in SCAN_DIRS:
+        directory = HOME / rel
+        if not directory.is_dir():
+            continue
+        for entry in sorted(directory.iterdir()):
+            if not entry.is_symlink():
+                continue
+            path = str(entry.relative_to(HOME))
+            resolved = entry.resolve()
+            if path in HOST_OWNED or not any(resolved.is_relative_to(root) for root in roots):
+                continue
+            found.append((path, str(entry.readlink())))
+    return found
+
+
+def hook_files() -> list[str]:
+    commands: list[str] = []
+    settings = (
+        PROJECTS / "claude-config/settings.json",
+        PROJECTS / "codex-config/hooks.json",
+    )
+    for source in settings:
+        hooks = json.loads(source.read_text(encoding="utf-8")).get("hooks", {})
+        for groups in hooks.values():
+            for group in groups:
+                commands.extend(hook.get("command", "") for hook in group.get("hooks", []))
+    files = set()
+    for command in commands:
+        for rel in HOOK_REF.findall(command):
+            path = HOME / rel
+            if path.is_file() and not path.is_symlink():
+                files.add(rel)
+    return sorted(files)
+
+
+def main() -> int:
+    mirrored = set(sys.argv[1:])
+    if not mirrored:
+        print("usage: home-links <mirrored checkout>...", file=sys.stderr)
+        return 2
+    for path, target in links(mirrored):
+        print(f"link\t{path}\t{target}")
+    for path in hook_files():
+        print(f"file\t{path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

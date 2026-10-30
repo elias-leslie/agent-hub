@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Canonical context CLI for a remote agent host, over Agent Hub's HTTP API.
+
+A host has no Agent Hub database, so `agent-hub-context` execs this when the
+backend environment is absent. `deliver` takes the same arguments and prints
+the same contract as the database-backed CLI, fetched from
+`/api/host-context/deliver` with the host's bearer token. Commands that read
+local transcripts or write session records are unavailable here and say so;
+the client treats that as degraded, never as a block.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+DEFAULT_URL = "http://127.0.0.1:8003"
+DEFAULT_TOKEN_FILE = "~/.config/agent-hub/host-token"
+DELIVER_PATH = "/api/host-context/deliver"
+TIMEOUT_SECONDS = 10.0
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="agent-hub-context", description=__doc__.splitlines()[0])
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    deliver = subparsers.add_parser("deliver")
+    deliver.add_argument("--surface", required=True)
+    deliver.add_argument("--profile", "--consumer-profile", dest="consumer_profile", default="agent_startup")
+    for option in ("--capability", "--consumer-tag", "--workflow", "--source-id", "--metadata"):
+        deliver.add_argument(option, action="append", default=[])
+    for option in (
+        "--agent-slug", "--project", "--session", "--task", "--query", "--task-type", "--phase",
+        "--branch", "--cwd", "--repo-root", "--provider", "--model", "--variant",
+        "--hook-event", "--source", "--turn-id", "--subagent-id", "--subagent-type",
+    ):
+        deliver.add_argument(option)
+    deliver.add_argument("--optional-context", choices=("on", "off"), default="on")
+    deliver.add_argument("--format", choices=("text", "json"), default="text")
+    return parser
+
+
+# The database-backed CLI's other commands read local transcripts or write
+# session records; on a host they report that they are unavailable.
+LOCAL_ONLY = ("bind-native-work-role", "sync-pi", "retire-pi", "maintenance", "feedback", "render", "status")
+
+
+def _strip(value: str | None) -> str | None:
+    return (value or "").strip() or None
+
+
+def delivery_request(args: argparse.Namespace) -> dict[str, Any]:
+    """The CanonicalContextDeliveryRequest the database-backed CLI builds."""
+    metadata: dict[str, str] = {}
+    for raw in args.metadata:
+        key, separator, value = raw.partition("=")
+        if not separator or not key.strip():
+            raise ValueError(f"Invalid --metadata value {raw!r}; expected KEY=VALUE")
+        metadata[key.strip()] = value
+    for key in ("hook_event", "source", "turn_id", "subagent_id", "subagent_type"):
+        if value := getattr(args, key):
+            metadata["hook_event_name" if key == "hook_event" else key] = value
+    optional = args.optional_context != "off"
+    return {
+        "consumer_surface": args.surface,
+        "consumer_profile": args.consumer_profile,
+        "capabilities": args.capability,
+        "agent_slug": _strip(args.agent_slug),
+        "consumer_tags": args.consumer_tag,
+        "workflow_ids": args.workflow,
+        "requested_source_ids": args.source_id,
+        "project_id": _strip(args.project),
+        "session_id": _strip(args.session),
+        "task": args.task,
+        "query": args.query,
+        "task_type": args.task_type,
+        "phase": args.phase,
+        "current_branch": args.branch,
+        "cwd": args.cwd,
+        "repo_root": args.repo_root,
+        "provider": args.provider,
+        "model": args.model,
+        "variant": args.variant,
+        "client_metadata": metadata,
+        "include_references": optional,
+        "include_reference_index": optional,
+        "include_project_index": optional,
+        "include_tool_capabilities": optional,
+        "include_continuity": optional,
+    }
+
+
+def _token() -> str:
+    path = Path(os.environ.get("AGENT_HUB_HOST_TOKEN_FILE") or DEFAULT_TOKEN_FILE).expanduser()
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise RuntimeError(f"no host token at {path} ({exc.strerror})") from None
+    if not token:
+        raise RuntimeError(f"host token file {path} is empty")
+    return token
+
+
+def _post(body: dict[str, Any]) -> dict[str, Any]:
+    url = (os.environ.get("AGENT_HUB_URL") or DEFAULT_URL).rstrip("/") + DELIVER_PATH
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {_token()}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"{url} answered HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise RuntimeError(f"{url} unreachable ({reason})") from None
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] in LOCAL_ONLY:
+        print(f"agent-hub-context {argv[0]}: unavailable on a remote host (no Agent Hub database here)", file=sys.stderr)
+        return 2
+    args = _parser().parse_args(argv)
+    try:
+        response = _post(delivery_request(args))
+    except (RuntimeError, ValueError) as exc:
+        print(f"agent-hub-context: {exc}", file=sys.stderr)
+        return 2
+    if args.format == "json":
+        print(json.dumps(response, indent=2, sort_keys=True))
+    else:
+        sys.stdout.write(response.get("rendered", ""))
+    return 0 if response.get("status") == "ok" else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

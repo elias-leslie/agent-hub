@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Host half of scripts/remote-host/bootstrap; runs on the agent host as its
+# user (sudo for the system parts). Re-runnable: every step converges.
+# Usage: setup <claude-version> <pi-version> < home-links.tsv
+set -euo pipefail
+
+claude_version=$1 pi_version=$2
+lib=/usr/local/lib/agent-host
+projects=/srv/workspaces/projects
+cred_bin=$HOME/.local/lib/agent-hub/cred-bin
+state=$HOME/.local/state/agent-host
+# Credential shims (Agent Hub's agent-hub-cred-exec) go first, then the
+# context launchers, then the real binaries, as on the workstation.
+agent_path="$cred_bin:$HOME/.claude/bin:$HOME/.codex/bin:$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="$agent_path"
+
+say() { printf 'setup: %s\n' "$*"; }
+
+# Write $2 to file $1 only when it differs; print whether it changed.
+put() {
+    local target=$1 content=$2
+    if [[ -f $target ]] && [[ $(cat -- "$target") == "$content" ]]; then return 1; fi
+    mkdir -p -- "$(dirname -- "$target")"
+    printf '%s\n' "$content" >"$target.tmp.$$" && mv -f -- "$target.tmp.$$" "$target"
+    say "wrote ${target/#$HOME/\~}"
+}
+
+link() {
+    local path=$1 target=$2
+    if [[ -e $path && ! -L $path ]]; then
+        say "kept ${path/#$HOME/\~}: a real file is there, not a link"
+        return 0
+    fi
+    [[ -L $path && $(readlink -- "$path") == "$target" ]] && return 0
+    mkdir -p -- "$(dirname -- "$path")"
+    ln -sfn -- "$target" "$path"
+    say "linked ${path/#$HOME/\~} -> $target"
+}
+
+# --- system: shared paths, idle poweroff ---------------------------------
+if [[ ! -e /srv/scratch ]]; then
+    sudo -n ln -s /work/scratch /srv/scratch
+    say "linked /srv/scratch -> /work/scratch"
+fi
+sudo -n install -d -m 0755 /etc/agent-host
+if [[ ! -f /etc/agent-host/idle.conf ]]; then
+    sudo -n install -m 0644 "$lib/idle.conf" /etc/agent-host/idle.conf
+    say "installed /etc/agent-host/idle.conf"
+fi
+units_changed=0
+for unit in agent-host-idle.service agent-host-idle.timer; do
+    if ! cmp -s "$lib/systemd/$unit" "/etc/systemd/system/$unit"; then
+        sudo -n install -m 0644 "$lib/systemd/$unit" "/etc/systemd/system/$unit"
+        units_changed=1
+        say "installed /etc/systemd/system/$unit"
+    fi
+done
+((units_changed)) && sudo -n systemctl daemon-reload
+sudo -n systemctl enable --now --quiet agent-host-idle.timer
+
+# --- harness binaries (copied by bootstrap) and launch links -------------
+link "$HOME/.local/bin/claude" "$HOME/.local/share/claude/versions/$claude_version"
+link "$HOME/.local/bin/codex" ../lib/node_modules/@openai/codex/bin/codex.js
+link "$HOME/.local/bin/codex-real" ../lib/node_modules/@openai/codex/bin/codex.js
+link "$HOME/.local/bin/pi" "$HOME/.pi/agent/bin/pi"
+link "$HOME/bin/st" "$lib/st"
+mkdir -p "$cred_bin"
+
+# Workstation home links into the mirrored checkouts.
+while IFS=$'\t' read -r kind path target; do
+    [[ $kind == link ]] && link "$HOME/$path" "$target"
+done
+
+# Canonical context adapters (Agent Hub owns the installer).
+python3 "$projects/agent-hub/integrations/context-delivery/install.py" >/dev/null
+python3 "$projects/agent-hub/integrations/context-delivery/install.py" --check >/dev/null
+say "context adapters installed and checked"
+
+# st runs from the summitflow checkout's backend environment.
+(cd "$projects/summitflow/backend" && uv sync --locked --quiet)
+say "summitflow backend environment synced"
+
+# --- login PATH and Tether -----------------------------------------------
+profile_block="# >>> agent-host PATH (scripts/remote-host) >>>
+PATH=\"$agent_path:\$PATH\"
+# <<< agent-host PATH <<<"
+if ! grep -qF '# >>> agent-host PATH' "$HOME/.profile"; then
+    printf '\n%s\n' "$profile_block" >>"$HOME/.profile"
+    say "added the agent PATH to ~/.profile"
+elif ! grep -qF "PATH=\"$agent_path:" "$HOME/.profile"; then
+    python3 - "$HOME/.profile" "$profile_block" <<'PY'
+import re, sys
+path, block = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+text = re.sub(r"# >>> agent-host PATH.*?# <<< agent-host PATH <<<", lambda _m: block, text, flags=re.S)
+open(path, "w", encoding="utf-8").write(text)
+PY
+    say "updated the agent PATH in ~/.profile"
+fi
+
+tether_changed=0
+unit_dir=$HOME/.config/systemd/user
+if ! cmp -s "$projects/aico/tether/systemd/tether@.service" "$unit_dir/tether@.service"; then
+    install -D -m 0644 "$projects/aico/tether/systemd/tether@.service" "$unit_dir/tether@.service"
+    tether_changed=1
+    say "installed tether@.service from the aico checkout"
+fi
+put "$unit_dir/tether@default.service.d/remote.conf" "# Agent host (scripts/remote-host): no desktop, workstation paths, agent PATH.
+[Service]
+Environment=TETHER_HEADLESS=1
+Environment=TETHER_PROJECTS_DIR=$projects
+Environment=PATH=$agent_path" && tether_changed=1
+sock=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tether/default/control.sock
+# The bundle digest decides whether the running daemon is stale.
+bundle_digest=$(cd "$HOME/.local/lib/tether" && find bin dist scripts shims -type f -not -path '*/__pycache__/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+mkdir -p "$state"
+if [[ $(cat "$state/tether-bundle.sha256" 2>/dev/null) != "$bundle_digest" ]]; then
+    tether_changed=1
+fi
+systemctl --user daemon-reload
+systemctl --user enable --quiet tether@default.service
+if ((tether_changed)) || ! systemctl --user is-active --quiet tether@default.service; then
+    # A restart never stops a pane: tmux servers are separate units.
+    systemctl --user restart tether@default.service
+    say "restarted tether@default"
+fi
+printf '%s\n' "$bundle_digest" >"$state/tether-bundle.sha256"
+
+for _ in $(seq 1 30); do
+    curl -sf --unix-socket "$sock" http://tether/v1/health >/dev/null && break
+    sleep 1
+done
+curl -sf --unix-socket "$sock" http://tether/v1/health >/dev/null \
+    || { say "Tether did not answer its health check"; exit 1; }
+say "done: claude $claude_version, $(codex --version), pi $pi_version, agy $(agy --version 2>/dev/null | head -1); Tether healthy"

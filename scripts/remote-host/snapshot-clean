@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Take a clean snapshot of an agent host: the host clears its Tether state and
+# scratch (refusing while anything runs), then Proxmox snapshots the VM.
+# Usage: scripts/remote-host/snapshot-clean <ssh-alias> <vmid> <snapshot-name>
+set -euo pipefail
+
+host=${1:?usage: snapshot-clean <ssh-alias> <vmid> <snapshot-name>}
+vmid=${2:?usage: snapshot-clean <ssh-alias> <vmid> <snapshot-name>}
+name=${3:?usage: snapshot-clean <ssh-alias> <vmid> <snapshot-name>}
+
+ssh -o BatchMode=yes -o ConnectTimeout=10 "$host" /usr/local/lib/agent-host/prepare-clean-snapshot
+st vm snapshot "$vmid" "$name"

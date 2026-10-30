@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Make an agent host match the workstation: mirrored infra checkouts, harness
+# CLIs at the workstation's versions, hooks and context adapters, st, the
+# Tether bundle, and the idle-poweroff timer. Re-runnable; see README.md.
+# Usage: scripts/remote-host/bootstrap <ssh-alias>
+set -euo pipefail
+
+host=${1:?usage: bootstrap <ssh-alias>}
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+projects=/srv/workspaces/projects
+ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10)
+mapfile -t mirrored < <(grep -v '^[[:space:]]*\(#\|$\)' "$here/mirror.list")
+
+say() { printf 'bootstrap %s: %s\n' "$host" "$*"; }
+# shellcheck disable=SC2029 # callers pass workstation-expanded arguments on purpose
+on_host() { ssh "${ssh_opts[@]}" "$host" "$@"; }
+copy() { rsync -a --delete -e "ssh ${ssh_opts[*]}" "$@"; }
+
+[[ $(on_host uname -m) == "$(uname -m)" ]] || { say "architecture differs from the workstation"; exit 1; }
+on_host 'test -d /srv/workspaces/projects' || { say "/srv/workspaces/projects is missing on the host"; exit 1; }
+
+# --- 1. Infra checkouts at identical paths: committed HEAD only, shallow ---
+# Only what git tracks travels (never history, .env, credstore or other
+# ignored files). Commits move as files the host fetches, never as a push:
+# this is a private mirror, not publication. A new host gets a depth-1 clone;
+# later runs send a bundle of just the new commits. A host checkout with local
+# changes or commits is kept as it is.
+scratch=$(mktemp -d /srv/scratch/remote-host-bootstrap.XXXXXX)
+host_scratch=/work/scratch/remote-host-bootstrap
+trap 'rm -rf -- "$scratch"; on_host rm -rf "$host_scratch" || true' EXIT
+on_host mkdir -p "$host_scratch"
+for name in "${mirrored[@]}"; do
+    src=$projects/$name dest=$projects/$name
+    branch=$(git -C "$src" symbolic-ref --short HEAD)
+    head=$(git -C "$src" rev-parse HEAD)
+    ref=refs/remotes/workstation/$branch
+    read -r synced host_head dirty < <(on_host bash -s -- "$dest" "$ref" <<'SH'
+set -e
+dest=$1 ref=$2
+[ -d "$dest/.git" ] || git init -q "$dest"
+synced=$(git -C "$dest" rev-parse -q --verify "$ref" || echo none)
+head=$(git -C "$dest" rev-parse -q --verify HEAD || echo none)
+dirty=$(git -C "$dest" status --porcelain | head -c1 | wc -c)
+echo "$synced $head $dirty"
+SH
+    )
+    if [[ $synced == "$head" ]]; then
+        :
+    elif [[ $synced != none ]] && git -C "$src" merge-base --is-ancestor "$synced" "$head" 2>/dev/null; then
+        git -C "$src" bundle create -q "$scratch/$name.bundle" "^$synced" "$branch"
+        copy "$scratch/$name.bundle" "$host:$host_scratch/$name.bundle"
+        on_host git -C "$dest" fetch -q "$host_scratch/$name.bundle" "+refs/heads/$branch:$ref"
+    else
+        git clone -q --depth 1 --no-local --branch "$branch" "file://$src" "$scratch/$name"
+        copy "$scratch/$name/.git/" "$host:$host_scratch/$name.git/"
+        on_host git -C "$dest" fetch -q --update-shallow "$host_scratch/$name.git" "+refs/heads/$branch:$ref"
+    fi
+    if [[ $host_head == "$head" ]]; then
+        continue
+    elif [[ $host_head != none && ($host_head != "$synced" || $dirty != 0) ]]; then
+        say "kept $name: the host checkout has local changes or commits"
+    else
+        on_host git -C "$dest" checkout -q -B "$branch" "$ref"
+        say "$name at ${head:0:9}"
+    fi
+done
+
+# --- 2. Harness CLIs at the workstation's versions -------------------------
+claude_version=$(basename "$(readlink -f ~/.local/bin/claude)")
+pi_version=$(<~/.pi/agent/install/current-version)
+on_host mkdir -p .local/share/claude/versions .local/lib/node_modules/@openai .pi/agent/install/releases .pi/agent/bin .local/bin
+copy ~/.local/share/claude/versions/"$claude_version" "$host:.local/share/claude/versions/"
+copy ~/.local/lib/node_modules/@openai/codex/ "$host:.local/lib/node_modules/@openai/codex/"
+copy ~/.pi/agent/install/releases/"$pi_version"/ "$host:.pi/agent/install/releases/$pi_version/"
+copy ~/.pi/agent/bin/pi "$host:.pi/agent/bin/pi"
+copy ~/.pi/agent/install/current-version "$host:.pi/agent/install/current-version"
+copy ~/.pi/agent/trust.json "$host:.pi/agent/trust.json"
+copy ~/.local/bin/agy "$host:.local/bin/agy"
+say "harness CLIs copied (claude $claude_version, pi $pi_version)"
+
+# --- 3. Tether bundle, the host scripts, plain hook files ------------------
+copy --exclude __pycache__ ~/.local/lib/tether/ "$host:.local/lib/tether/"
+copy --rsync-path="sudo -n rsync" --chown=root:root "$here/host/" "$host:/usr/local/lib/agent-host/"
+links=$("$here/home-links" "${mirrored[@]}")
+while IFS=$'\t' read -r kind path _; do
+    [[ $kind == file ]] || continue
+    on_host mkdir -p "$(dirname -- "$path")"
+    copy ~/"$path" "$host:$path"
+done <<<"$links"
+
+# Tether's local project list, used while SummitFlow cannot answer the host:
+# the whole registry, since Tether skips roots the host has not checked out.
+st projects list | python3 -c 'import json, sys
+print(json.dumps([{"id": p["id"], "name": p["name"], "root": p["root_path"]} for p in json.load(sys.stdin)], indent=1))' >"$scratch/projects.json"
+on_host mkdir -p .config/tether
+copy "$scratch/projects.json" "$host:.config/tether/projects.json"
+
+# --- 4. Host half ----------------------------------------------------------
+on_host /usr/local/lib/agent-host/setup "$claude_version" "$pi_version" <<<"$links"
