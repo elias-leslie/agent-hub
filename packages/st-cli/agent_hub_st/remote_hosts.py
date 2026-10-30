@@ -107,13 +107,11 @@ def tool_remove(tool: Annotated[str, typer.Argument()], name: Annotated[str, typ
 
 
 @app.command("credential-set")
-@usage(surface="st.agents.hosts.credential-set", cmd="st agents hosts credential-set TOOL NAME [--input FILE|-] [--expires-at ISO]", when="store a non-rotating tool credential created on the workstation; hidden prompt in a terminal, piped stdin or a private file, never argv", on_demand="agent administration")
+@usage(surface="st.agents.hosts.credential-set", cmd="st agents hosts credential-set TOOL NAME --input FILE|- [--expires-at ISO]", when="store a non-rotating tool credential created on the workstation; private file or piped stdin only, never argv", on_demand="agent administration")
 def credential_set(
     tool: Annotated[str, typer.Argument()],
     name: Annotated[str, typer.Argument()],
-    input_file: Annotated[
-        str, typer.Option("--input", help="Your private (0600) file, or - (default): piped stdin, or a hidden prompt in a terminal")
-    ] = "-",
+    input_file: Annotated[str, typer.Option("--input", help="Your private (0600) file, or - for piped stdin")],
     expires_at: Annotated[str | None, typer.Option("--expires-at", help="ISO time with timezone")] = None,
 ) -> None:
     """Save (or replace) the value granted hosts fetch for TOOL/NAME. Hosts push theirs with `agent-hub credential push`."""
