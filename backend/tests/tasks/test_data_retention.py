@@ -13,6 +13,7 @@ from app.tasks.data_retention import (
     REQUEST_LOGS_RETENTION_DAYS,
     USAGE_STATS_RETENTION_DAYS,
     archive_old_session_events,
+    purge_expired_session_archives,
     purge_old_memory_injection_metrics,
     purge_old_request_logs,
     purge_old_usage_stats,
@@ -80,6 +81,24 @@ async def test_archive_old_session_events_uses_configured_window_and_vacuums_aft
 
 
 @pytest.mark.asyncio
+async def test_purge_expired_session_archives_uses_configured_window_and_zero_keeps_all() -> None:
+    db = AsyncMock()
+    with (
+        patch("app.tasks.data_retention.settings.session_event_archives_delete_after_days", 365),
+        patch("app.tasks.data_retention.purge_expired_archives", return_value=(3, 900)) as purge,
+    ):
+        assert await purge_expired_session_archives(db) == (3, 900)
+    purge.assert_awaited_once_with(db, 365)
+
+    with (
+        patch("app.tasks.data_retention.settings.session_event_archives_delete_after_days", 0),
+        patch("app.tasks.data_retention.purge_expired_archives") as purge,
+    ):
+        assert await purge_expired_session_archives(db) == (0, 0)
+    purge.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_purge_old_memory_injection_metrics_single_batch() -> None:
     db = AsyncMock()
     db.execute = AsyncMock(return_value=_make_result(750))
@@ -100,6 +119,7 @@ async def test_run_data_retention_returns_all_counts() -> None:
             "app.tasks.data_retention.archive_old_session_events",
             return_value=CompactionResult(sessions=3, events=300, raw_bytes=10, stored_bytes=1).as_dict(),
         ) as mock_se,
+        patch("app.tasks.data_retention.purge_expired_session_archives", return_value=(2, 4096)) as mock_pa,
         patch(
             "app.tasks.data_retention.purge_old_memory_injection_metrics",
             return_value=400,
@@ -116,11 +136,14 @@ async def test_run_data_retention_returns_all_counts() -> None:
         "session_events_archive_stored_bytes": 1,
         "session_archive_skipped": [],
         "session_archive_failed": [],
+        "session_archives_deleted": 2,
+        "session_archive_bytes_deleted": 4096,
         "memory_injection_metrics_deleted": 400,
     }
     mock_rl.assert_awaited_once_with(db)
     mock_us.assert_awaited_once_with(db)
     mock_se.assert_awaited_once_with(db)
+    mock_pa.assert_awaited_once_with(db)
     mock_mim.assert_awaited_once_with(db)
 
 

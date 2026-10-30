@@ -374,6 +374,25 @@ async def compact_old_sessions(db: AsyncSession, older_than_days: float) -> Comp
     return result
 
 
+async def purge_expired_archives(db: AsyncSession, older_than_days: float) -> tuple[int, int]:
+    """Delete the archives of finished sessions idle past the window. Returns (sessions, stored bytes) removed."""
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    rows = await db.execute(
+        text(
+            f"""
+            DELETE FROM session_event_archives a
+            USING sessions s
+            WHERE a.session_id = s.id AND {_ARCHIVABLE_SQL}
+            RETURNING octet_length(a.payload)
+            """
+        ).bindparams(bindparam("statuses", expanding=True)),
+        {"statuses": list(_FINISHED_STATUSES), "cutoff": cutoff},
+    )
+    sizes = list(rows.scalars())
+    await db.commit()
+    return len(sizes), sum(sizes)
+
+
 async def vacuum_session_events(db: AsyncSession) -> None:
     """Plain VACUUM so archived rows' space is reused (and a free tail returned) without locking writers."""
     bind = db.bind

@@ -8,9 +8,11 @@ Retention windows:
   - usage_stats:               30 days (analytics dashboard floor; aggregates live on memories)
   - memory_injection_metrics:  90 days (matches the max memory metrics lookback)
 
-session_events are never deleted: a finished session idle past
-settings.session_events_archive_after_days moves its events into one
-compressed archive row (app/services/session_event_archive.py).
+A finished session idle past settings.session_events_archive_after_days
+moves its events into one compressed archive row
+(app/services/session_event_archive.py); that archive is deleted once the
+session has been idle past settings.session_event_archives_delete_after_days
+(0 keeps it). The session row and usage_calls stay.
 """
 
 from __future__ import annotations
@@ -23,7 +25,11 @@ from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.services.session_event_archive import compact_old_sessions, vacuum_session_events
+from app.services.session_event_archive import (
+    compact_old_sessions,
+    purge_expired_archives,
+    vacuum_session_events,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +109,14 @@ async def archive_old_session_events(db: AsyncSession) -> dict[str, Any]:
     return result.as_dict()
 
 
+async def purge_expired_session_archives(db: AsyncSession) -> tuple[int, int]:
+    """Delete session archives past the configured window; (0, 0) when the window is 0 (keep forever)."""
+    days = settings.session_event_archives_delete_after_days
+    if not days:
+        return 0, 0
+    return await purge_expired_archives(db, days)
+
+
 async def purge_old_memory_injection_metrics(
     db: AsyncSession,
     retention_days: int = MEMORY_INJECTION_METRICS_RETENTION_DAYS,
@@ -135,6 +149,10 @@ async def run_data_retention(db: AsyncSession) -> dict[str, Any]:
             archived["skipped"], archived["failed"],
         )
 
+    archives_deleted, archive_bytes_deleted = await purge_expired_session_archives(db)
+    if archives_deleted:
+        logger.info("Retention: deleted %d session archives (%d bytes)", archives_deleted, archive_bytes_deleted)
+
     memory_injection_metrics_deleted = await purge_old_memory_injection_metrics(db)
     if memory_injection_metrics_deleted:
         logger.info(
@@ -151,5 +169,7 @@ async def run_data_retention(db: AsyncSession) -> dict[str, Any]:
         "session_events_archive_stored_bytes": archived["stored_bytes"],
         "session_archive_skipped": archived["skipped"],
         "session_archive_failed": archived["failed"],
+        "session_archives_deleted": archives_deleted,
+        "session_archive_bytes_deleted": archive_bytes_deleted,
         "memory_injection_metrics_deleted": memory_injection_metrics_deleted,
     }

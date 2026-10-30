@@ -37,6 +37,7 @@ from app.services.session_event_archive import (
     archive_session_events,
     compact_old_sessions,
     load_archived_events,
+    purge_expired_archives,
 )
 from tests.conftest import TEST_HEADERS
 
@@ -201,6 +202,24 @@ async def test_only_old_finished_sessions_with_events_are_archived(pg_db: AsyncS
     # Checked again under the lock: a session that picked up work after the listing is left alone.
     assert await archive_session_events(pg_db, "s-active-old", idle_before=datetime.now(UTC)) is None
     assert await archive_session_events(pg_db, "s-recent", idle_before=recent - timedelta(hours=1)) is None
+
+
+async def test_only_archives_of_long_idle_finished_sessions_are_deleted(pg_db: AsyncSession) -> None:
+    year_old = datetime.now(UTC) - timedelta(days=400)
+    for session_id in ("s-year-old", "s-old", "s-reopened"):
+        await add_session(pg_db, session_id, at=year_old if session_id != "s-old" else OLD)
+        await add_history(pg_db, session_id)
+    assert (await compact_old_sessions(pg_db, older_than_days=30)).sessions == 3
+    await pg_db.execute(text("UPDATE sessions SET status = 'active' WHERE id = 's-reopened'"))
+    await pg_db.execute(text("UPDATE sessions SET last_activity_at = now() - interval '100 days' WHERE id = 's-old'"))
+
+    deleted, stored = await purge_expired_archives(pg_db, older_than_days=365)
+
+    assert deleted == 1 and stored > 0
+    kept = (await pg_db.execute(select(SessionEventArchive.session_id).order_by(SessionEventArchive.session_id))).scalars()
+    assert list(kept) == ["s-old", "s-reopened"]
+    # The session row itself stays, so lists, titles and the cost ledger keep their references.
+    assert (await pg_db.execute(select(func.count()).select_from(Session).where(Session.id == "s-year-old"))).scalar() == 1
 
 
 async def test_write_restores_archive_then_rearchive_merges(pg_db: AsyncSession) -> None:

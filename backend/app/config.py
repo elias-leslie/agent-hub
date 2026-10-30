@@ -84,7 +84,10 @@ class Settings(BaseSettings):
     # A finished session idle this many days keeps its events as one compressed archive row instead of raw rows
     # (app/services/session_event_archive.py); reads return them unchanged. Above 30: the 30-day spend coverage
     # (usage_costs._COVERAGE_SQL) still reads event rows.
-    session_events_archive_after_days: float = Field(default=90, gt=30)
+    session_events_archive_after_days: float = Field(default=45, gt=30)
+    # An archived session idle this many days loses its archived events (the session row and the usage_calls cost
+    # ledger stay); 0 keeps archives forever. Owner decision 2026-10-30: 45 days raw, then compressed for a year.
+    session_event_archives_delete_after_days: float = Field(default=365, ge=0)
     # A parent's child_session_update keeps this many characters of the child event's text; the child keeps it all.
     child_session_update_preview_chars: int = Field(default=300, ge=0)
 
