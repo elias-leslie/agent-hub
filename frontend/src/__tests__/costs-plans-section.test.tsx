@@ -1,7 +1,13 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { withLiveOpenCodeGo } from '@/app/costs/components/openCodeGoLive'
 import { PlansSection, timeUntil } from '@/app/costs/components/PlansSection'
 import type { CostAccountingResponse } from '@/lib/api'
+import {
+  fetchOpenCodeGoUsage,
+  type OpenCodeGoUsage,
+  type ProviderUtilization,
+} from '@/lib/api/analytics'
 import { createQueryClientWrapper } from './test-utils'
 
 const data: CostAccountingResponse = {
@@ -111,12 +117,83 @@ const data: CostAccountingResponse = {
   ],
 }
 
+const storedOpenCode: ProviderUtilization = {
+  provider: 'opencode-go',
+  plan_type: null,
+  windows: [
+    {
+      window_minutes: 10080,
+      label: 'weekly',
+      used_percent: 70,
+      resets_at: '2099-01-01T00:00:00Z',
+      observed_at: '2026-10-11T15:00:00Z',
+      reset_since_observed: false,
+      source: 'opencode_go_usage',
+      source_label: 'OpenCode usage',
+    },
+  ],
+}
+
+const live: OpenCodeGoUsage = {
+  provider: 'opencode-go',
+  state: 'ok',
+  reason: null,
+  fetched_at: '2026-10-11T16:59:00Z',
+  windows: [
+    {
+      key: 'rolling',
+      label: '5 hours',
+      status: 'ok',
+      percent: 12,
+      resets_at: '2099-01-01T00:00:00Z',
+    },
+    {
+      key: 'weekly',
+      label: 'Week',
+      status: 'ok',
+      percent: 90,
+      resets_at: '2099-01-01T00:00:00Z',
+    },
+    {
+      key: 'monthly',
+      label: 'Month',
+      status: 'rate-limited',
+      percent: 100,
+      resets_at: null,
+    },
+  ],
+}
+
 vi.mock('@/lib/api', () => ({
   fetchCostAccounting: vi.fn(() => Promise.resolve(data)),
 }))
 
+vi.mock('@/lib/api/analytics', async (original) => ({
+  ...(await original<typeof import('@/lib/api/analytics')>()),
+  fetchOpenCodeGoUsage: vi.fn(),
+}))
+
+function renderPlans(liveResult: OpenCodeGoUsage | Error) {
+  vi.mocked(fetchOpenCodeGoUsage).mockImplementation(() =>
+    liveResult instanceof Error
+      ? Promise.reject(liveResult)
+      : Promise.resolve(liveResult),
+  )
+  render(<PlansSection daysRange={30} />, {
+    wrapper: createQueryClientWrapper(),
+  })
+}
+
 describe('PlansSection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    data.utilization = data.utilization.filter(
+      (p) => p.provider !== 'opencode-go',
+    )
+  })
+
   it('keeps cash, plan limits and credits separate', async () => {
+    vi.mocked(fetchOpenCodeGoUsage).mockReturnValue(new Promise(() => {}))
     render(<PlansSection daysRange={30} />, {
       wrapper: createQueryClientWrapper(),
     })
@@ -126,6 +203,65 @@ describe('PlansSection', () => {
     expect(screen.getByText(/workflow run ·/)).toBeInTheDocument()
     expect(screen.getByText(/Grant: 37,311 of 62,500 left/)).toBeInTheDocument()
     expect(screen.queryByText(/Not money spent/)).not.toBeInTheDocument()
+  })
+
+  it('shows OpenCode Go once in plan limits, live when OpenCode answers', async () => {
+    data.utilization = [...data.utilization, storedOpenCode]
+    renderPlans(live)
+    expect(await screen.findByText('5h 12%')).toBeInTheDocument()
+    expect(screen.getAllByText('OpenCode Go')).toHaveLength(1)
+    expect(screen.getByText('weekly 90%')).toBeInTheDocument()
+    expect(screen.queryByText('weekly 70%')).not.toBeInTheDocument()
+    expect(screen.getByText('Rate limited')).toBeInTheDocument()
+    expect(screen.getAllByText(/OpenCode, live ·/)).toHaveLength(3)
+    expect(screen.getByText(/unofficial OpenCode endpoint/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('meter', { name: 'OpenCode Go monthly used' }),
+    ).toHaveAttribute('aria-valuetext', '100%, rate limited')
+  })
+
+  it('falls back to the stored OpenCode Go reading with its age when live fails', async () => {
+    data.utilization = [...data.utilization, storedOpenCode]
+    renderPlans({
+      ...live,
+      state: 'unavailable',
+      reason: 'Could not reach OpenCode.',
+      windows: [],
+    })
+    const note = await screen.findByText(
+      'Live reading unavailable. Could not reach OpenCode.',
+    )
+    const block = note.parentElement as HTMLElement
+    expect(within(block).getByText('weekly 70%')).toBeInTheDocument()
+    expect(within(block).getByText(/OpenCode usage ·/)).toBeInTheDocument()
+  })
+
+  it('says when OpenCode Go is not set up and nothing is stored', async () => {
+    renderPlans({
+      ...live,
+      state: 'not_configured',
+      reason: 'No OpenCode Go API key is set for Agent Hub.',
+      windows: [],
+    })
+    expect(
+      await screen.findByText(
+        'Not set up. No OpenCode Go API key is set for Agent Hub.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps stored readings while the live request is loading or after it errors', () => {
+    const stored = [...data.utilization, storedOpenCode]
+    expect(withLiveOpenCodeGo(stored, undefined, false)).toEqual(stored)
+    const failed = withLiveOpenCodeGo(stored, undefined, true)
+    expect(failed.at(-1)?.windows).toEqual(storedOpenCode.windows)
+    expect(failed.at(-1)?.note).toBe('Live reading unavailable.')
+    expect(withLiveOpenCodeGo(data.utilization, undefined, false)).toEqual(
+      data.utilization,
+    )
+    expect(withLiveOpenCodeGo(stored, live, true).at(-1)?.note).toMatch(
+      /^Live refresh failed; showing the last live reading\./,
+    )
   })
 
   it('formats time until reset', () => {

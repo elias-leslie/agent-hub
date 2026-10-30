@@ -7,10 +7,11 @@ import {
   type CostAlert,
   type CreditLotState,
   fetchCostAccounting,
-  type ProviderUtilization,
 } from '@/lib/api'
+import { fetchOpenCodeGoUsage } from '@/lib/api/analytics'
 import { formatCurrency, formatRelativeTime } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
+import { type ShownProvider, withLiveOpenCodeGo } from './openCodeGoLive'
 
 const PROVIDER_NAMES: Record<string, string> = {
   claude: 'Claude Code',
@@ -128,13 +129,27 @@ function CashCard({ data }: { data: CostAccountingResponse }) {
   )
 }
 
-function WindowBar({ used }: { used: number }) {
+function WindowBar({
+  used,
+  label,
+  limited = false,
+}: {
+  used: number
+  label: string
+  limited?: boolean
+}) {
   const color =
-    used >= 100 ? 'bg-red-500' : used >= 80 ? 'bg-amber-500' : 'bg-emerald-500'
+    limited || used >= 100
+      ? 'bg-red-500'
+      : used >= 80
+        ? 'bg-amber-500'
+        : 'bg-emerald-500'
   return (
     <div
       className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800"
       role="meter"
+      aria-label={`${label} used`}
+      aria-valuetext={`${Math.round(used)}%${limited ? ', rate limited' : ''}`}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={used}
@@ -147,7 +162,7 @@ function WindowBar({ used }: { used: number }) {
   )
 }
 
-function HeadroomCard({ utilization }: { utilization: ProviderUtilization[] }) {
+function HeadroomCard({ utilization }: { utilization: ShownProvider[] }) {
   return (
     <Card title="Plan limits used" icon={Gauge}>
       {utilization.length === 0 ? (
@@ -169,6 +184,11 @@ function HeadroomCard({ utilization }: { utilization: ProviderUtilization[] }) {
                     <div className="mb-1 flex justify-between text-xs text-slate-400">
                       <span>
                         {w.label} {w.used_percent.toFixed(0)}%
+                        {w.rate_limited && (
+                          <span className="ml-2 font-medium text-red-400">
+                            Rate limited
+                          </span>
+                        )}
                       </span>
                       <span>
                         {w.reset_since_observed
@@ -178,7 +198,11 @@ function HeadroomCard({ utilization }: { utilization: ProviderUtilization[] }) {
                             : ''}
                       </span>
                     </div>
-                    <WindowBar used={w.used_percent} />
+                    <WindowBar
+                      used={w.used_percent}
+                      label={`${providerName(prov.provider)} ${w.label}`}
+                      limited={w.rate_limited}
+                    />
                     <p
                       className="mt-0.5 text-[11px] text-slate-500"
                       title={new Date(w.observed_at).toLocaleString()}
@@ -189,6 +213,9 @@ function HeadroomCard({ utilization }: { utilization: ProviderUtilization[] }) {
                   </div>
                 )
               })}
+              {prov.note && (
+                <p className="text-[11px] text-slate-500">{prov.note}</p>
+              )}
             </div>
           ))}
         </div>
@@ -255,12 +282,17 @@ function CreditsCard({ data }: { data: CostAccountingResponse }) {
   )
 }
 
-/** What the plans actually cost, how much of their limits is used, and Codex credits. */
+/** What the plans actually cost, how much of their limits is used (OpenCode Go live when it answers), and Codex credits. */
 export function PlansSection({ daysRange }: { daysRange: number }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['cost-accounting', daysRange],
     queryFn: () => fetchCostAccounting(daysRange),
     refetchInterval: 5 * 60 * 1000,
+  })
+  const live = useQuery({
+    queryKey: ['opencode-go-usage'],
+    queryFn: fetchOpenCodeGoUsage,
+    refetchInterval: 60_000,
   })
 
   return (
@@ -293,7 +325,13 @@ export function PlansSection({ daysRange }: { daysRange: number }) {
           <Alerts alerts={data.alerts} />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <CashCard data={data} />
-            <HeadroomCard utilization={data.utilization} />
+            <HeadroomCard
+              utilization={withLiveOpenCodeGo(
+                data.utilization,
+                live.data,
+                live.isError,
+              )}
+            />
             <CreditsCard data={data} />
           </div>
         </>

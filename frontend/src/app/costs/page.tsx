@@ -12,7 +12,6 @@ import {
 import { cn } from '@/lib/utils'
 import { CostTable } from './components/CostTable'
 import { ItemDrawer } from './components/ItemDrawer'
-import { OpenCodeGoSection } from './components/OpenCodeGoSection'
 import { PlansSection } from './components/PlansSection'
 import { SpendChart } from './components/SpendChart'
 import { SpendSummary } from './components/SpendSummary'
@@ -335,7 +334,6 @@ function CostsView() {
           )}
 
           <PlansSection daysRange={RANGE_DAYS[state.range]} />
-          <OpenCodeGoSection />
         </div>
       </main>
 
