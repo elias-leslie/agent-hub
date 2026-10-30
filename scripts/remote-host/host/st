@@ -26,4 +26,7 @@ fi
 # command its options, so give it an address nothing listens on: API-backed
 # commands work, and DB-backed parts fail with "connection refused".
 export DATABASE_URL=${DATABASE_URL:-postgresql://st-remote-host@127.0.0.1:1/unavailable}
+# Tells st it runs on an agent host: `st sessions send` hands a target that is
+# none of this host's agents to the workstation (SummitFlow cli/lib/coord_remote.py).
+export ST_AGENT_HOST=${ST_AGENT_HOST:-$(hostname -s)}
 exec "$launcher" "$@"
