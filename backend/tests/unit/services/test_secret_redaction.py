@@ -10,6 +10,7 @@ import importlib.util
 import json
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -345,27 +346,31 @@ def test_near_misses_are_left_alone(text: str) -> None:
     assert redact_secrets(text) == (text, {})
 
 
-def test_patterns_stay_linear_on_hostile_input() -> None:
-    hostile = (_pem("BEGIN") + " a" * 50 + "\n") * 2000 + "ghp_" + "a" * 30 + " " + "xoxb-" * 20000
+# Built per case so collection does not hold megabytes of hostile text in every worker.
+_HOSTILE_INPUTS: dict[str, Callable[[], str]] = {
+    "pem_headers_tokens_and_slack_prefixes": lambda: (
+        (_pem("BEGIN") + " a" * 50 + "\n") * 2000 + "ghp_" + "a" * 30 + " " + "xoxb-" * 20000
+    ),
+    # Codes of any length and many codes: an unterminated 400 KB parameter run, then 50,000 cut points.
+    "unterminated_csi_parameters": lambda: "\x1b[" + "1;" * 200_000 + SAMPLES["github_token"],
+    "many_cut_points": lambda: ("a\x1b[1mghp_\x1b[0m") * 50_000,
+    "backslash_run_without_introducer": lambda: "\\" * 400_000 + SAMPLES["github_token"],
+    "escaped_csi_introducers": lambda: ("\\" * 15 + "u009b") * 20_000,
+    "osc_openings_without_terminator": lambda: "\x1b]" * 200_000,
+    "long_unterminated_osc": lambda: "\x1b]" + "a" * 400_000 + SAMPLES["github_token"],
+    "escaped_osc_hyperlinks": lambda: ("\\\\u001b]8;;" + "x" * 2000) * 200,
+    "escaped_osc_introducers": lambda: ("\\" * 15 + "u001b]") * 20_000,
+    "unending_nf_escape": lambda: "\x1b" + " " * 400_000,
+    "charset_escapes_inside_tokens": lambda: ("ghp_AA\x1b(B" + "A" * 34) * 10_000,
+}
+
+
+@pytest.mark.parametrize("build", list(_HOSTILE_INPUTS.values()), ids=list(_HOSTILE_INPUTS))
+def test_patterns_stay_linear_on_hostile_input(build: Callable[[], str]) -> None:
+    hostile = build()
     started = time.monotonic()
     redact_secrets(hostile)
     assert time.monotonic() - started < 2
-    # Codes of any length and many codes: an unterminated 400 KB parameter run, then 50,000 cut points.
-    for hostile in (
-        "\x1b[" + "1;" * 200_000 + SAMPLES["github_token"],
-        ("a\x1b[1mghp_\x1b[0m") * 50_000,
-        "\\" * 400_000 + SAMPLES["github_token"],  # backslash runs with no introducer
-        ("\\" * 15 + "u009b") * 20_000,
-        "\x1b]" * 200_000,  # OSC openings with no terminator
-        "\x1b]" + "a" * 400_000 + SAMPLES["github_token"],
-        ("\\\\u001b]8;;" + "x" * 2000) * 200,
-        ("\\" * 15 + "u001b]") * 20_000,
-        "\x1b" + " " * 400_000,  # an nF escape that never ends
-        ("ghp_AA\x1b(B" + "A" * 34) * 10_000,
-    ):
-        started = time.monotonic()
-        redact_secrets(hostile)
-        assert time.monotonic() - started < 2
 
 
 def test_redact_value_walks_json_and_keeps_clean_objects() -> None:

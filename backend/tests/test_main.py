@@ -157,3 +157,30 @@ async def test_startup_logs_registered_access_reconciliation_failure_and_continu
     )
     for message in ("seed boom", "model boom", "first-party boom", "boom"):
         assert message in failures
+
+
+@pytest.mark.asyncio
+async def test_app_lifespan_runs_startup_then_stops_every_runtime_on_shutdown() -> None:
+    """The app's lifespan wiring and ``_shutdown``'s lazy imports, which the API test clients no longer enter."""
+    from app.main import app
+
+    calls: list[str] = []
+
+    def record(name: str) -> AsyncMock:
+        return AsyncMock(side_effect=lambda *_a, **_k: calls.append(name))
+
+    with patch("app.main._startup", record("startup")), patch(
+        "app.services.turn_runs.registry.shutdown", record("turns")
+    ), patch(
+        "app.services.native_continuation_runtime.shutdown_native_runtime_manager", record("native")
+    ), patch(
+        "app.llm.provider_support.claude_sessions.shutdown_claude_sessions", record("claude")
+    ), patch(
+        "app.services.codex_credentials.drain_codex_credential_refreshes", record("codex")
+    ), patch("app.main.stop_all_stream_bridges", record("bridges")), patch(
+        "app.main.shutdown_usage_tracker", record("usage")
+    ):
+        async with app.router.lifespan_context(app):
+            assert calls == ["startup"]
+
+    assert calls == ["startup", "turns", "native", "claude", "codex", "bridges", "usage"]

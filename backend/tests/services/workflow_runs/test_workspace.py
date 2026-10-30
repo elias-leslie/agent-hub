@@ -30,6 +30,8 @@ def repo(tmp_path: Path) -> Path:
     path = tmp_path / "repo"
     path.mkdir()
     git(path, "init", "-q", "-b", "main")
+    # A global core.hooksPath would otherwise run the user's hooks on every commit the tests make.
+    git(path, "config", "core.hooksPath", str(path / ".git/hooks"))
     (path / "shared.txt").write_text("one\ntwo\nthree\n")
     git(path, "add", "-A")
     git(path, "commit", "-q", "-m", "base")

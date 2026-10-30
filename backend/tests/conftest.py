@@ -192,22 +192,26 @@ class APITestClient(TestClient):
 
 
 @pytest.fixture
-def test_client() -> Generator[TestClient]:
-    """Create FastAPI test client (basic, no headers)."""
-    with TestClient(app) as client:
-        yield client
+def test_client() -> TestClient:
+    """Create FastAPI test client (basic, no headers).
+
+    The client is not entered as a context manager, so the app lifespan (startup
+    reconciliation against the database, telemetry, st warm-up) does not run per
+    test; tests/test_main.py covers startup itself.
+    """
+    return TestClient(app)
 
 
 @pytest.fixture
-def api_client() -> Generator[APITestClient]:
+def api_client() -> APITestClient:
     """Create FastAPI test client with source headers for API tests.
 
     Use this fixture for any test that calls API endpoints behind the
     access control middleware. The client adds the headers listed on
     APITestClient (pytest source attribution plus the internal bypass).
+    Like test_client, it does not run the app lifespan.
     """
-    with APITestClient(app) as client:
-        yield client
+    return APITestClient(app)
 
 
 async def _null_db() -> AsyncGenerator[None]:

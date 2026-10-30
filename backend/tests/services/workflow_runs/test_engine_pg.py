@@ -113,7 +113,12 @@ def repo(tmp_path: Path) -> Path:
         "GIT_COMMITTER_NAME": "t",
         "GIT_COMMITTER_EMAIL": "t@t",
     }
-    for args in (["init", "-q", "-b", "main"], ["commit", "-q", "--allow-empty", "-m", "base"]):
+    for args in (
+        ["init", "-q", "-b", "main"],
+        # A global core.hooksPath would otherwise replace the repo's own hooks (and run the user's).
+        ["config", "core.hooksPath", str(path / ".git/hooks")],
+        ["commit", "-q", "--allow-empty", "-m", "base"],
+    ):
         subprocess.run(["git", *args], cwd=path, check=True, env=env)
     return path
 

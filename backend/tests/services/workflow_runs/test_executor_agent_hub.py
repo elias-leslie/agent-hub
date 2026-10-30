@@ -59,7 +59,12 @@ def worktree(tmp_path: Path) -> Path:
     path = tmp_path / "wt"
     path.mkdir()
     env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
-    for args in (["init", "-q", "-b", "main"], ["commit", "-q", "--allow-empty", "-m", "base"]):
+    for args in (
+        ["init", "-q", "-b", "main"],
+        # A global core.hooksPath would otherwise run the user's hooks on the tests' commits.
+        ["config", "core.hooksPath", str(path / ".git/hooks")],
+        ["commit", "-q", "--allow-empty", "-m", "base"],
+    ):
         subprocess.run(["git", *args], cwd=path, check=True, env=env)
     return path
 
