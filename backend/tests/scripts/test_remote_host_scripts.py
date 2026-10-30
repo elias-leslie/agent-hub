@@ -231,12 +231,31 @@ def test_clean_snapshot_wipes_read_only_scratch_trees(tmp_path: Path, monkeypatc
 def test_clean_snapshot_refuses_while_user_work_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     prepare = SourceFileLoader("prepare_clean_snapshot", str(HOST_DIR / "prepare-clean-snapshot")).load_module()
     idle = prepare.idle
-    monkeypatch.setattr(idle, "tether_get", lambda _sock, path: {"catalog": {}} if path == "/v1/health" else {"items": []})
+    monkeypatch.setattr(idle, "tether_get", lambda _sock, path: {"catalog": {}} if path == "/v1/health" else {"items": [], "roots": []})
     monkeypatch.setattr(prepare.subprocess, "run", lambda argv, **_: subprocess.CompletedProcess(argv, 1, "", ""))
     monkeypatch.setattr(idle, "ssh_sessions", lambda: 1)
     monkeypatch.setattr(idle, "user_work", lambda config, exclude_cgroup=None: ["sleep"])
     found = prepare.refusals(idle.load_config(HOST_DIR / "idle.conf"))
     assert "1 user process(es) outside Tether (sleep)" in found
+
+
+def test_clean_snapshot_counts_only_roots_that_have_not_ended(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ended root keeps its record (and the catalog's rootRequests count) until the state is cleared."""
+    prepare = SourceFileLoader("prepare_clean_snapshot", str(HOST_DIR / "prepare-clean-snapshot")).load_module()
+    idle = prepare.idle
+    answers = {
+        "/v1/health": {"catalog": {"sessions": 0, "tmuxServersActive": 0, "rootRequests": 3}},
+        "/v1/wakes": {"items": []},
+        "/v1/roots": {"roots": [{"status": "ended"}, {"status": "ended"}, {"status": "running"}]},
+    }
+    monkeypatch.setattr(idle, "tether_get", lambda _sock, path: answers[path])
+    monkeypatch.setattr(prepare.subprocess, "run", lambda argv, **_: subprocess.CompletedProcess(argv, 1, "", ""))
+    monkeypatch.setattr(idle, "ssh_sessions", lambda: 1)
+    monkeypatch.setattr(idle, "user_work", lambda config, exclude_cgroup=None: [])
+    config = idle.load_config(HOST_DIR / "idle.conf")
+    assert "1 root request(s)" in prepare.refusals(config)
+    answers["/v1/roots"]["roots"].pop()
+    assert not any("root" in reason for reason in prepare.refusals(config))
 
 
 def test_bootstrap_on_host_never_eats_a_loop_input(tmp_path: Path) -> None:

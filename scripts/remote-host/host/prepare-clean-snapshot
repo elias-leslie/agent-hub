@@ -36,11 +36,15 @@ def refusals(config) -> list[str]:
     try:
         catalog = idle.tether_get(config.tether_socket, "/v1/health")["catalog"]
         wakes = len(idle.tether_get(config.tether_socket, "/v1/wakes")["items"])
+        # The catalog counts every root record; an ended root's record stays until the state is cleared.
+        roots = sum(root.get("status") != "ended" for root in idle.tether_get(config.tether_socket, "/v1/roots")["roots"])
     except Exception as exc:  # any unreadable catalog is a refusal
         return [f"Tether catalog unreadable ({type(exc).__name__}: {exc})"]
-    for key, label in (("sessions", "Tether session(s)"), ("tmuxServersActive", "tmux server(s)"), ("rootRequests", "root request(s)")):
+    for key, label in (("sessions", "Tether session(s)"), ("tmuxServersActive", "tmux server(s)")):
         if catalog.get(key):
             found.append(f"{catalog[key]} {label}")
+    if roots:
+        found.append(f"{roots} root request(s)")
     if wakes:
         found.append(f"{wakes} pending wake(s)")
     if subprocess.run(["pgrep", "-u", str(Path.home().owner()), "-x", "tmux: server"], capture_output=True).returncode == 0:
