@@ -47,14 +47,14 @@ def test_idle_host_powers_off_only_after_the_idle_minutes() -> None:
 @pytest.mark.parametrize(
     ("reading", "reason"),
     [
-        ({"sessions": 1}, "1 Tether session(s)"),
-        ({"wakes": 2}, "2 pending wake(s)"),
+        ({"sessions": 1}, "1 Aico session(s) open"),
+        ({"wakes": 2}, "2 scheduled check-in(s)"),
         ({"load": 0.3}, "load 0.30 >= 0.3"),
-        ({"ssh": 1}, "1 ssh session(s) besides the link"),
+        ({"ssh": 1}, "1 ssh login(s) besides Aico's link"),
         ({"sessions": None, "wakes": None, "errors": ("Tether unreadable (x)",)}, "Tether unreadable"),
-        ({"work": ("sleep", "make")}, "2 user process(es) outside Tether (make, sleep)"),
+        ({"work": ("sleep", "make")}, "2 program(s) still running outside Aico sessions (make, sleep)"),
         ({"containers": 2}, "2 running container(s)"),
-        ({"jobs": ("run-u12.service",)}, "1 root job(s) (run-u12.service)"),
+        ({"jobs": ("run-u12.service",)}, "1 background job(s) run as root (run-u12.service)"),
     ],
 )
 def test_any_activity_or_unknown_keeps_the_host_up(reading: dict[str, Any], reason: str) -> None:
@@ -270,7 +270,7 @@ def test_clean_snapshot_refuses_while_user_work_runs(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(idle, "ssh_sessions", lambda: 1)
     monkeypatch.setattr(idle, "user_work", lambda config, exclude_cgroup=None: ["sleep"])
     found = prepare.refusals(idle.load_config(HOST_DIR / "idle.conf"))
-    assert "1 user process(es) outside Tether (sleep)" in found
+    assert "1 program(s) still running outside Aico sessions (sleep)" in found
     assert {"docker unreadable", "system units unreadable"} <= set(found)
 
 
@@ -288,9 +288,9 @@ def test_clean_snapshot_counts_only_roots_that_have_not_ended(monkeypatch: pytes
     monkeypatch.setattr(idle, "ssh_sessions", lambda: 1)
     monkeypatch.setattr(idle, "user_work", lambda config, exclude_cgroup=None: [])
     config = idle.load_config(HOST_DIR / "idle.conf")
-    assert "1 root request(s)" in prepare.refusals(config)
+    assert "1 agent launch(es) not ended yet" in prepare.refusals(config)
     answers["/v1/roots"]["roots"].pop()
-    assert not any("root" in reason for reason in prepare.refusals(config))
+    assert not any("agent launch" in reason for reason in prepare.refusals(config))
 
 
 def test_bootstrap_on_host_never_eats_a_loop_input(tmp_path: Path) -> None:

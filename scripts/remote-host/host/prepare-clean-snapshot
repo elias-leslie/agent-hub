@@ -40,13 +40,13 @@ def refusals(config) -> list[str]:
         roots = sum(root.get("status") != "ended" for root in idle.tether_get(config.tether_socket, "/v1/roots")["roots"])
     except Exception as exc:  # any unreadable catalog is a refusal
         return [f"Tether catalog unreadable ({type(exc).__name__}: {exc})"]
-    for key, label in (("sessions", "Tether session(s)"), ("tmuxServersActive", "tmux server(s)")):
+    for key, label in (("sessions", "Aico session(s) open"), ("tmuxServersActive", "terminal server(s)")):
         if catalog.get(key):
             found.append(f"{catalog[key]} {label}")
     if roots:
-        found.append(f"{roots} root request(s)")
+        found.append(f"{roots} agent launch(es) not ended yet")
     if wakes:
-        found.append(f"{wakes} pending wake(s)")
+        found.append(f"{wakes} scheduled check-in(s)")
     if subprocess.run(["pgrep", "-u", str(Path.home().owner()), "-x", "tmux: server"], capture_output=True).returncode == 0:
         found.append("a tmux server is running")
     try:
@@ -56,14 +56,14 @@ def refusals(config) -> list[str]:
         found.append("docker unreadable")
     try:
         if jobs := idle.system_jobs(config):
-            found.append(f"{len(jobs)} root job(s) ({', '.join(jobs[:5])})")
+            found.append(f"{len(jobs)} background job(s) run as root ({', '.join(jobs[:5])})")
     except (OSError, RuntimeError, IndexError):
         found.append("system units unreadable")
     # This command's own ssh session is one; anything more is someone else.
     if (ssh := idle.ssh_sessions()) > 1:
         found.append(f"{ssh - 1} other ssh session(s)")
     if work := idle.user_work(config, exclude_cgroup=idle.own_cgroup()):
-        found.append(f"{len(work)} user process(es) outside Tether ({', '.join(sorted(set(work))[:5])})")
+        found.append(f"{len(work)} program(s) still running outside Aico sessions ({', '.join(sorted(set(work))[:5])})")
     return found
 
 

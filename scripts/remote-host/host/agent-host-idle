@@ -266,22 +266,22 @@ def read_host(config: Config, exclude_cgroup: str | None = None) -> Reading:
 def busy_reasons(reading: Reading, config: Config) -> list[str]:
     reasons = list(reading.errors)
     if reading.sessions:
-        reasons.append(f"{reading.sessions} Tether session(s)")
+        reasons.append(f"{reading.sessions} Aico session(s) open")
     if reading.wakes:
-        reasons.append(f"{reading.wakes} pending wake(s)")
+        reasons.append(f"{reading.wakes} scheduled check-in(s)")
     if reading.load is not None and reading.load >= config.load_max:
         reasons.append(f"load {reading.load:.2f} >= {config.load_max:g}")
     if reading.ssh:
-        reasons.append(f"{reading.ssh} ssh session(s) besides the link")
+        reasons.append(f"{reading.ssh} ssh login(s) besides Aico's link")
     if reading.work:
         names = sorted(set(reading.work))
         shown = ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
-        reasons.append(f"{len(reading.work)} user process(es) outside Tether ({shown})")
+        reasons.append(f"{len(reading.work)} program(s) still running outside Aico sessions ({shown})")
     if reading.containers:
         reasons.append(f"{reading.containers} running container(s)")
     if reading.jobs:
         shown = ", ".join(reading.jobs[:5]) + (", ..." if len(reading.jobs) > 5 else "")
-        reasons.append(f"{len(reading.jobs)} root job(s) ({shown})")
+        reasons.append(f"{len(reading.jobs)} background job(s) run as root ({shown})")
     return reasons
 
 
