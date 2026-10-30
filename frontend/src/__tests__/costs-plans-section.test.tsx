@@ -225,6 +225,36 @@ describe('PlansSection', () => {
     }
   })
 
+  it('names plans the way the provider sells them', async () => {
+    vi.mocked(fetchOpenCodeGoUsage).mockReturnValue(new Promise(() => {}))
+    const saved = data.cash
+    data.cash = {
+      ...data.cash,
+      subscriptions: [
+        ...data.cash.subscriptions,
+        {
+          provider: 'opencode-go',
+          plan: 'go',
+          monthly_usd: 40,
+          amortized_usd: 9.4,
+          days: 7,
+        },
+      ],
+    }
+    try {
+      render(<PlansSection daysRange={30} />, {
+        wrapper: createQueryClientWrapper(),
+      })
+      expect(
+        await screen.findByText('Claude Code Max 20x at $200/mo'),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Codex Plus at $20/mo')).toBeInTheDocument()
+      expect(screen.getByText('OpenCode Go at $40/mo')).toBeInTheDocument()
+    } finally {
+      data.cash = saved
+    }
+  })
+
   it('shows OpenCode Go once in plan limits, live when OpenCode answers', async () => {
     data.utilization = [...data.utilization, storedOpenCode]
     renderPlans(live)

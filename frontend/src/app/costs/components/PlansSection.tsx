@@ -25,6 +25,14 @@ function providerName(provider: string): string {
   return PROVIDER_NAMES[provider] ?? provider
 }
 
+// 'max_20x' reads 'Max 20x'; a plan id that repeats the provider name ('OpenCode Go' + 'go') is dropped.
+function planName(provider: string, plan: string): string {
+  const name = providerName(provider)
+  const words = plan.replace(/_/g, ' ').trim()
+  if (!words || name.toLowerCase().endsWith(words.toLowerCase())) return name
+  return `${name} ${words.charAt(0).toUpperCase()}${words.slice(1)}`
+}
+
 function lastDays(days: number): string {
   return days === 1 ? 'last day' : `last ${days} days`
 }
@@ -117,7 +125,7 @@ function CashCard({ data }: { data: CostAccountingResponse }) {
         {cash.subscriptions.map((sub) => (
           <Row
             key={`${sub.provider}-${sub.plan}-${sub.monthly_usd}`}
-            label={`${providerName(sub.provider)} ${sub.plan}${sub.monthly_usd == null ? ' (price unverified)' : ` at $${sub.monthly_usd}/mo`}`}
+            label={`${planName(sub.provider, sub.plan)}${sub.monthly_usd == null ? ' (price unverified)' : ` at $${sub.monthly_usd}/mo`}`}
             value={usd(sub.amortized_usd)}
           />
         ))}
