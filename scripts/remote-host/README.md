@@ -35,7 +35,9 @@ re-runnable: a second run changes nothing unless the workstation changed.
     `integrations/context-delivery/install.py`.
   - The workstation's links from `~` into the mirrored repos (settings, hooks,
     skills, commands, bins) are recreated, plus the plain hook scripts the
-    settings call.
+    settings call. A skill installed as a plain folder in the home, not a
+    link into a mirrored repo (such as `~/.agents/skills/graphify`), stays on
+    the workstation, so a host's skill list can be shorter.
   - No login is copied. Logins are served or signed in on the host, as
     described under Credentials.
   - Claude Code's first-run screens are answered in `~/.claude.json`
