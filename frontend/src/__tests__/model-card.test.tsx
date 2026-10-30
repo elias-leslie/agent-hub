@@ -15,3 +15,35 @@ describe('ModelCard context window', () => {
     expect(screen.queryByText('0K')).not.toBeInTheDocument()
   })
 })
+
+describe('ModelCard billing route', () => {
+  // The same model from Codex (ChatGPT plan) and the OpenAI API must not read as duplicates.
+  it.each([
+    'codex_oauth_subscription; verified_2026-10-09',
+    'codex_oauth; text_verified_2026-10-28; vision_tools_untested',
+  ])('labels a Codex model as the subscription (%s)', (availability) => {
+    render(<ModelCard model={{ ...codexModel, availability }} />)
+    expect(screen.getByText('Codex subscription')).toBeInTheDocument()
+    expect(screen.getByText('Subscription')).toBeInTheDocument()
+    expect(
+      screen.getByText('API equivalent $2.50 / $15.00'),
+    ).toBeInTheDocument()
+  })
+
+  it('labels the OpenAI API model as paid', () => {
+    render(
+      <ModelCard
+        model={{
+          ...codexModel,
+          id: 'openai/gpt-6.1-terra',
+          provider: 'openai',
+          availability:
+            'chat_completions_without_tools; api_entitlement_unverified',
+        }}
+      />,
+    )
+    expect(screen.getByText('OpenAI API, paid')).toBeInTheDocument()
+    expect(screen.getByText('OpenAI')).toBeInTheDocument()
+    expect(screen.queryByText('Codex subscription')).not.toBeInTheDocument()
+  })
+})

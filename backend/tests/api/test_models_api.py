@@ -277,9 +277,12 @@ def test_subscription_and_local_models_are_not_counted_as_missing_live_pricing()
     subscription = _entry_with(metered, id="claude-opus-5-5", provider="claude",
                                availability="claude_code_cli_subscription")
     local = _entry_with(metered, id="local/qwen", provider="local", availability=None)
+    # Codex OAuth runs on the ChatGPT plan whether or not the note says "subscription".
+    codex = _entry_with(metered, id="codex/gpt-6.1-terra", provider="codex",
+                        availability="codex_oauth; text_verified_2026-10-28")
 
     health = _build_catalog_health(
-        entries=[metered, subscription, local], enrichments={}, sync_state=None, last_sync=None,
+        entries=[metered, subscription, local, codex], enrichments={}, sync_state=None, last_sync=None,
     )
 
     assert (health.models_with_live_pricing, health.models_missing_live_pricing) == (0, 1)

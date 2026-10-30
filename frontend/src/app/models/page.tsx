@@ -26,7 +26,7 @@ import { ModelFilters } from '@/components/models/model-filters'
 import { useModelComparison } from '@/components/models/use-model-comparison'
 import { type ModelOption, useModelsWithSync } from '@/hooks/use-models-catalog'
 import { fetchApi } from '@/lib/api-config'
-import { getPricingSortValue } from '@/lib/model-pricing'
+import { getPricingSortValue, isCodexSubscription } from '@/lib/model-pricing'
 
 function formatMoment(value: string | null): string {
   if (!value) return 'Never'
@@ -46,7 +46,7 @@ function compactNumber(value: number | null | undefined): string {
 function pricingSortValue(model: ModelOption): number {
   if (
     model.availability?.includes('free_tier') ||
-    model.availability === 'codex_oauth_subscription'
+    isCodexSubscription(model.availability)
   ) {
     return 0
   }

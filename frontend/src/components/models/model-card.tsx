@@ -12,9 +12,15 @@ import {
   Pencil,
   Zap,
 } from 'lucide-react'
-import { getProviderColor } from '@/components/settings/constants'
+import {
+  getProviderColor,
+  getProviderInfo,
+} from '@/components/settings/constants'
 import type { ModelOption } from '@/hooks/use-models-catalog'
-import { formatCatalogModelPricing } from '@/lib/model-pricing'
+import {
+  formatCatalogModelPricing,
+  isCodexSubscription,
+} from '@/lib/model-pricing'
 import { cn } from '@/lib/utils'
 import { ModelRadar } from './model-radar'
 
@@ -48,14 +54,14 @@ function formatSyncMoment(value: string | null | undefined): string | null {
   })
 }
 
-function availabilityBadge(
-  availability: string | null | undefined,
-): string | null {
-  if (!availability) return null
+/** How the model is paid for, so the same model from two providers (Codex plan, OpenAI API) tells apart. */
+function availabilityBadge(model: ModelOption): string | null {
+  const availability = model.availability ?? ''
   if (availability.includes('free_tier_preview')) return 'Free tier preview'
   if (availability.includes('free_tier')) return 'Free tier'
-  if (availability === 'codex_oauth_subscription') return 'Codex OAuth'
+  if (isCodexSubscription(availability)) return 'Codex subscription'
   if (availability.includes('paid_only')) return 'Paid only'
+  if (model.provider === 'openai') return 'OpenAI API, paid'
   return null
 }
 
@@ -72,7 +78,7 @@ export function ModelCard({
   const hasEnrichment = !!model.enrichment
   const pricing = formatCatalogModelPricing(model)
   const syncedAt = formatSyncMoment(model.enrichment?.synced_at)
-  const availability = availabilityBadge(model.availability)
+  const availability = availabilityBadge(model)
 
   return (
     <div
@@ -140,7 +146,7 @@ export function ModelCard({
             <div
               className={cn('w-1.5 h-1.5 rounded-full', providerColor.dot)}
             />
-            <span className="capitalize">{model.provider}</span>
+            <span>{getProviderInfo(model.provider).name}</span>
           </div>
         </div>
 

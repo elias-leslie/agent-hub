@@ -168,7 +168,8 @@ def _build_model_info(
 
 def _bills_per_token(entry: ModelEntry) -> bool:
     """Subscription and local models have no per-token price to sync."""
-    return entry.provider != "local" and "subscription" not in (entry.availability or "")
+    availability = entry.availability or ""
+    return entry.provider != "local" and "subscription" not in availability and not availability.startswith("codex_oauth")
 
 
 def _current_discovery(raw: dict[str, Any], known_ids: set[str]) -> CatalogDiscoveryInfo:

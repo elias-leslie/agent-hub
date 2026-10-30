@@ -112,13 +112,27 @@ export function formatModelPricing(cost: ModelCost): {
   }
 }
 
+/**
+ * Codex OAuth models run on the ChatGPT plan. Availability is a `;` list led by the access
+ * route (`codex_oauth_subscription; verified_…`, or `codex_oauth; …` for newer entries).
+ */
+export function isCodexSubscription(
+  availability: string | null | undefined,
+): boolean {
+  return Boolean(availability?.split(';')[0].trim().startsWith('codex_oauth'))
+}
+
 export function formatCatalogModelPricing(
   model: Pick<CatalogModel, 'cost' | 'availability'>,
 ): { primary: string; secondary: string; source: string } {
-  if (model.availability === 'codex_oauth_subscription') {
+  if (isCodexSubscription(model.availability)) {
+    const { input_per_m, output_per_m } = model.cost
     return {
-      primary: 'Codex OAuth',
-      secondary: 'API pricing pending',
+      primary: 'Subscription',
+      secondary:
+        input_per_m > 0 || output_per_m > 0
+          ? `API equivalent ${formatUsd(input_per_m)} / ${formatUsd(output_per_m)}`
+          : 'No API equivalent yet',
       source: 'Codex-only',
     }
   }
