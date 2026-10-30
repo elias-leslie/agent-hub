@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Clear an agent host's Tether state and scratch so a snapshot of it is clean.
+"""Clear an agent host's Tether state, context artifacts and scratch for a clean snapshot.
 
 Refuses unless nothing is running: an empty Tether catalog (no sessions, tmux
 servers, root requests or wakes), no tmux servers, no running containers and
@@ -24,6 +24,8 @@ idle = SourceFileLoader("agent_host_idle", str(HERE / "agent-host-idle")).load_m
 
 STATE_DIR = Path.home() / ".local/state/tether/default"
 SCRATCH = Path("/work/scratch")
+# Per-session context artifacts; the launchers write fresh ones at each start.
+CONTEXT_ARTIFACTS = Path.home() / ".local/state/agent-hub/context-deliveries"
 UNIT = "tether@default.service"
 
 
@@ -82,7 +84,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     subprocess.run(["systemctl", "--user", "stop", UNIT], check=True)
     try:
-        shutil.rmtree(STATE_DIR, ignore_errors=False) if STATE_DIR.exists() else None
+        for directory in (STATE_DIR, CONTEXT_ARTIFACTS):
+            if directory.exists():
+                shutil.rmtree(directory)
         cleared = 0
         for entry in SCRATCH.iterdir():
             if entry.is_dir() and not entry.is_symlink():
@@ -94,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.run(["systemctl", "--user", "start", UNIT], check=True)
     health = _wait_healthy(config)
     print(
-        f"prepare-clean-snapshot: cleared Tether state and {cleared} scratch item(s); "
+        f"prepare-clean-snapshot: cleared Tether state, context artifacts and {cleared} scratch item(s); "
         f"Tether ready with {health['catalog']['sessions']} sessions"
     )
     return 0

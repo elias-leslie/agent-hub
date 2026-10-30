@@ -17,6 +17,9 @@ re-runnable: a second run changes nothing unless the workstation changed.
 - **Infra checkouts at the same paths.** The repos in `mirror.list` go under
   `/srv/workspaces/projects` as shallow checkouts of the workstation's
   committed HEAD.
+  - That path is a real directory, not a link, because Agent Hub matches the
+    resolved cwd against its project roots. A template that links it elsewhere
+    (VM 9001 links it to `/work/projects`) gets the two swapped once.
   - A new host gets a depth-1 clone. Later runs send a git bundle of only the
     new commits, never the history, and nothing is pushed.
   - Only tracked files travel: no `.env`, credstore or ignored files.
@@ -83,8 +86,8 @@ scripts/remote-host/snapshot-clean agent-work 200 agent-host-ready
 The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot.
 - The host step refuses while anything runs: Tether sessions, tmux servers,
   root requests or wakes, running containers, or another ssh session.
-- Otherwise it clears Tether's state and `/work/scratch` and restarts Tether
-  empty.
+- Otherwise it clears Tether's state, the per-session context artifacts and
+  `/work/scratch`, then restarts Tether empty.
 - Logins on the host are kept, so a snapshot taken after sign-in keeps them.
 - To check readiness only: `ssh agent-work /usr/local/lib/agent-host/prepare-clean-snapshot --check`.
 

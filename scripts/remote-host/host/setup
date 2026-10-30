@@ -38,6 +38,17 @@ link() {
 }
 
 # --- system: shared paths, idle poweroff ---------------------------------
+# The checkouts must really live at the workstation's path: git and getcwd
+# report resolved paths, and Agent Hub matches those against its project
+# roots. A template that links the projects dir elsewhere gets the two
+# swapped (a rename on the same disk), keeping the old path as a link.
+if [[ -L $projects ]]; then
+    real=$(readlink -f -- "$projects")
+    sudo -n rm -- "$projects"
+    sudo -n mv -T -- "$real" "$projects"
+    sudo -n ln -s -- "$projects" "$real"
+    say "moved $real to $projects (old path is now a link)"
+fi
 if [[ ! -e /srv/scratch ]]; then
     sudo -n ln -s /work/scratch /srv/scratch
     say "linked /srv/scratch -> /work/scratch"
