@@ -122,7 +122,10 @@ class AutomationRun(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (Index("ix_automation_runs_profile_created", "profile_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_automation_runs_profile_created", "profile_id", "created_at"),
+        Index("ix_automation_runs_status_created", "status", "created_at"),
+    )
 
 
 # Run status sets. Agent Hub itself writes admitted, rejected, dispatching, accepted and the

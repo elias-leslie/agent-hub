@@ -262,6 +262,7 @@ export async function fetchAutomationRuns(
   filters: {
     profileId?: string
     projectId?: string
+    status?: string
     limit?: number
     offset?: number
   } = {},
@@ -272,6 +273,7 @@ export async function fetchAutomationRuns(
   })
   if (filters.profileId) query.set('profile_id', filters.profileId)
   if (filters.projectId) query.set('project_id', filters.projectId)
+  if (filters.status) query.set('status', filters.status)
   return readResponse<AutomationRunsPage>(
     await fetchApi(endpoint(`/runs?${query}`)),
     'Failed to load automation runs',

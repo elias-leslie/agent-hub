@@ -224,7 +224,7 @@ describe('Automations project policy', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('shows UTC cron schedules in local time and says what unreviewed runs means', async () => {
+  it('shows UTC cron schedules in local time and counts failed runs since the last review', async () => {
     const base = {
       project_id: 'agent-hub',
       subject_id: null,
@@ -290,12 +290,30 @@ describe('Automations project policy', () => {
       ).toBeInTheDocument()
       expect(screen.getByText('0 0 1 1 * (UTC)')).toBeInTheDocument()
       expect(
-        screen.getByText(/5 runs since last\s+marked reviewed/),
+        screen.getByText(/5 failed runs since last marked reviewed/),
       ).toBeInTheDocument()
     } finally {
       vi.useRealTimers()
       if (zone === undefined) delete process.env.TZ
       else process.env.TZ = zone
     }
+  })
+
+  it('filters run history to failures', async () => {
+    vi.mocked(fetchAutomationRuns).mockResolvedValue({ items: [], total: 0 })
+    render(<AutomationsPage />, { wrapper })
+    fireEvent.click(screen.getByRole('button', { name: 'Run history' }))
+    await screen.findByText('No runs for this selection.')
+    expect(fetchAutomationRuns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: undefined }),
+    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Failures only' }))
+    expect(
+      await screen.findByText('No failed runs for this selection.'),
+    ).toBeInTheDocument()
+    expect(fetchAutomationRuns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'failed', offset: 0 }),
+    )
   })
 })

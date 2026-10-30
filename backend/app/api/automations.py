@@ -134,8 +134,10 @@ async def _profile(db: AsyncSession, row: AutomationProfile) -> dict[str, Any]:
     )
     if row.clock_owner == "legacy":
         gates.append("legacy_clock_owner")
+    # Only failures need a look; routine successes (session cleanup every 15 min) don't pile up as review debt.
     unreviewed = await db.scalar(select(func.count()).select_from(AutomationRun).where(
         AutomationRun.profile_id == row.id,
+        AutomationRun.status == "failed",
         AutomationRun.created_at > (row.last_reviewed_at or datetime.min.replace(tzinfo=UTC)),
     ))
     return {
@@ -351,6 +353,7 @@ async def review_profile(
 async def list_runs(
     db: Annotated[AsyncSession, Depends(get_db)],
     profile_id: str | None = None, project_id: str | None = None,
+    status: Annotated[list[str] | None, Query(description="Only runs with one of these statuses")] = None,
     limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     query = select(AutomationRun)
@@ -358,6 +361,8 @@ async def list_runs(
         query = query.where(AutomationRun.profile_id == profile_id)
     if project_id:
         query = query.where(AutomationRun.project_id == project_id)
+    if status:
+        query = query.where(AutomationRun.status.in_(status))
     total = await db.scalar(select(func.count()).select_from(query.subquery()))
     rows = (await db.execute(query.order_by(
         AutomationRun.created_at.desc()

@@ -578,6 +578,7 @@ export default function AutomationsPage() {
   const [tab, setTab] = useState<Tab>('profiles')
   const [profileOffset, setProfileOffset] = useState(0)
   const [runOffset, setRunOffset] = useState(0)
+  const [failuresOnly, setFailuresOnly] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -606,11 +607,18 @@ export default function AutomationsPage() {
     refetchInterval: 30000,
   })
   const runsQuery = useQuery({
-    queryKey: ['automation-runs', projectId, selectedId, runOffset],
+    queryKey: [
+      'automation-runs',
+      projectId,
+      selectedId,
+      failuresOnly,
+      runOffset,
+    ],
     queryFn: () =>
       fetchAutomationRuns({
         projectId: projectId || undefined,
         profileId: selectedId || undefined,
+        status: failuresOnly ? 'failed' : undefined,
         limit: PAGE_SIZE,
         offset: runOffset,
       }),
@@ -634,9 +642,12 @@ export default function AutomationsPage() {
     if (!creating) return
     const form = document.getElementById('new-automation-profile')
     if (!form) return
+    // The header only covers content where it is sticky (not on phones).
+    const header = document.querySelector('.page-header')
     const headerBottom =
-      document.querySelector('.page-header')?.getBoundingClientRect().bottom ??
-      0
+      header && getComputedStyle(header).position === 'sticky'
+        ? header.getBoundingClientRect().bottom
+        : 0
     form.style.scrollMarginTop = `${headerBottom + 16}px`
     form.scrollIntoView({ block: 'start' })
   }, [creating])
@@ -794,7 +805,7 @@ export default function AutomationsPage() {
   return (
     <div className="page-shell">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
-      <header className="page-header">
+      <header className="page-header max-sm:static">
         <div className="page-container page-header-row px-4 lg:px-8">
           <div className="page-title-group">
             <div className="page-title-icon">
@@ -1003,8 +1014,11 @@ export default function AutomationsPage() {
                               </span>
                               {profile.unreviewed_count > 0 && (
                                 <span className="mt-2 block text-xs font-medium text-amber-300">
-                                  {profile.unreviewed_count} runs since last
-                                  marked reviewed
+                                  {profile.unreviewed_count} failed{' '}
+                                  {profile.unreviewed_count === 1
+                                    ? 'run'
+                                    : 'runs'}{' '}
+                                  since last marked reviewed
                                 </span>
                               )}
                             </span>
@@ -1234,24 +1248,38 @@ export default function AutomationsPage() {
                   {selected ? selected.label : projectId || 'All projects'}
                 </p>
               </div>
-              <label className="text-xs text-slate-400">
-                Profile
-                <select
-                  className="control-select ml-2 max-w-[16rem]"
-                  value={selectedId ?? ''}
-                  onChange={(event) => {
-                    setSelectedId(event.target.value || null)
-                    setRunOffset(0)
-                  }}
-                >
-                  <option value="">All profiles</option>
-                  {profiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <input
+                    type="checkbox"
+                    checked={failuresOnly}
+                    onChange={(event) => {
+                      setFailuresOnly(event.target.checked)
+                      setRunOffset(0)
+                    }}
+                    className="h-4 w-4 accent-amber-500"
+                  />
+                  Failures only
+                </label>
+                <label className="text-xs text-slate-400">
+                  Profile
+                  <select
+                    className="control-select ml-2 max-w-[16rem]"
+                    value={selectedId ?? ''}
+                    onChange={(event) => {
+                      setSelectedId(event.target.value || null)
+                      setRunOffset(0)
+                    }}
+                  >
+                    <option value="">All profiles</option>
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
             {runsQuery.isLoading ? (
               <p className="p-5 text-sm text-slate-400">Loading runs…</p>
@@ -1279,7 +1307,9 @@ export default function AutomationsPage() {
               ))
             ) : (
               <p className="p-5 text-sm text-slate-400">
-                No runs for this selection.
+                {failuresOnly
+                  ? 'No failed runs for this selection.'
+                  : 'No runs for this selection.'}
               </p>
             )}
           </section>
