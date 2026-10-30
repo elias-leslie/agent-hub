@@ -144,9 +144,9 @@ export function ModelCard({
           </div>
         </div>
 
-        {/* Composite Score */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="min-w-0 flex-1">
+        {/* Composite Score; the price box wraps below a score too wide to share the row (typed models read "Unrated") */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="flex-1">
             <div className="text-xs text-slate-400 mb-1">Composite Score</div>
             <div className="flex flex-wrap items-baseline gap-x-1">
               <span className="text-2xl font-bold text-slate-100">
