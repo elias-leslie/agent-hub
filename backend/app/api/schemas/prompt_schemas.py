@@ -41,6 +41,8 @@ class PromptResponse(BaseModel):
     boot_eligible: bool = False
     exclude_agents: list[str]
     owner_agent_slug: str | None = None
+    # Projects a project-scoped prompt applies to (its context policy targets); empty for any other scope.
+    projects: list[str] = Field(default_factory=list)
     prompt_type: str | None = None
     deletion_locked: bool = False
     created_at: datetime

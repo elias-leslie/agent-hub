@@ -904,8 +904,12 @@ describe('workflow run detail', () => {
     expect(await screen.findByTestId('run-result')).toHaveTextContent(
       'Branches b could not be merged (conflict in shared.txt); the rest is on workflow/r1111111 at cccccccc',
     )
+    // A finished run has nothing running, so it gives the limit rather than '0 of 2 steps running'.
     expect(screen.getByTestId('run-concurrency')).toHaveTextContent(
-      '0 of 2 steps running',
+      'Up to 2 steps at a time',
+    )
+    expect(screen.getByTestId('run-concurrency')).not.toHaveTextContent(
+      'running',
     )
     const ws = screen.getByTestId('step-workspace')
     expect(ws).toHaveTextContent('directory removed, branch kept')

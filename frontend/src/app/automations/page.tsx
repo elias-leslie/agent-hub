@@ -82,9 +82,22 @@ function utcCronLocalText(cron: string): string | null {
   if (hour === '*' && weekday === '*')
     return `Hourly at :${minute.padStart(2, '0')}`
   if (!/^\d+$/.test(hour) || !/^(\*|[0-6])$/.test(weekday)) return null
-  // Any date works for the time; the weekday needs a date that falls on it in UTC.
-  const at = new Date(Date.UTC(2026, 0, 4, Number(hour), Number(minute)))
-  if (weekday !== '*') at.setUTCDate(at.getUTCDate() + Number(weekday))
+  // This week's run, so the local time carries today's daylight-saving offset (a fixed winter date read an hour
+  // early all summer); the weekday is the next day that falls on it in UTC.
+  const now = new Date()
+  const at = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      Number(hour),
+      Number(minute),
+    ),
+  )
+  if (weekday !== '*')
+    at.setUTCDate(
+      at.getUTCDate() + ((Number(weekday) - at.getUTCDay() + 7) % 7),
+    )
   const time = at.toLocaleTimeString(undefined, {
     hour: 'numeric',
     minute: '2-digit',

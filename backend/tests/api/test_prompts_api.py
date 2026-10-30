@@ -120,3 +120,20 @@ class TestPromptRevisionEndpoints:
 
         assert response.status_code == 400
         assert "Ambiguous prompt revision prefix" in response.text
+
+
+class TestPromptScopeInResponse:
+    def test_project_scoped_prompt_names_its_projects(self):
+        from app.api.prompts import _prompt_to_response
+
+        scoped = _make_prompt(context_policy={"scope": "project", "targets": ["agent-hub"]})
+        assert _prompt_to_response(scoped).projects == ["agent-hub"]
+
+    @pytest.mark.parametrize(
+        "policy",
+        [None, {"scope": "global", "targets": []}, {"scope": "unassigned", "targets": ["agent-hub"]}],
+    )
+    def test_other_scopes_name_no_project(self, policy):
+        from app.api.prompts import _prompt_to_response
+
+        assert _prompt_to_response(_make_prompt(context_policy=policy)).projects == []

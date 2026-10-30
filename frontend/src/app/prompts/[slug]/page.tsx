@@ -462,8 +462,9 @@ export default function PromptEditPage() {
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
-                      Scoped prompts follow their assignment target only, so
-                      exclusions are not needed.
+                      {prompt?.projects && prompt.projects.length > 0
+                        ? `Applies to project ${prompt.projects.join(', ')} only, so exclusions are not needed.`
+                        : 'Scoped prompts follow their assignment target only, so exclusions are not needed.'}
                     </div>
                   )}
                 </div>

@@ -6,6 +6,7 @@ import {
   attemptModels,
   attemptTokens,
   costTotalsParts,
+  failureText,
   isModelSwitch,
   modelLabel,
   pauseExplanation,
@@ -91,6 +92,18 @@ describe('attempt timing and pause copy', () => {
     )
     expect(text).toContain('Step "plan" is waiting for a usage limit to reset')
     expect(text).toContain('resumes by itself')
+  })
+})
+
+describe('failureText', () => {
+  it('reads an owner-ended pause in plain words instead of the raw reason code', () => {
+    expect(failureText('integration_conflict: owner ended the run')).toBe(
+      'It paused because every step finished, but their work could not be put together on the run branch, and the owner ended it there.',
+    )
+    expect(failureText('build: owner ended the run')).toBe(
+      'It paused because step "build" could not finish, and the owner ended it there.',
+    )
+    expect(failureText('engine crashed')).toBe('engine crashed')
   })
 })
 

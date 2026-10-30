@@ -224,29 +224,40 @@ describe('Automations project policy', () => {
       ],
       total: 3,
     })
-    render(<AutomationsPage />, { wrapper })
-    const time = (iso: string) =>
-      new Date(iso).toLocaleTimeString(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    const saturday = new Date('2026-01-10T13:30:00Z')
-    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
-      saturday.getDay()
-    ]
-    expect(
-      await screen.findByText(
-        `Daily at ${time('2026-01-04T03:15:00Z')} your time · 15 3 * * * (UTC)`,
-      ),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        `${weekday} at ${time('2026-01-10T13:30:00Z')} your time · 30 13 * * 6 (UTC)`,
-      ),
-    ).toBeInTheDocument()
-    expect(screen.getByText('0 0 1 1 * (UTC)')).toBeInTheDocument()
-    expect(
-      screen.getByText(/5 runs since last\s+marked reviewed/),
-    ).toBeInTheDocument()
+    // A summer day in a daylight-saving zone: the local time must use July's offset, not winter's.
+    const zone = process.env.TZ
+    process.env.TZ = 'America/New_York'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-07-15T12:00:00Z'))
+    try {
+      render(<AutomationsPage />, { wrapper })
+      const time = (iso: string) =>
+        new Date(iso).toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      expect(time('2026-07-15T03:15:00Z')).not.toBe(
+        time('2026-01-04T03:15:00Z'),
+      )
+      expect(
+        await screen.findByText(
+          `Daily at ${time('2026-07-15T03:15:00Z')} your time · 15 3 * * * (UTC)`,
+        ),
+      ).toBeInTheDocument()
+      // The next Saturday after Wed Jul 15 is Jul 18; 13:30 UTC is still Saturday in New York.
+      expect(
+        screen.getByText(
+          `Sat at ${time('2026-07-18T13:30:00Z')} your time · 30 13 * * 6 (UTC)`,
+        ),
+      ).toBeInTheDocument()
+      expect(screen.getByText('0 0 1 1 * (UTC)')).toBeInTheDocument()
+      expect(
+        screen.getByText(/5 runs since last\s+marked reviewed/),
+      ).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+      if (zone === undefined) delete process.env.TZ
+      else process.env.TZ = zone
+    }
   })
 })

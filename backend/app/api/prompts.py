@@ -69,6 +69,8 @@ def _prompt_to_response(p: object) -> PromptResponse:
 
     assert isinstance(p, Prompt)
     owner_agent = p.__dict__.get("owner_agent")
+    policy = p.context_policy or {}
+    projects = [str(t) for t in policy.get("targets") or []] if policy.get("scope") == "project" else []
     return PromptResponse(
         id=p.id,
         slug=p.slug,
@@ -80,6 +82,7 @@ def _prompt_to_response(p: object) -> PromptResponse:
         boot_eligible=bool(p.boot_eligible),
         exclude_agents=p.exclude_agents or [],
         owner_agent_slug=owner_agent.slug if owner_agent else None,
+        projects=projects,
         prompt_type=p.prompt_type,
         deletion_locked=bool(p.deletion_locked),
         created_at=p.created_at,

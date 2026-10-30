@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
 import type { ModelInfo } from '../types'
+import { modelOptionLabels } from './ModelSelect'
 
 interface FallbackModelsListProps {
   selectedModels: string[]
@@ -13,6 +14,7 @@ export function FallbackModelsList({
   onChange,
 }: FallbackModelsListProps) {
   const routableModels = availableModels.filter((model) => model.routable)
+  const labels = modelOptionLabels(routableModels)
 
   const addModel = () => {
     const available = routableModels.filter(
@@ -57,7 +59,7 @@ export function FallbackModelsList({
               >
                 {routableModels.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {labels.get(m.id)}
                   </option>
                 ))}
               </select>

@@ -13,6 +13,8 @@ export interface Prompt {
   boot_eligible?: boolean
   exclude_agents: string[]
   owner_agent_slug: string | null
+  /** Projects a project-scoped prompt applies to; empty for global and agent prompts. */
+  projects?: string[]
   prompt_type: string
   deletion_locked: boolean
   created_at: string

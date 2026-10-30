@@ -55,6 +55,11 @@ export function ProvidersTab() {
       <h3 className="text-sm font-medium text-slate-100">
         Provider Credentials
       </h3>
+      <p className="text-xs text-slate-400">
+        Claude isn&apos;t listed: it runs through the claude command on your
+        Claude subscription, so there is no key to store here. Its health is on
+        the Dashboard.
+      </p>
       {catalogError && (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
           Couldn&apos;t load the provider list from the model catalog. Showing

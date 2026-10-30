@@ -16,6 +16,7 @@ import { useWorkflowRun } from '../hooks/useWorkflowRuns'
 import {
   cancelText,
   costTotalsParts,
+  failureText,
   resultText,
   runStateLabel,
 } from '../utils'
@@ -86,8 +87,9 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           className="font-mono text-[12px] tabular-nums text-slate-400"
           data-testid="run-concurrency"
         >
-          {running.length} of {run.max_concurrent_steps} step
-          {run.max_concurrent_steps === 1 ? '' : 's'} running
+          {finished
+            ? `Up to ${run.max_concurrent_steps} step${run.max_concurrent_steps === 1 ? '' : 's'} at a time`
+            : `${running.length} of ${run.max_concurrent_steps} step${run.max_concurrent_steps === 1 ? '' : 's'} running`}
           {running.length > 0 ? `: ${running.join(', ')}` : ''}
           {run.uses_lanes ? ' · each step has its own worktree and branch' : ''}
         </p>
@@ -163,7 +165,7 @@ function RunSummary({ run }: { run: WorkflowRunDetail }) {
           role="note"
           className="rounded-md border border-rose-500/40 bg-rose-950/30 px-2.5 py-1.5 text-[13px] text-rose-100"
         >
-          <strong>Run failed.</strong> {run.failure}
+          <strong>Run failed.</strong> {failureText(run.failure)}
         </p>
       ) : null}
     </div>

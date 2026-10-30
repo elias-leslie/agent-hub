@@ -56,10 +56,10 @@ export function AppShell({ children }: AppShellProps) {
           'sidebar-transition',
           // Desktop width
           isCollapsed ? 'lg:w-18' : 'lg:w-60',
-          // Mobile
+          // Mobile: closed, it also leaves the tab order (off-screen links were still focusable)
           isMobileOpen
             ? 'translate-x-0 w-[280px]'
-            : '-translate-x-full lg:translate-x-0',
+            : '-translate-x-full max-lg:invisible lg:translate-x-0',
         )}
       >
         <SidebarLogo

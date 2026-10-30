@@ -147,7 +147,7 @@ function LoginRow({
       >
         {login.updated_at ? formatRelativeTime(login.updated_at) : 'Unknown'}
       </td>
-      <td className="sticky right-0 bg-slate-950 px-4 py-3 shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]">
+      <td className="bg-slate-950 px-4 py-3 sm:sticky sm:right-0 sm:shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]">
         {confirming ? (
           <div className="flex flex-wrap items-center gap-1">
             <span className="text-xs text-slate-300">
@@ -539,7 +539,7 @@ export default function AgentLoginsPage() {
                         ))}
                         <th
                           scope="col"
-                          className="sticky right-0 bg-slate-900 px-4 py-3 text-left text-[10px] font-bold tracking-wider text-slate-500 uppercase shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]"
+                          className="bg-slate-900 px-4 py-3 text-left text-[10px] font-bold tracking-wider text-slate-500 uppercase sm:sticky sm:right-0 sm:shadow-[-12px_0_12px_-12px_rgb(0_0_0/0.8)]"
                         >
                           Actions
                         </th>

@@ -146,9 +146,9 @@ export function ModelCard({
 
         {/* Composite Score */}
         <div className="flex items-center gap-2 mb-4">
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <div className="text-xs text-slate-400 mb-1">Composite Score</div>
-            <div className="flex items-baseline gap-1">
+            <div className="flex flex-wrap items-baseline gap-x-1">
               <span className="text-2xl font-bold text-slate-100">
                 {typedOnly ? 'Unrated' : model.scores.composite}
               </span>
@@ -259,7 +259,10 @@ export function ModelCard({
           <div className="flex justify-between">
             <span>Context Window</span>
             <span className="font-mono font-medium text-slate-300">
-              {(model.context_window / 1000).toFixed(0)}K
+              {/* Image models have no context window; the catalog reports 0, which is not a size. */}
+              {model.context_window > 0
+                ? `${(model.context_window / 1000).toFixed(0)}K`
+                : 'n/a'}
             </span>
           </div>
           <div className="flex justify-between gap-3">

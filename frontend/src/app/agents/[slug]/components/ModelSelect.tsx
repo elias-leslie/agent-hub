@@ -1,4 +1,20 @@
+import { getProviderInfo } from '@/components/settings/constants'
 import type { ModelInfo } from '../types'
+
+/** Option text per model id; a name two providers share (Codex and OpenAI 'GPT-6.1 Terra') gets its provider. */
+export function modelOptionLabels(models: ModelInfo[]): Map<string, string> {
+  const seen = new Map<string, number>()
+  for (const model of models)
+    seen.set(model.name, (seen.get(model.name) ?? 0) + 1)
+  return new Map(
+    models.map((model) => [
+      model.id,
+      (seen.get(model.name) ?? 0) > 1
+        ? `${model.name} (${getProviderInfo(model.provider).name})`
+        : model.name,
+    ]),
+  )
+}
 
 interface ModelSelectProps {
   value: string | null
@@ -18,6 +34,7 @@ export function ModelSelect({
   allowNull = false,
 }: ModelSelectProps) {
   const routableModels = models.filter((model) => model.routable)
+  const labels = modelOptionLabels(routableModels)
 
   return (
     <div className="section-card space-y-3">
@@ -35,7 +52,7 @@ export function ModelSelect({
         {allowNull && <option value="">None</option>}
         {routableModels.map((model) => (
           <option key={model.id} value={model.id}>
-            {model.name}
+            {labels.get(model.id)}
           </option>
         ))}
       </select>

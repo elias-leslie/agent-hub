@@ -238,6 +238,14 @@ export default function PromptsPage() {
                               Global
                             </span>
                           )}
+                          {prompt.projects?.map((project) => (
+                            <span
+                              key={project}
+                              className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-sky-950/40 text-sky-300 inline-flex items-center gap-1"
+                            >
+                              Project: {project}
+                            </span>
+                          ))}
                           {prompt.owner_agent_slug && (
                             <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-950/40 text-emerald-300 inline-flex items-center gap-1">
                               {prompt.owner_agent_slug}

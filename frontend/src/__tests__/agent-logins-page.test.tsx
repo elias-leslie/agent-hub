@@ -113,6 +113,13 @@ describe('AgentLoginsPage', () => {
     ).toHaveAttribute('href', 'https://hackerone.com/users/sign_in')
     expect(within(row).getByText('No expiry')).toBeInTheDocument()
     expect(screen.getByText(/^Expired /)).toBeInTheDocument()
+    // Actions stay pinned from tablet width up; on a phone a pinned column covered the actor and status.
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toHaveClass(
+      'sm:sticky',
+    )
+    expect(
+      screen.getByRole('columnheader', { name: 'Actions' }),
+    ).not.toHaveClass('sticky')
   })
 
   it('shows an unreadable login as such, warns, and keeps the rest of the list', async () => {

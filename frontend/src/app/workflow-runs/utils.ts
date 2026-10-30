@@ -183,6 +183,17 @@ export function pauseExplanation(
     : text
 }
 
+/** A failed run's reason in the owner's terms; the engine records '<pause reason or step>: owner ended the run'. */
+export function failureText(failure: string): string {
+  const ended = /^(.+): owner ended the run$/.exec(failure)
+  if (!ended) return failure
+  const why =
+    ended[1] === 'integration_conflict' || ended[1] === 'integration_failed'
+      ? 'every step finished, but their work could not be put together on the run branch'
+      : `step "${ended[1]}" could not finish`
+  return `It paused because ${why}, and the owner ended it there.`
+}
+
 /** Who stopped a run or step, when, and why, in the owner's terms. */
 export function cancelText(
   cancel: CancelRecord,

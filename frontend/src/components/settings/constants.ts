@@ -26,6 +26,7 @@ export interface ProviderInfo {
 const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, 'id'>> = {
   codex: { name: 'Codex', hint: 'ChatGPT subscription OAuth', oauth: true },
   gemini: { name: 'Gemini', hint: 'Google AI API key' },
+  openai: { name: 'OpenAI', hint: 'OpenAI API key' },
   local: { name: 'Local', hint: 'Local OpenAI-compatible endpoint key' },
   xai: { name: 'xAI', hint: 'xAI (Grok) API key' },
   typesafe: { name: 'TypeSafe', hint: 'Typed judgment API credential' },
