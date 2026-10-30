@@ -213,7 +213,7 @@ async def summarize_with_agent(
     a literal here. Raises when no model in the chain answers.
     """
     from app.api.complete.core import complete_internal
-    from app.api.complete.runtime_usage import accounting_model, served_model
+    from app.api.complete.runtime_usage import price_call, served_model
     from app.db import async_session
     from app.llm.compaction import SummaryResult
     from app.routing.registry import get_provider_for_model
@@ -223,7 +223,6 @@ async def summarize_with_agent(
         thinking_level_for_provider,
     )
     from app.services.agent_routing_utils import resolve_agent
-    from app.services.token_counter import estimate_usage_cost
 
     slug = settings.llm_compaction_agent_slug
     async with async_session() as db:
@@ -260,11 +259,7 @@ async def summarize_with_agent(
             failures.append(f"{model}: {message.error_message or message.stop_reason}")
             continue
         usage = message.usage
-        accounted = accounting_model(message, model)
-        cost = estimate_usage_cost(
-            usage.input, usage.output, accounted,
-            cache_read_tokens=usage.cache_read, cache_write_tokens=usage.cache_write,
-        )
+        _, cost = price_call(message, model)
         return SummaryResult(
             text=result.content or "",
             model=served_model(message, model),

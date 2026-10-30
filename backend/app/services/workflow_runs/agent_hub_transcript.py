@@ -33,7 +33,6 @@ from app.llm.utils.request_metrics import request_metrics_of
 from app.models import SessionEvent, SessionEventType
 from app.services.context_tracker import log_token_usage
 from app.services.event_storage import lock_session_event_ingestion, store_event, storing_history
-from app.services.token_counter import estimate_usage_cost
 
 from .executor_common import Usage, clip
 
@@ -110,7 +109,7 @@ async def _write_events(db: AsyncSession, transcript: Transcript) -> None:
     # Imported here: app.api's package init imports the workflow routes, which import the engine and its executors.
     from app.api.complete.helpers import normalize_content_for_storage
     from app.api.complete.request_metrics import store_model_requests
-    from app.api.complete.runtime_usage import accounting_model, outcome_usage, served_model
+    from app.api.complete.runtime_usage import outcome_usage, price_call, served_model
 
     sid, agent = transcript.session_id, transcript.agent_slug
     await lock_session_event_ingestion(db, sid)
@@ -199,11 +198,7 @@ async def _write_events(db: AsyncSession, transcript: Transcript) -> None:
                 usage=lead() or outcome_usage(message), **common,
             )
         if cost_due:
-            accounted = accounting_model(message, transcript.requested_model)
-            cost = estimate_usage_cost(
-                message.usage.input, message.usage.output, accounted,
-                cache_read_tokens=message.usage.cache_read, cache_write_tokens=message.usage.cache_write,
-            )
+            accounted, cost = price_call(message, transcript.requested_model)
             await log_token_usage(
                 db, sid, accounted, message.usage.input, message.usage.output, cost.total_cost_usd,
                 cache_read_tokens=message.usage.cache_read, cache_write_tokens=message.usage.cache_write,

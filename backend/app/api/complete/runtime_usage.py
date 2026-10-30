@@ -14,6 +14,8 @@ from app.llm.types import AssistantMessage, Usage, UsageCost
 from app.llm.utils.outcomes import is_model_switch, outcome_details, outcome_of
 
 if TYPE_CHECKING:
+    from app.services.token_counter import CostBreakdown
+
     from .streaming_context import StreamContext
     from .types import CompletionInternalResult
 
@@ -61,6 +63,18 @@ def accounting_model(message: AssistantMessage, fallback: str) -> str:
     return message.model or fallback
 
 
+def price_call(message: AssistantMessage, fallback: str) -> tuple[str, CostBreakdown]:
+    """The accounting model for one provider call and its cost over the call's usage buckets."""
+    from app.services.token_counter import estimate_usage_cost
+
+    model = accounting_model(message, fallback)
+    usage = message.usage
+    return model, estimate_usage_cost(
+        usage.input, usage.output, model,
+        cache_read_tokens=usage.cache_read, cache_write_tokens=usage.cache_write,
+    )
+
+
 def served_model(message: AssistantMessage, fallback: str) -> str:
     """Model that actually answered, for session events: the provider-reported model when it differs."""
     return (_switched_to(message) or accounting_model(message, fallback))[:100]
@@ -96,7 +110,6 @@ async def persist_failed_attempt_usage(
     Exceptions without a result provide no usage to reconstruct.
     """
     from app.services.context_tracker import log_token_usage
-    from app.services.token_counter import estimate_usage_cost
 
     session_id = session_id or result.session_id
     if not session_id or session_id.startswith("ephemeral:"):
@@ -108,11 +121,8 @@ async def persist_failed_attempt_usage(
     total_cost = 0.0
     for index, message in enumerate(result.usage_messages):
         usage = message.usage
-        call_model = accounting_model(message, model)
-        cost = estimate_usage_cost(
-            usage.input, usage.output, call_model,
-            cache_read_tokens=usage.cache_read, cache_write_tokens=usage.cache_write,
-        ).total_cost_usd
+        call_model, breakdown = price_call(message, model)
+        cost = breakdown.total_cost_usd
         total_cost += cost
         await log_token_usage(
             db, session_id, call_model, usage.input, usage.output, cost,

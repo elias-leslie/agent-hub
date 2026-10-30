@@ -59,9 +59,9 @@ from .orchestrator import (
     sent_thinking_level,
 )
 from .runtime_usage import (
-    accounting_model,
     aggregate_message_usage,
     outcome_usage,
+    price_call,
     served_model,
     turn_usage,
 )
@@ -120,14 +120,8 @@ async def _log_stream_cost(
 
 async def _record_stream_usage(ctx: StreamContext, message: AssistantMessage) -> float:
     """Record each terminal provider call, including intermediate and failed turns."""
-    from app.services.token_counter import estimate_usage_cost
-
-    model = accounting_model(message, ctx.model_used or ctx.model)
-    usage = message.usage
-    cost = estimate_usage_cost(
-        usage.input, usage.output, model,
-        cache_read_tokens=usage.cache_read, cache_write_tokens=usage.cache_write,
-    ).total_cost_usd
+    model, breakdown = price_call(message, ctx.model_used or ctx.model)
+    cost = breakdown.total_cost_usd
     await _log_stream_cost(ctx, message, model, cost)
     if ctx.project_id and cost > 0:
         from app.services.project_budget import record_project_cost
