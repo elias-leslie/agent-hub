@@ -346,6 +346,70 @@ def test_near_misses_are_left_alone(text: str) -> None:
     assert redact_secrets(text) == (text, {})
 
 
+# One token per anchor the gate lists, and one code per introducer form (raw, 8-bit, written out, both cases).
+_GATE_TOKENS = [
+    *(f"gh{kind}_" + "A1b2C3d4" * 5 for kind in "pousr"),
+    "github_pat_" + "11ABCDEFG0" + "a1B2c3D4e5" * 3,
+    *(f"xox{kind}-" + "1234567890-abcdef" for kind in "abposr"),
+    "rk" + "_live_" + "51HaBcDeFgHiJkLmNoPqRsTu",
+    *(SAMPLES[kind] for kind in ("aws_access_key", "gitlab_token", "anthropic_key", "stripe_live_key")),
+    SAMPLES["private_key"],
+    _pem("BEGIN") + "\n" + PEM_BODY,
+]
+_GATE_CODES = [
+    "\x1b[0m", "\x1b(B", "\x1b7", "\x9b1m", "\x1b]8;;f\x07", "\x9d0;t\x9c", "\x1b]0;t\x1b\\",
+    *(f"\\{name}[0m" for name in ("u001b", "u001B", "x1b", "x1B", "033", "e")),
+    "\\\\u001b[1m", "\\e7", "\\x1B(B",
+    *(f"\\{name}1m" for name in ("u009b", "u009B", "x9b", "x9B", "233")),
+    *(f"\\{name}0;t\\a" for name in ("u009d", "u009D", "x9d", "x9D", "235")),
+]
+
+
+def _gate_cases() -> list[str]:
+    # Every token cut at each offset through its anchor (the PEM header in full) by each code, or by nothing.
+    cases = []
+    for token in _GATE_TOKENS:
+        for cut in range(min(len(token), 34 if "PRIVATE" in token else 13) + 1):
+            cases += [f"x {token[:cut]}{code}{token[cut:]} y" for code in ["", *_GATE_CODES]]
+    return cases
+
+
+def _skipped_corpus(seed: int, count: int) -> list[str]:
+    # Near misses the gate should skip: anchor halves, partial introducers, look-alike letters.
+    import random
+
+    halves = [token[:cut] for token in _GATE_TOKENS for cut in range(1, 12)]
+    near = ["\\u001", "\\x9", "\\03", "\\u00", "\\x", "\\\\", "\\n", "\x9c", "\x07", "PRIVATE KE", "PRIVATE  KEY",
+            "\u017fk-ant-" + "Zz9_" * 10, "AK\u0130A" + "Q3EGUTZ7XK4LM2PN", "gh_p", "sk-an", "xox-", "[0m", ";31m", " ", "id_"]
+    rng = random.Random(seed)
+    return ["".join(rng.choice(halves + near) for _ in range(rng.randint(1, 8))) for _ in range(count)]
+
+
+def test_candidate_gate_changes_no_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The gate only skips text that cannot match: the floor with and without it agrees on every
+    # anchor cut at each offset by each code form, and on near misses the gate skips.
+    import app.services.secret_redaction as floor
+
+    corpus = _gate_cases() + _skipped_corpus(seed=7, count=3000)
+    skipped = sum(1 for text in corpus if not floor._CANDIDATE.search(text))
+    gated = [redact_secrets(text) for text in corpus]
+    monkeypatch.setattr(floor, "_CANDIDATE", re.compile(""))
+    assert gated == [redact_secrets(text) for text in corpus]
+    assert sum(1 for _, counts in gated if counts) > len(corpus) // 3  # matches reach the full scan
+    assert skipped > 300  # and the skip path is compared too
+
+
+def test_clean_text_skips_the_full_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.secret_redaction as floor
+
+    def full_scan(*_args: object) -> str:
+        raise AssertionError("clean text must not reach the full scan")
+
+    monkeypatch.setattr(floor, "_redact_split_tokens", full_scan)
+    text = json.dumps({"cmd": "git log --oneline", "output": "ok\n" * 1000, "path": "C:\\tmp\\ghost"})
+    assert redact_secrets(text) == (text, {})
+
+
 # Each builder takes a repeat count; the case's size is the full input timed against one eighth of it.
 # Built per case so collection does not hold megabytes of hostile text in every worker.
 _HOSTILE_INPUTS: dict[str, tuple[Callable[[int], str], int]] = {

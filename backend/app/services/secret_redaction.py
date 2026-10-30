@@ -87,10 +87,21 @@ SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
 }
 _PREFIXED = [pattern for kind, pattern in SECRET_PATTERNS.items() if kind != "private_key"]
 
+# Every match above holds one of these anchors as written, and every code the
+# split-token pass removes starts with one of these introducers (raw, 8-bit or
+# written out). Text with neither cannot match, so the full scan (~1 MB/s, run on
+# the event loop for every stored event) is skipped; this search reads ~50 MB/s.
+_CANDIDATE = re.compile(
+    r"AKIA|gh[pousr]_|github_pat_|glpat-|xox[abposr]-|sk-ant-|[rs]k_live_|PRIVATE KEY"
+    r"|[\x1b\x9b\x9d]|\\(?:u00(?:1[bB]|9[bBdD])|x(?:1[bB]|9[bBdD])|033|23[35]|e)"
+)
+
 
 def redact_secrets(text: str) -> tuple[str, dict[str, int]]:
     """Replace each secret match with ``[REDACTED:<kind>]``; return counts per kind."""
     counts: dict[str, int] = {}
+    if not _CANDIDATE.search(text):
+        return text, counts
     text = _redact_split_tokens(text, counts)
     for kind, pattern in SECRET_PATTERNS.items():
         tag = f"[REDACTED:{kind}]"
