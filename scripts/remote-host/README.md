@@ -196,8 +196,11 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
   (`virtiofs0`, PVE directory mapping `neri-hunters-codex`, host path
   `/srv/neri-hunters-codex-home` on davion-gem; guest `/etc/fstab`). Snapshots
   and rollbacks never touch it, so the Codex sign-in and its refreshes survive
-  `st vm rollback 201 clean`; the original on-disk `~/.codex` sits hidden under
-  the mount. A clone of 201 would share that same Codex home: on the clone run
+  `st vm rollback 201 clean`. Under the mount, `~/.codex` on the VM disk is an
+  empty root-owned mode-000 immutable (`chattr +i`) directory, so without the
+  share Codex fails ("Permission denied") instead of using the snapshot disk;
+  the VM's original on-disk Codex home is kept, unread, at
+  `~/.codex.on-disk-before-virtiofs-20261031`. A clone of 201 would share that same Codex home: on the clone run
   `qm set <id> --delete virtiofs0` and drop the fstab line before booting it.
   `st vm destroy 201` leaves the host directory and mapping in place.
 - **Remove:**
