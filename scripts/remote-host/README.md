@@ -192,6 +192,14 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
   CLIs up to date. A snapshot from before 2026-10-30 03:00 resets VM 200's
   balloon minimum to 4096, which leaves agents waiting on the 6 GiB memory
   guard after a cold boot: run `ssh davion-gem qm set 200 --balloon 8192`.
+- **neri-hunters (VM 201) Codex home:** `~/.codex` is a virtiofs share
+  (`virtiofs0`, PVE directory mapping `neri-hunters-codex`, host path
+  `/srv/neri-hunters-codex-home` on davion-gem; guest `/etc/fstab`). Snapshots
+  and rollbacks never touch it, so the Codex sign-in and its refreshes survive
+  `st vm rollback 201 clean`; the original on-disk `~/.codex` sits hidden under
+  the mount. A clone of 201 would share that same Codex home: on the clone run
+  `qm set <id> --delete virtiofs0` and drop the fstab line before booting it.
+  `st vm destroy 201` leaves the host directory and mapping in place.
 - **Remove:**
   1. `st agents hosts revoke <name>`. The token stops working and its grants
      are dropped.
