@@ -94,6 +94,15 @@ PY
     fi
 fi
 
+# Per-host Tether settings (e.g. AICO_AGENT_MIN_AVAILABLE_GIB, the free memory
+# a new agent needs here). Created empty once; edits there survive re-runs and
+# a change restarts Tether below.
+if [[ ! -f /etc/agent-host/tether.env ]]; then
+    printf '%s\n' "# Per-host Tether environment (scripts/remote-host README, \"Per-host Tether settings\")." \
+        "# AICO_AGENT_MIN_AVAILABLE_GIB=6" | sudo -n tee /etc/agent-host/tether.env >/dev/null
+    say "installed /etc/agent-host/tether.env"
+fi
+
 # sshd: room for every terminal on the link's one connection, and dead-link
 # detection. Validated before the reload; a reload keeps open connections.
 sshd_dropin=/etc/ssh/sshd_config.d/50-agent-host.conf
@@ -220,10 +229,11 @@ put "$unit_dir/tether@default.service.d/remote.conf" "# Agent host (scripts/remo
 [Service]
 Environment=TETHER_HEADLESS=1
 Environment=TETHER_PROJECTS_DIR=$projects
-Environment=PATH=$agent_path" && tether_changed=1
+Environment=PATH=$agent_path
+EnvironmentFile=-/etc/agent-host/tether.env" && tether_changed=1
 sock=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tether/default/control.sock
-# The bundle digest decides whether the running daemon is stale.
-bundle_digest=$(cd "$HOME/.local/lib/tether" && find bin dist scripts shims -type f -not -path '*/__pycache__/*' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+# The bundle digest (and the per-host env) decides whether the running daemon is stale.
+bundle_digest=$( (cd "$HOME/.local/lib/tether" && find bin dist scripts shims -type f -not -path '*/__pycache__/*' -print0 | sort -z | xargs -0 sha256sum; cat /etc/agent-host/tether.env 2>/dev/null) | sha256sum | cut -d' ' -f1)
 mkdir -p "$state"
 if [[ $(cat "$state/tether-bundle.sha256" 2>/dev/null) != "$bundle_digest" ]]; then
     tether_changed=1

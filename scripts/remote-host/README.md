@@ -110,6 +110,12 @@ re-runnable: a second run changes nothing unless the workstation changed.
     knows the projects even while SummitFlow can't answer the host.
   - The daemon restarts only when the bundle, unit or drop-in changed.
     Restarting never stops a pane.
+- **Per-host Tether settings:** `/etc/agent-host/tether.env`, read by the
+  `tether@default` drop-in (`EnvironmentFile`). Setup creates it with only a
+  comment; re-runs keep edits, and a changed file restarts Tether on the next
+  run. `AICO_AGENT_MIN_AVAILABLE_GIB` is the free memory a new agent needs on
+  this host (Tether's default 6). neri-hunters sets 2, matching placement's
+  reserve, since placement already checks the host's live room.
 - **Idle poweroff:** `agent-host-idle.timer` runs every 5 min as root.
   - The host powers off once it has been idle for `IDLE_MINUTES`. Idle means
     no Tether sessions, no pending wakes, load below `LOAD_MAX`, no ssh
