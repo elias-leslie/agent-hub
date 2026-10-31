@@ -30,7 +30,7 @@ def test_shipped_config_holds_the_thresholds() -> None:
     config = idle.load_config(HOST_DIR / "idle.conf")
     assert (config.enabled, config.idle_minutes, config.load_max, config.load_window) == (True, 15.0, 0.3, 5)
     assert "tether@*.service" in config.ignore_units and "tmux-spawn-*.scope" not in config.ignore_units
-    assert {"sshd", "sshd-session"} <= set(config.ignore_commands)
+    assert {"sshd", "sshd-session", "catatonit"} <= set(config.ignore_commands)
     assert config.ignore_system_units == ("docker-*.scope",)
 
 
@@ -171,7 +171,7 @@ def test_a_garbage_tether_answer_keeps_the_host_up_instead_of_crashing(tmp_path:
     assert idle.decide(reading, _config(idle), 0.0, now=10_000.0)[0] == "busy"
 
 
-def _guard(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
+def _guard(tmp_path: Path, *argv: str, bin_dir: str | None = None) -> subprocess.CompletedProcess[str]:
     guard = tmp_path / "st"
     guard.write_text((HOST_DIR / "st").read_text(encoding="utf-8").replace(
         "launcher=/srv/workspaces/projects/summitflow/scripts/st", f"launcher={tmp_path / 'launcher'}"
@@ -182,6 +182,8 @@ def _guard(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
     for path in (guard, launcher):
         path.chmod(0o755)
     env = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
+    if bin_dir is not None:
+        env["PATH"] = f"{bin_dir}:/usr/bin:/bin"
     return subprocess.run([str(guard), *argv], env=env, capture_output=True, text=True, timeout=10, check=False)
 
 
@@ -224,6 +226,28 @@ def test_st_guard_runs_remote_commands_with_a_placeholder_database(tmp_path: Pat
         result = _guard(tmp_path, *argv)
         assert result.returncode == 0, result.stderr
         assert result.stdout == f"ran: {' '.join(argv)} db=postgresql://st-remote-host\n"
+
+
+def test_st_guard_routes_neri_case_commands_to_the_hunter_client(tmp_path: Path) -> None:
+    # A hunter host started for one case runs its case commands through neri-hunter; the rest
+    # of st neri stays on the workstation, and a host without the client says how to set it up.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    client = bin_dir / "neri-hunter"
+    client.write_text('#!/bin/sh\necho "hunter: $*"\n', encoding="utf-8")
+    client.chmod(0o755)
+    for argv in (("neri", "show", "c1"), ("neri", "log", "c1", "a note"), ("-P", "neri", "neri", "check", "c1"),
+                 ("neri", "advance", "c1", "candidate"), ("neri", "ask", "c1", "t"), ("neri", "sync", "c1", "-m", "x")):
+        result = _guard(tmp_path, *argv, bin_dir=str(bin_dir))
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == f"hunter: {' '.join(argv[argv.index('neri', 2 if argv[0] == '-P' else 0) + 1:])}\n"
+    for argv in (("neri", "next"), ("neri", "new", "p", "c"), ("neri", "program", "list"), ("neri", "hunter", "start"),
+                 ("neri",), ("neri", "--json", "show", "c1")):
+        result = _guard(tmp_path, *argv, bin_dir=str(bin_dir))
+        assert result.returncode == 2 and "workstation-only" in result.stderr and not result.stdout, argv
+    missing = _guard(tmp_path, "neri", "show", "c1", bin_dir=str(tmp_path / "empty"))
+    assert missing.returncode == 2 and not missing.stdout
+    assert "st neri show: runs through neri-hunter" in missing.stderr and "st neri hunter start" in missing.stderr
 
 
 def test_clean_snapshot_removes_read_only_trees_without_following_links(tmp_path: Path) -> None:

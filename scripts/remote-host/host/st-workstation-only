@@ -2,7 +2,8 @@
 # st guard refuses them at once instead of acting on the wrong machine or
 # waiting on a service that is not forwarded. One command per line, then the
 # reason. "command:subcommand" names one subcommand and wins over its command;
-# "allow" instead of a reason re-allows that subcommand.
+# "allow" instead of a reason re-allows that subcommand; "route PROGRAM [hint]"
+# runs it through PROGRAM on this host with the arguments after the command.
 snap         Btrfs snapshots of workstation projects
 snaps        Btrfs snapshots of workstation projects
 recover      Btrfs snapshots of workstation projects
@@ -36,4 +37,10 @@ bugout       lab runs from the workstation
 bugout-deployment lab runs from the workstation
 ominull      production observation runs from the workstation
 ominull-backup production backups run from the workstation
-neri         Neri state and case data stay on the workstation
+neri         Neri state and case data stay on the workstation; a hunter host started for one case runs show, check, log, advance, ask and sync for it
+neri:show    route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
+neri:check   route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
+neri:log     route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
+neri:advance route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
+neri:ask     route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
+neri:sync    route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>

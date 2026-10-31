@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # st on an agent host: refuse workstation-only commands at once, run the rest
 # through the mirrored SummitFlow launcher (same shape as the workstation's
-# ~/bin/st). The list lives next to this file.
+# ~/bin/st). The list lives next to this file; a subcommand marked "route"
+# runs through a host program instead (Neri's case commands on a hunter host).
 set -euo pipefail
 here=$(dirname -- "$(readlink -f -- "$0")")
 launcher=/srv/workspaces/projects/summitflow/scripts/st
@@ -33,6 +34,16 @@ if [[ -n $command ]]; then
             reason=$rest label="$command $subcommand" label_sub_matched=1
         fi
     done < <(grep -v '^[[:space:]]*\(#\|$\)' "$here/st-workstation-only")
+    # "route PROGRAM [hint]": this host runs that subcommand through its own PROGRAM, given
+    # the arguments after the command (st neri show x runs `neri-hunter show x`).
+    if [[ $reason == route\ * ]]; then
+        read -r _ program hint <<<"$reason"
+        if ! command -v "$program" >/dev/null 2>&1; then
+            printf 'st %s: runs through %s on this host, which is not set up%s.\n' "$label" "$program" "${hint:+ ($hint)}" >&2
+            exit 2
+        fi
+        exec "$program" "${args[@]:i+1}"
+    fi
     if [[ -n $reason && $reason != allow ]]; then
         printf 'st %s: workstation-only on this agent host (%s). Run it on the workstation.\n' "$label" "$reason" >&2
         exit 2

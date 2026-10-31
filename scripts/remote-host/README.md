@@ -70,6 +70,12 @@ re-runnable: a second run changes nothing unless the workstation changed.
     `create`, `root`, `roots` and `wake` run here, against this host's own
     Tether: an agent here starts and steers helpers on this host, nested under
     itself in the workstation's Aico.
+  - A line `command:subcommand route PROGRAM [hint]` runs that subcommand
+    through PROGRAM on the host, with the arguments after the command. Neri
+    uses it: on a hunter host that `st neri hunter start <case> --host <host>`
+    set up, `st neri show|check|log|advance|ask|sync` run through
+    `neri-hunter` for that one case (Neri `docs/st-neri.md`, "Hunter hosts").
+    Without it they say how to set it up; the rest of `st neri` stays refused.
   - Everything else runs against the forwarded SummitFlow API (`-R 8001`). It
     authenticates with the agent token that Agent Hub serves through the `st`
     credential shim.
@@ -115,7 +121,8 @@ re-runnable: a second run changes nothing unless the workstation changed.
     a `setsid -f`/`nohup` job, a stray tmux, a `systemd-run --user` unit, or
     something left running after a Tether session ended. Tether's own units,
     the user manager and the usual user daemons (`IGNORE_UNITS`) and sshd's own
-    processes (`IGNORE_COMMANDS`) don't count.
+    processes and podman's rootless pause process `catatonit`
+    (`IGNORE_COMMANDS`) don't count.
   - The thresholds are in `/etc/agent-host/idle.conf`. Re-runs never overwrite
     it; they only add keys it lacks. `ENABLED=0` turns poweroff off.
   - Anything that can't be read counts as busy.
