@@ -38,6 +38,14 @@ sessions fill `launched_by` and `coordinator`; an Agent Hub chat session fills t
 After a command change, regenerate `st-extensions/workflow.json` with
 `describe_app` at `COLUMNS=80`; `tests/test_workflow.py` fails on drift.
 
+`st ctx` reads Agent Hub's context-observability API: `cost`, `trend`, `cell`, `why`
+and `markers` say what lands in a first turn and what moved it; `changes`, `show`,
+`keep`, `refuse` and `rework` are the after-the-fact review of agent context edits
+(agents decide only when the owner asked); `budget` shows and edits the alert levels.
+Each prints at most 15 lines and `--json` prints the API response. After a `ctx`
+change, regenerate `st-extensions/ctx.json` with `describe_app` at `COLUMNS=80`;
+`backend/tests/st_cli/test_entrypoint.py` fails on drift.
+
 ## Public helper contract
 
 Version `2`, exposed as `agent_hub_st.PUBLIC_HELPER_API_VERSION`, supports these

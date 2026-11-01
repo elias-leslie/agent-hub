@@ -20,6 +20,7 @@ EXPECTED_NAMESPACES = {
     "agents",
     "automations",
     "complete",
+    "ctx",
     "mandates",
     "memory",
     "models",
@@ -84,6 +85,22 @@ def test_shipped_workflow_manifest_lists_every_command_and_a_guide_command() -> 
     surfaces = {usage["surface"]: usage for usage in manifest["usage"]}
     assert surfaces["st.workflow"]["cmd"] == "st workflow guide"
     assert all(usage.get("on_demand") for usage in surfaces.values())
+
+
+def test_shipped_ctx_manifest_matches_the_command_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regenerate st-extensions/ctx.json (describe_app at COLUMNS=80) whenever a command or its help changes."""
+    monkeypatch.setenv("COLUMNS", "80")
+    root = Path(__file__).resolve().parents[3]
+    manifest = json.loads((root / "st-extensions/ctx.json").read_text())
+    described = describe_app(entrypoint.OWNED_APPS["ctx"], "ctx")
+    assert (manifest["id"], manifest["namespace"], manifest["version"]) == ("agent-hub.ctx", "ctx", agent_hub_st.__version__)
+    assert manifest["help"] == described["help"]
+    assert manifest["usage"] == described["usage"]
+    assert manifest["help_options"] == described["help_options"]
+    assert all(usage["on_demand"] and len(usage["cmd"] + usage["when"]) // 4 <= 120 for usage in manifest["usage"])
+    decisions = {usage["surface"]: usage["when"] for usage in manifest["usage"]}
+    for surface in ("st.ctx.keep", "st.ctx.refuse", "st.ctx.rework"):
+        assert "owner asked" in decisions[surface]
 
 
 def test_shipped_models_manifest_matches_the_command_tree(monkeypatch: pytest.MonkeyPatch) -> None:

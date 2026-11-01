@@ -1,0 +1,179 @@
+{
+  "id": "agent-hub.ctx",
+  "owner": "agent-hub",
+  "version": "0.5.0",
+  "st_contract_versions": [
+    1
+  ],
+  "summary": "Context cost per harness and role, why it moved, and the review queue of agent context changes.",
+  "effects": [
+    "network",
+    "read-remote",
+    "write-remote",
+    "read-local",
+    "credentials"
+  ],
+  "namespace": "ctx",
+  "help": {
+    "": "Usage: ctx [OPTIONS] COMMAND [ARGS]...\n\n  Context cost: what lands in an agent's first turn, why it moved, and the\n  changes to review\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  cost     The Cost matrix: median first turn per harness and role,...\n  trend    One cell over time with the steps the step finder flagged.\n  cell     The latest start of a cell: where its tokens are, block by block.\n  why      What moved a cell's first turn, biggest first.\n  markers  Markers, oldest first, the newest N.\n  changes  The review queue, newest first.\n  show     One queue row with its diff.\n  keep     Mark changes reviewed and acceptable.\n  refuse   Undo changes.\n  rework   Edit or narrow one change.\n  budget   Budget levels that raise the context alerts",
+    "cost": "Usage: ctx cost [OPTIONS]\n\n  The Cost matrix: median first turn per harness and role, flagged cells\n  first.\n\nOptions:\n  -H, --harness <str>  One harness; agent_hub shows Agent Hub's own agents.\n  -r, --role <str>     One role (coordinator, implementation, subagent...).\n  --days <int range>   [default: 14; 1<=x<=90]\n  --limit <int range>  Rows shown; flagged ones first.  [default: 12;\n                       1<=x<=13]\n  --json               Print the API response as JSON.\n  --help               Show this message and exit.",
+    "trend": "Usage: ctx trend [OPTIONS] {harness} {role}\n\n  One cell over time with the steps the step finder flagged.\n\nArguments:\n  harness  claude, codex, pi or agent_hub  [required]\n  role     A Cost-matrix role, or lane (every launched role but the\n           coordinator)  [required]\n\nOptions:\n  --days <int range>  [default: 30; 1<=x<=90]\n  --json              Print the API response as JSON.\n  --help              Show this message and exit.",
+    "cell": "Usage: ctx cell [OPTIONS] {harness} {role}\n\n  The latest start of a cell: where its tokens are, block by block.\n\nArguments:\n  harness  claude, codex, pi or agent_hub  [required]\n  role     A Cost-matrix role, or lane (every launched role but the\n           coordinator)  [required]\n\nOptions:\n  --json  Print the API response as JSON.\n  --help  Show this message and exit.",
+    "why": "Usage: ctx why [OPTIONS] {harness} {role}\n\n  What moved a cell's first turn, biggest first.\n\nArguments:\n  harness  claude, codex, pi or agent_hub  [required]\n  role     A Cost-matrix role, or lane (every launched role but the\n           coordinator)  [required]\n\nOptions:\n  --at <str>  Explain the move at this ISO time; default the newest step.\n  --json      Print the API response as JSON.\n  --help      Show this message and exit.",
+    "markers": "Usage: ctx markers [OPTIONS]\n\n  Markers, oldest first, the newest N.\n\nOptions:\n  -H, --harness <str>\n  --days <int range>   [default: 3; 1<=x<=90]\n  --kind <str>         memory, prompt, harness_version, config, placement or\n                       knob\n  --limit <int range>  Newest N shown.  [default: 12; 1<=x<=13]\n  --json               Print the API response as JSON.\n  --help               Show this message and exit.",
+    "changes": "Usage: ctx changes [OPTIONS]\n\n  The review queue, newest first.\n\nOptions:\n  --session <str>      Every unreviewed row this writer session touched.\n  --mine               Only rows this session (AICO_SESSION_ID) wrote.\n  --kind <str>         memory, prompt or placement\n  --decided            Past decisions instead of the queue.\n  --limit <int range>  [default: 9; 1<=x<=11]\n  --json               Print the API response as JSON.\n  --help               Show this message and exit.",
+    "show": "Usage: ctx show [OPTIONS] {ID}\n\n  One queue row with its diff.\n\nArguments:\n  ID  Row id from st ctx changes  [required]\n\nOptions:\n  --json  Print the API response as JSON.\n  --help  Show this message and exit.",
+    "keep": "Usage: ctx keep [OPTIONS] [ids]...\n\n  Mark changes reviewed and acceptable.\n\nArguments:\n  ids...  Row id from st ctx changes (a unique prefix of it works)\n\nOptions:\n  --session <str>  Every unreviewed row this writer session touched.\n  --note <str>     Why, kept with the decision.\n  --json           Print the API response as JSON.\n  --help           Show this message and exit.",
+    "refuse": "Usage: ctx refuse [OPTIONS] [ids]...\n\n  Undo changes.\n\nArguments:\n  ids...  Row id from st ctx changes (a unique prefix of it works)\n\nOptions:\n  --session <str>  Every unreviewed row this writer session touched.\n  --note <str>     Why, kept with the decision.\n  --json           Print the API response as JSON.\n  --help           Show this message and exit.",
+    "rework": "Usage: ctx rework [OPTIONS] {ID}\n\n  Edit or narrow one change.\n\nArguments:\n  ID  Row id from st ctx changes  [required]\n\nOptions:\n  -f, --file <file>  New content from this file.\n  --summary <str>\n  --name <str>\n  --narrow <str>     project:ID, role:ROLE or session\n  --note <str>       Why, kept with the decision.\n  --json             Print the API response as JSON.\n  --help             Show this message and exit.",
+    "budget": "Usage: ctx budget [OPTIONS] COMMAND [ARGS]...\n\n  Budget levels that raise the context alerts\n\nOptions:\n  --json  Print the API response as JSON.\n  --help  Show this message and exit.\n\nCommands:\n  set   Set the warn level of one (harness, role) cell.\n  jump  Set the one global step threshold.\n  rm    Remove a cell's own level so the next most specific one applies.",
+    "budget set": "Usage: ctx budget set [OPTIONS] {harness} {role} {tokens}\n\n  Set the warn level of one (harness, role) cell.\n\nArguments:\n  harness  claude, codex, pi... or * for any  [required]\n  role     A role, lane, or * for any  [required]\n  tokens   Warn above this median first turn  [required]\n\nOptions:\n  --note <str>\n  --help        Show this message and exit.",
+    "budget jump": "Usage: ctx budget jump [OPTIONS] {PCT}\n\n  Set the one global step threshold.\n\nArguments:\n  PCT  Step alert threshold, percent  [required]\n\nOptions:\n  --help  Show this message and exit.",
+    "budget rm": "Usage: ctx budget rm [OPTIONS] {harness} {role}\n\n  Remove a cell's own level so the next most specific one applies.\n\nArguments:\n  harness  [required]\n  role     [required]\n\nOptions:\n  --help  Show this message and exit."
+  },
+  "usage": [
+    {
+      "surface": "st.ctx.cost",
+      "tier": "reference",
+      "cmd": "st ctx cost [-H HARNESS] [-r ROLE] [--days N]",
+      "when": "first-turn tokens per harness and role: median, change, harness/ours/brief split, budget flags",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.trend",
+      "tier": "reference",
+      "cmd": "st ctx trend HARNESS ROLE [--days N]",
+      "when": "one cell over time: median, change, steps with their cause, versions seen, daily medians",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.cell",
+      "tier": "reference",
+      "cmd": "st ctx cell HARNESS ROLE",
+      "when": "one cell's latest start: parts, biggest delivered blocks with last writer, growth, newest move",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.why",
+      "tier": "reference",
+      "cmd": "st ctx why HARNESS ROLE [--at TIME]",
+      "when": "why a cell moved: cause (ours, config, harness version, brief, model), parts delta, changed blocks with writer, knob",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.markers",
+      "tier": "reference",
+      "cmd": "st ctx markers [-H HARNESS] [--days N] [--kind KIND]",
+      "when": "what changed lately: memory and prompt revisions of delivered blocks, harness versions, configs, placements",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.changes",
+      "tier": "reference",
+      "cmd": "st ctx changes [--session S | --mine] [--kind memory|prompt|placement] [--decided]",
+      "when": "unreviewed agent edits to memories, prompts and placements, with reach and writer session; --decided lists past keeps, reworks and refusals",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.show",
+      "tier": "reference",
+      "cmd": "st ctx show ID",
+      "when": "one queued change: what changed, who wrote it, who receives it, the diff",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.keep",
+      "tier": "reference",
+      "cmd": "st ctx keep ID... | --session S [--note TEXT]",
+      "when": "record a change as reviewed and fine; nothing else changes. Only when the owner asked for it in this session.",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.refuse",
+      "tier": "reference",
+      "cmd": "st ctx refuse ID... | --session S [--note TEXT]",
+      "when": "undo changes, all or nothing: a create is archived, an update or delete restored (409 if it changed since). Only when the owner asked for it in this session.",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.rework",
+      "tier": "reference",
+      "cmd": "st ctx rework ID (-f FILE | --summary S | --name N | --narrow project:ID|role:R|session)",
+      "when": "edit a change in place or narrow who gets it (session = archive); a memory or prompt, not a placement. Only when the owner asked for it in this session.",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    },
+    {
+      "surface": "st.ctx.budget",
+      "tier": "reference",
+      "cmd": "st ctx budget [set HARNESS ROLE TOKENS | jump PCT | rm HARNESS ROLE]",
+      "when": "show warn levels and cells over them; set, jump and rm edit the levels that raise the Nightshift alert",
+      "task_types": [
+        "context-cost",
+        "prompt-tuning",
+        "agent-admin"
+      ],
+      "on_demand": "context cost"
+    }
+  ],
+  "help_options": {
+    "": {
+      "--install-completion": 0,
+      "--show-completion": 0,
+      "--help": 0
+    },
+    "budget": {
+      "--json": 0,
+      "--help": 0
+    }
+  }
+}

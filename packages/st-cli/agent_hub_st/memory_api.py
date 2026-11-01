@@ -50,6 +50,9 @@ def _dispatch(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.R
 
 def _format_error_payload(payload: dict[str, Any], fallback: str) -> str:
     """Render Agent Hub error payloads into a concise CLI message."""
+    detail = payload.get("detail")
+    if isinstance(detail, dict) and isinstance(detail.get("message"), str):  # e.g. a 409 {"detail": {"message": ...}}
+        payload = {**payload, "detail": detail["message"]}
     message = str(payload.get("message") or payload.get("detail") or payload.get("error") or fallback)
     parts = [message]
 
