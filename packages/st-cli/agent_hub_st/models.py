@@ -30,8 +30,10 @@ def _selection_policy_api() -> dict[str, Any]:
     return agent_hub_request("GET", MODELS_SELECTION_POLICY_PATH, tool_name="st models route")
 
 
-def _launch_api(role: str | None, tool: str | None) -> dict[str, Any]:
-    params = {key: value for key, value in (("role", role), ("tool", tool)) if value}
+def _launch_api(role: str | None, tool: str | None, model: str | None = None,
+                project: str | None = None) -> dict[str, Any]:
+    params = {key: value for key, value in (("role", role), ("tool", tool), ("model", model), ("project", project))
+              if value}
     return agent_hub_request("GET", MODELS_LAUNCH_DEFAULTS_PATH, params=params or None, tool_name="st models route")
 
 
@@ -200,14 +202,16 @@ def _print_launch(payload: dict[str, Any]) -> None:
     rows = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
     if len(rows) == 1:
         row = rows[0]
-        rank = f"{row['rank']}/{len(row.get('prefer') or [])}" if row.get("rank") else "not listed"
         print(f"LAUNCH[{payload.get('role')} {row.get('tool')}] job={row.get('job')} ({row.get('label')}) "
               f"policy=v{payload.get('version', '-')}")
         state = "" if row.get("use") and row.get("launchable") else " (not used: no default applies)"
         print(f"  model={row.get('model') or '-'} effort={row.get('effort') or '-'} "
               f"daybreak={_daybreak(row)} "
               f"context={row.get('context')}{state}")
-        print(f"  tool order={' > '.join(row.get('prefer') or []) or '-'} (this tool: {rank})")
+        if row.get("allowed") is False:
+            print(f"  DENIED: {row.get('deny_reason') or '-'}")
+        if row.get("note"):
+            print(f"  note={row['note']}")
         for alt in row.get("alternates") or []:
             if isinstance(alt, dict):
                 print(f"  instead: {_effort(alt)} when {alt.get('when') or '-'}")
@@ -217,12 +221,12 @@ def _print_launch(payload: dict[str, Any]) -> None:
         return
     print(f"LAUNCH[{len(rows)} rows] policy=v{payload.get('version', '-')} "
           "(st models route --role JOB --tool TOOL for one row with its reasons)")
-    print_table(["job", "tool", "model", "effort", "daybreak", "context", "rank", "subagent"], [
+    print_table(["job", "tool", "model", "effort", "daybreak", "context", "allowed", "subagent"], [
         [
             str(row.get("job")), str(row.get("tool")),
             str(row.get("model") or ("-" if row.get("use") else "not used")),
             str(row.get("effort") or "-"), _daybreak(row), str(row.get("context")),
-            str(row.get("rank") or "-"), str(row.get("subagent") or "-"),
+            "no" if row.get("allowed") is False else "yes", str(row.get("subagent") or "-"),
         ]
         for row in rows
     ])
@@ -268,7 +272,7 @@ def _print_route(advice: dict[str, Any]) -> None:
 @app.command("route")
 @usage(
     surface="st.models.route",
-    cmd="st models route [--role JOB --tool TOOL | --task TASK] [--json]",
+    cmd="st models route [--role JOB --tool TOOL [--model M] [--project P] | --task TASK] [--json]",
     when="which model, effort, Daybreak and context an agent gets for a job (--role, a work role or job such as testing or lookup) and tool; st aico create applies it by default. --task: completion-route advice; no options lists both",
     task_types=("model-admin", "model-review"),
     on_demand="model administration",
@@ -277,14 +281,18 @@ def _print_route(advice: dict[str, Any]) -> None:
 def route_model(
     role: Annotated[str | None, typer.Option("--role", help="Launch table: a work role or job (testing, lookup).")] = None,
     tool: Annotated[str | None, typer.Option("--tool", help="Launch table: claude-code, codex, pi, agent-hub or antigravity.")] = None,
+    model: Annotated[str | None, typer.Option("--model", help="Launch table: check this model instead of the table's.")] = None,
+    project: Annotated[str | None, typer.Option("--project", help="Launch table: the project the agent works in (deny rows can be per project).")] = None,
     task: Annotated[str | None, typer.Option("--task", help="Completion-route task type; omit to list task types.")] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the API response as JSON.")] = False,
 ) -> None:
     """Model, effort, Daybreak and context by job and tool; --task gives completion-route advice."""
     if task and (role or tool):
         raise typer.BadParameter("--task is completion-route advice; use it without --role/--tool")
+    if (model or project) and not (role or tool):
+        raise typer.BadParameter("--model and --project check a launch; use them with --role/--tool")
     if role or tool:
-        payload = _launch_api(role, tool)
+        payload = _launch_api(role, tool, model, project)
     elif task:
         payload = _select_api(task)
     else:

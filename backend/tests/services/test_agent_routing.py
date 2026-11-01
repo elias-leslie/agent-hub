@@ -743,3 +743,88 @@ class TestInjectSystemPromptIntoMessages:
             "Earlier user turn",
             "Earlier reply",
         ]
+
+
+class TestLaunchDenyBlocksClaude:
+    """A session whose work role a launch deny row covers never falls back or escalates to Claude."""
+
+    @staticmethod
+    def _hunter_session_db() -> SimpleNamespace:
+        session = SimpleNamespace(project_id="neri", provider_metadata={
+            "work_role": {"id": "hunting", "source": "tether", "declared_at": "2026-11-01T20:00:00+00:00"}})
+        return SimpleNamespace(get=AsyncMock(return_value=session))
+
+    @staticmethod
+    def _agent(primary: str, fallbacks: list[str], escalation: str | None) -> AgentDTO:
+        from datetime import UTC, datetime
+
+        return AgentDTO(
+            id=9, slug="market-pulse-scout", name="Scout", description=None, system_prompt="Prompt.",
+            primary_model_id=primary, fallback_models=fallbacks, escalation_model_id=escalation,
+            strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
+            is_active=True, is_coding_agent=False, memory_config=None,
+            max_concurrency=None, max_subagent_concurrency=None,
+            daily_token_budget=None, hourly_request_limit=None, version=1,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        )
+
+    @pytest.mark.asyncio
+    async def test_session_denial_reads_work_role_and_blocks_claude_names(self) -> None:
+        from app.routing.launch_policy import session_launch_denial
+
+        denial = await session_launch_denial(self._hunter_session_db(), "sess-hunt")
+        assert denial is not None and "claude" in denial.providers
+        assert denial.blocks(CLAUDE_SONNET) and denial.blocks("anthropic/claude-opus-5-5")
+        assert denial.blocks(CODEX_GPT_6_1_SOL) is None and denial.blocks("opencode-go/new-model") is None
+        plain = SimpleNamespace(get=AsyncMock(return_value=SimpleNamespace(project_id="neri", provider_metadata={})))
+        assert await session_launch_denial(plain, "sess-plain") is None
+
+    @pytest.mark.asyncio
+    async def test_claude_fallback_and_escalation_are_skipped(self) -> None:
+        from app.routing.launch_policy import session_launch_denial
+
+        agent = self._agent(CODEX_GPT_6_1_SOL, [CLAUDE_SONNET, DEFAULT_GEMINI_MODEL], CLAUDE_OPUS)
+        denial = await session_launch_denial(self._hunter_session_db(), "sess-hunt")
+        tried: list[str] = []
+
+        async def internal(**kwargs: object) -> object:
+            tried.append(str(kwargs["model"]))
+            if kwargs["model"] == DEFAULT_GEMINI_MODEL:
+                return _internal_result_for(DEFAULT_GEMINI_MODEL, "gemini")
+            raise ProviderError(provider=str(kwargs["provider"]), message="fail")
+
+        with (
+            patch("app.services.agent_routing_completion.session_launch_denial", new=AsyncMock(return_value=denial)),
+            patch("app.api.complete.core.complete_internal", new=AsyncMock(side_effect=internal)),
+        ):
+            result = await complete_with_fallback(messages=[Message(role="user", content="Hi")], agent=agent,
+                                                  temperature=0.7, prompt_cache_key="sess-hunt")
+        assert result.model_used == DEFAULT_GEMINI_MODEL and tried == [CODEX_GPT_6_1_SOL, DEFAULT_GEMINI_MODEL]
+
+        tried.clear()
+        with (
+            patch("app.services.agent_routing_completion.session_launch_denial", new=AsyncMock(return_value=denial)),
+            patch("app.api.complete.core.complete_internal", new=AsyncMock(side_effect=internal)),
+            pytest.raises(ProviderError, match="All models failed"),
+        ):
+            await complete_with_fallback(messages=[Message(role="user", content="Hi")],
+                                         agent=self._agent(CODEX_GPT_6_1_SOL, [CLAUDE_HAIKU], CLAUDE_OPUS),
+                                         temperature=0.7, prompt_cache_key="sess-hunt")
+        assert tried == [CODEX_GPT_6_1_SOL]
+
+    @pytest.mark.asyncio
+    async def test_claude_primary_is_skipped_with_the_owner_reason(self) -> None:
+        from app.routing.launch_policy import session_launch_denial
+
+        denial = await session_launch_denial(self._hunter_session_db(), "sess-hunt")
+        with (
+            patch("app.services.agent_routing_completion.session_launch_denial", new=AsyncMock(return_value=denial)),
+            patch("app.api.complete.core.complete_internal",
+                  new=AsyncMock(return_value=_internal_result_for(CODEX_GPT_6_1_SOL, "codex"))) as complete_mock,
+        ):
+            result = await complete_with_fallback(messages=[Message(role="user", content="Hi")],
+                                                  agent=self._agent(CLAUDE_OPUS, [CODEX_GPT_6_1_SOL], None),
+                                                  temperature=0.7, prompt_cache_key="sess-hunt")
+        assert result.model_used == CODEX_GPT_6_1_SOL and result.used_fallback
+        assert "Claude never for active hunting" in str(result.fallback_reason)
+        assert [call.kwargs["model"] for call in complete_mock.await_args_list] == [CODEX_GPT_6_1_SOL]

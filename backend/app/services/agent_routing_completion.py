@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.routing.availability import route_unavailable_reason
+from app.routing.launch_policy import LaunchDenial, session_launch_denial
 from app.routing.registry import is_workload_provider
 from app.services.agent_dto import AgentDTO
 from app.services.circuit_breaker import CircuitBreakerManager
@@ -243,12 +244,16 @@ async def _try_fallbacks(
     prompt_cache_key: str | None = None,
     db: AsyncSession | None = None,
     cooldown_probe_provider: str | None = None,
+    denial: LaunchDenial | None = None,
 ) -> FallbackCompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     blocked_providers = blocked_providers or set()
     cooldown_probe_consumed = False
     for fallback_model in agent.fallback_models or []:
         fallback_provider = get_provider_for_model(fallback_model)
+        if denial is not None and (reason := denial.blocks(fallback_model)):
+            logger.info("Skipping fallback model %s: %s", fallback_model, reason)
+            continue
         allow_cooldown_probe = (
             not cooldown_probe_consumed
             and fallback_provider == cooldown_probe_provider
@@ -298,12 +303,16 @@ async def _try_escalation(
     blocked_providers: set[str] | None = None,
     prompt_cache_key: str | None = None,
     db: AsyncSession | None = None,
+    denial: LaunchDenial | None = None,
 ) -> FallbackCompletionResult | None:
     """Try the escalation model if configured and not already tried."""
     tried_models = tried_models or set()
     blocked_providers = blocked_providers or set()
     escalation = agent.escalation_model_id
     if not escalation or escalation in tried_models:
+        return None
+    if denial is not None and (reason := denial.blocks(escalation)):
+        logger.info("Skipping escalation model %s: %s", escalation, reason)
         return None
     escalation_provider = get_provider_for_model(escalation)
     if escalation_provider in blocked_providers:
@@ -398,20 +407,30 @@ async def complete_with_fallback(
     """
     primary_model = primary_model_override or agent.primary_model_id
     verbosity_level = getattr(agent, "verbosity_level", None)
-    blocked_providers: set[str] = set()
+    # A session whose work role a launch deny row covers never runs that provider: not as
+    # primary, fallback or escalation.
+    denial = await session_launch_denial(db, prompt_cache_key)
+    blocked_providers: set[str] = denial.providers if denial is not None else set()
     cooldown_probe_provider: str | None = None
 
-    result, primary_error = await _try_model(
-        messages,
-        primary_model,
-        temperature,
-        max_tokens,
-        tools,
-        thinking_level,
-        verbosity_level,
-        prompt_cache_key,
-        db,
-    )
+    denied = denial.blocks(primary_model) if denial is not None else None
+    result: CompletionInternalResult | None = None
+    primary_error: BaseException | None
+    if denied:
+        logger.info("Skipping primary model %s: %s", primary_model, denied)
+        primary_error = ProviderError(provider=get_provider_for_model(primary_model), message=denied, status_code=403)
+    else:
+        result, primary_error = await _try_model(
+            messages,
+            primary_model,
+            temperature,
+            max_tokens,
+            tools,
+            thinking_level,
+            verbosity_level,
+            prompt_cache_key,
+            db,
+        )
     if result is not None:
         return _completion_result(
             result=result,
@@ -442,6 +461,7 @@ async def complete_with_fallback(
         prompt_cache_key,
         db,
         cooldown_probe_provider,
+        denial,
     )
     if fallback_result is not None:
         fallback_result.fallback_reason = primary_reason
@@ -460,6 +480,7 @@ async def complete_with_fallback(
         blocked_providers=blocked_providers,
         prompt_cache_key=prompt_cache_key,
         db=db,
+        denial=denial,
     )
     if escalation_result is not None:
         escalation_result.fallback_reason = primary_reason

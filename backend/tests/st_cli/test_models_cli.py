@@ -143,7 +143,7 @@ def test_route_role_and_tool_prints_one_launch_row_with_reasons() -> None:
         result = runner.invoke(app, ["route", "--role", "verification", "--tool", "claude-code"])
 
     assert result.exit_code == 0
-    launch.assert_called_once_with("verification", "claude-code")
+    launch.assert_called_once_with("verification", "claude-code", None, None)
     lines = result.output.splitlines()
     assert lines[0].startswith("LAUNCH[verification claude-code] job=testing (Testing)")
     assert lines[1] == "  model=claude-haiku-5-5 effort=high daybreak=- context=blank-slate"
@@ -151,10 +151,22 @@ def test_route_role_and_tool_prints_one_launch_row_with_reasons() -> None:
     assert "native subagent: user-tester" in result.output and "why=Owner 2026-11-01" in result.output
 
 
-def test_route_marks_rows_no_default_applies_to() -> None:
-    with patch("agent_hub_st.models._launch_api", return_value=_launch("review", "codex")):
-        result = runner.invoke(app, ["route", "--role", "review", "--tool", "codex"])
-    assert "(not used: no default applies)" in result.output and "no Codex reviews" in result.output
+def test_route_marks_denied_launches_with_the_reason() -> None:
+    with patch("agent_hub_st.models._launch_api", return_value=_launch("hunting", "claude-code")):
+        result = runner.invoke(app, ["route", "--role", "hunting", "--tool", "claude-code"])
+    assert "(not used: no default applies)" in result.output
+    assert "DENIED: Owner 2026-11-01: Claude never for active hunting or recon" in result.output
+
+
+def test_route_passes_an_explicit_model_and_project() -> None:
+    with patch("agent_hub_st.models.agent_hub_request", return_value=_launch("hunting", "pi")) as request:
+        runner.invoke(app, ["route", "--role", "hunting", "--tool", "pi", "--model", "anthropic/claude-opus-5-5",
+                            "--project", "neri-hunters", "--json"])
+    request.assert_called_once_with(
+        "GET", "/api/models/launch-defaults",
+        params={"role": "hunting", "tool": "pi", "model": "anthropic/claude-opus-5-5", "project": "neri-hunters"},
+        tool_name="st models route")
+    assert runner.invoke(app, ["route", "--model", "claude-opus-5-5"]).exit_code != 0
 
 
 def test_route_sends_role_and_tool_as_query_and_refuses_task_with_role() -> None:

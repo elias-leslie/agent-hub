@@ -474,12 +474,15 @@ async def select_model_advice(request: SelectionRequest) -> dict:
 async def model_launch_defaults(
     role: Annotated[str | None, Query(max_length=80, pattern=r"^[a-z][a-z0-9_-]*$")] = None,
     tool: Annotated[str | None, Query(max_length=80, pattern=r"^[a-z][a-z0-9_-]*$")] = None,
+    model: Annotated[str | None, Query(max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")] = None,
+    project: Annotated[str | None, Query(max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")] = None,
 ) -> dict:
-    """Model, effort, Daybreak and context for launching an agent, by job or work role and tool."""
+    """Model, effort, Daybreak and context for launching an agent, by job or work role and tool, and whether
+    the launch is allowed (the table's model, or ``model`` when given, checked against the deny rows)."""
     from app.routing.model_selection import UnknownLaunchKey, launch_defaults, selection_policy
 
     try:
-        return launch_defaults(await selection_policy(), role=role, tool=tool)
+        return launch_defaults(await selection_policy(), role=role, tool=tool, model=model, project=project)
     except UnknownLaunchKey as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

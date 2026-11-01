@@ -693,3 +693,50 @@ class TestCodexAuthDeadNotification:
             ce._log_codex_auth_dead("codex/gpt-5.5", CodexAuthError("dead"))
         spawn.assert_not_called()
         assert ce._codex_notified_at is None
+
+
+def _hunter_db() -> SimpleNamespace:
+    session = SimpleNamespace(project_id="neri", provider_metadata={
+        "work_role": {"id": "hunting", "source": "tether", "declared_at": "2026-11-01T20:00:00+00:00"}})
+    return SimpleNamespace(get=AsyncMock(return_value=session))
+
+
+@pytest.mark.asyncio
+async def test_agentic_fallback_skips_claude_for_a_hunting_session() -> None:
+    from app.api.complete.complete_execution import _run_with_agentic_fallback
+
+    agent = SimpleNamespace(agent=SimpleNamespace(fallback_models=["claude-sonnet-5-5", "opencode-go/deepseek-v4.1-flash"]))
+    success = CompletionInternalResult(
+        content="done", model="opencode-go/deepseek-v4.1-flash", provider="opencode-go",
+        input_tokens=1, output_tokens=1, finish_reason="stop", session_id="sess-1", memory_uuids=[], cited_uuids=[],
+    )
+    run = AsyncMock(return_value=success)
+    with patch("app.api.complete.complete_execution._run_internal", new=run), patch(
+        "app.routing.availability.route_unavailable_reason", new=AsyncMock(return_value=None),
+    ):
+        result = await _run_with_agentic_fallback(
+            req=SimpleNamespace(project_id="neri", agent_slug="scout"),
+            primary_model="claude-opus-5-5", provider="claude", agent=agent, msgs=[],
+            db=_hunter_db(), sid="sess-1", client_id=None, source=None, thinking=None,
+            tools=None, fmt=None, skip_cache=False,
+        )
+    assert [call.args[1] for call in run.await_args_list] == ["opencode-go/deepseek-v4.1-flash"]
+    assert "Claude never for active hunting" in str(result.fallback_reason)
+
+
+@pytest.mark.asyncio
+async def test_a_lone_claude_model_is_refused_for_a_hunting_session() -> None:
+    from app.api.complete.complete_execution import execute_completion
+
+    request = SimpleNamespace(tools=None, response_format=None, thinking_level=None, auto_thinking=False,
+                              disable_agent_fallbacks=False)
+    with patch("app.api.complete.complete_execution.execute_without_db", new=AsyncMock()) as run, \
+            pytest.raises(ProviderError, match="Claude never for active hunting") as refused:
+        await execute_completion(
+            request=request, resolved_model="anthropic/claude-opus-5-5", provider="claude", resolved_agent=None,
+            messages_dict=[{"role": "user", "content": "hi"}], all_messages=[Message(role="user", content="hi")],
+            is_agentic=False, db=_hunter_db(), session_id="sess-1", client_id=None, request_source=None,
+            skip_cache=False,
+        )
+    assert refused.value.status_code == 403
+    run.assert_not_awaited()

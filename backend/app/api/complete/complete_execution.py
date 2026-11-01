@@ -19,6 +19,7 @@ from app.api.complete.execution import (
 from app.api.complete.runtime_usage import persist_failed_attempt_usage
 from app.api.complete.schemas import CompletionRequest
 from app.api.complete.types import CompletionInternalResult
+from app.routing.launch_policy import session_launch_denial
 from app.services.agent_routing_models import ResolvedAgent
 from app.services.llm_errors import ProviderError
 from app.services.llm_messages import Message
@@ -145,8 +146,15 @@ async def _run_with_agentic_fallback(
     from app.routing.registry import get_provider_for_model
 
     primary_error: ProviderError | RuntimeError | asyncio.TimeoutError | None = None
+    denial = await session_launch_denial(db, sid)
     for model_id in [primary_model, *agent.agent.fallback_models]:
         fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
+        denied = denial.blocks(model_id) if denial is not None else None
+        if denied is not None:
+            logger.info("Skipping model %s: %s", model_id, denied)
+            if model_id == primary_model:
+                primary_error = ProviderError(provider=fb_provider, message=denied, status_code=403)
+            continue
         unavailable = await route_unavailable_reason(model_id)
         if unavailable is not None:
             logger.info("Skipping model %s: %s", model_id, unavailable)
@@ -224,6 +232,11 @@ async def execute_completion(
     thinking = get_thinking_level(request, all_messages, resolved_agent)
     tools = prepare_tools(request)
     fmt = prepare_response_format(request)
+    if not _fallbacks_enabled(request, resolved_agent):
+        # The fallback chains skip a provider the session's work role is denied; a lone model is refused.
+        denial = await session_launch_denial(db, session_id)
+        if denial is not None and (denied := denial.blocks(resolved_model)):
+            raise ProviderError(provider=provider, message=denied, status_code=403)
     if _fallbacks_enabled(request, resolved_agent) and not is_agentic:
         result, model_used, fallback_used = await execute_with_fallback(
             _to_messages(messages_dict),

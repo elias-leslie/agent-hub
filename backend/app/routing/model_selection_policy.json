@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "policies": {
     "coding": {
       "requires_tools": true,
@@ -96,24 +96,64 @@
     }
   },
   "launch": {
-    "about": "Which model, effort, Daybreak and context each kind of agent gets, by job and tool. st models route --role JOB --tool TOOL reads it; st aico create applies it when --model/--reasoning-effort are not given (explicit flags win). A job's work_roles are the Agent Hub work roles (session_roles.json) whose launches default to it; every registered work role belongs to exactly one job. context: full = Agent Hub delivery in the project; blank-slate = --blank-slate plus a specific brief (create uses it when neither --project nor --blank-slate is given). prefer lists tools best first. subagent names the lean Claude Code agent definition (claude-config/agents) to use for this job as a native subagent. Owner decisions 2026-11-01: /srv/workspaces/handoffs/followups-2026-10-31/token-audit/BRIEF-launch-defaults.md.",
+    "about": "Which model, effort, Daybreak and context each kind of agent gets, by job and tool, and the hard rules on top. st models route --role JOB --tool TOOL reads it; st aico create applies it when --model/--reasoning-effort are not given (explicit flags win). A job's work_roles are the Agent Hub work roles (session_roles.json) whose launches default to it; every registered work role belongs to exactly one job. context: full = Agent Hub delivery in the project; blank-slate = --blank-slate plus a specific brief (create uses it when neither --project nor --blank-slate is given). subagent names the lean Claude Code agent definition (claude-config/agents) to use for this job as a native subagent. deny rows are hard rules: a launch whose job, work role and project match every selector a row names is refused when its tool or model counts as the row's provider (providers says what counts), explicit --model included; Agent Hub agent sessions with a denied work role never fall back or escalate to that provider. Everything else (usage, credits, which tool to pick) is the coordinator's choice from live facts, not an order here. Owner decisions 2026-11-01: /srv/workspaces/handoffs/followups-2026-10-31/token-audit/BRIEF-launch-defaults.md.",
+    "providers": {
+      "claude": {
+        "label": "Claude",
+        "tools": [
+          "claude-code"
+        ],
+        "catalog_providers": [
+          "claude",
+          "anthropic"
+        ],
+        "name_tokens": [
+          "claude",
+          "opus",
+          "sonnet",
+          "haiku"
+        ],
+        "why": "Claude Code always runs Claude; any other tool runs Claude when the catalog lists the model under a Claude provider or its id names a Claude family (anthropic/claude-opus-5-5 through Pi). Other ids, catalogued or not, are not Claude."
+      }
+    },
+    "deny": [
+      {
+        "jobs": [
+          "hunting",
+          "recon"
+        ],
+        "provider": "claude",
+        "reason": "Owner 2026-11-01: Claude never for active hunting or recon",
+        "source": "Owner approved 2026-11-01: /srv/workspaces/handoffs/model-choice-2026-11-01/BUILD-PLAN.md (REVIEW.md P1)"
+      },
+      {
+        "work_roles": [
+          "verification"
+        ],
+        "projects": [
+          "neri-hunters"
+        ],
+        "provider": "claude",
+        "reason": "Owner 2026-11-01: Claude never for full case/hunt review",
+        "source": "Owner approved 2026-11-01: /srv/workspaces/handoffs/model-choice-2026-11-01/BUILD-PLAN.md (REVIEW.md P1)"
+      }
+    ],
     "tools": {
       "claude-code": {
         "label": "Claude Code"
       },
       "codex": {
         "label": "Codex",
-        "note": "Few credits: quick cheap tests only.",
         "default": {
           "model": "gpt-6.1-sol",
           "effort": "xhigh",
           "daybreak": false,
-          "why": "Owner 2026-11-01: Codex non-hunting work runs gpt-6.1-sol xhigh; Codex credits are few, so quick cheap tests only."
+          "why": "Owner 2026-11-01: Codex non-hunting work runs gpt-6.1-sol xhigh."
         }
       },
       "pi": {
         "label": "Pi",
-        "note": "Hunters; otherwise the last choice.",
+        "note": "Owner 2026-11-01: Pi hunts; outside hunting it is the last choice.",
         "default": {
           "model": "opencode-go/deepseek-v4.1-flash",
           "effort": "high",
@@ -152,11 +192,6 @@
           "coordinator"
         ],
         "context": "full",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-opus-5-5",
@@ -171,11 +206,6 @@
           "implementation"
         ],
         "context": "full",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-sonnet-5-5",
@@ -199,11 +229,6 @@
           "reporting"
         ],
         "context": "full",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-opus-5-5",
@@ -225,11 +250,6 @@
           "mapping"
         ],
         "context": "full",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-opus-5-5",
@@ -255,22 +275,12 @@
           "review"
         ],
         "context": "blank-slate",
-        "prefer": [
-          "claude-code",
-          "pi"
-        ],
         "subagent": "code-reviewer",
         "tools": {
           "claude-code": {
             "model": "claude-opus-5-5",
             "effort": "high",
             "why": "Owner 2026-11-01: reviews run Opus 5.5 high."
-          },
-          "codex": {
-            "model": null,
-            "effort": null,
-            "use": false,
-            "why": "Owner 2026-11-01: no Codex reviews. Pass --model to launch one anyway."
           }
         }
       },
@@ -280,11 +290,6 @@
           "verification"
         ],
         "context": "blank-slate",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "subagent": "user-tester",
         "tools": {
           "claude-code": {
@@ -310,11 +315,6 @@
         "label": "Lookups, file finding and mechanical work",
         "work_roles": [],
         "context": "blank-slate",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-haiku-5-5",
@@ -334,11 +334,6 @@
           "operations"
         ],
         "context": "full",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-sonnet-5-5",
@@ -353,22 +348,12 @@
           "recon"
         ],
         "context": "full",
-        "prefer": [
-          "pi",
-          "codex",
-          "claude-code"
-        ],
         "tools": {
-          "claude-code": {
-            "model": "claude-sonnet-5-5",
-            "effort": "high",
-            "why": "Recon is fact-gathering (owner 2026-11-01: Sonnet 5.5 high); Pi and Codex Daybreak come first for security work."
-          },
           "codex": {
             "model": "gpt-6-sol",
             "effort": "xhigh",
             "daybreak": true,
-            "why": "Recon is part of hunting: Owner 2026-11-01: Codex hunting runs the current Daybreak model at xhigh with Daybreak on (Codex's catalog lists gpt-6-sol with Daybreak, checked 2026-11-01; create refuses a model that lost it)."
+            "why": "Recon is part of hunting. Owner 2026-11-01: Codex hunting runs the current Daybreak model at xhigh with Daybreak on (Codex's catalog lists gpt-6-sol with Daybreak, checked 2026-11-01; create refuses a model that lost it)."
           },
           "pi": {
             "model": "opencode-go/deepseek-v4.1-flash",
@@ -383,17 +368,7 @@
           "hunting"
         ],
         "context": "full",
-        "prefer": [
-          "pi",
-          "codex",
-          "claude-code"
-        ],
         "tools": {
-          "claude-code": {
-            "model": "claude-opus-5-5",
-            "effort": "high",
-            "why": "No owner rule for Claude hunters; when unsure, Opus 5.5 (owner 2026-11-01)."
-          },
           "codex": {
             "model": "gpt-6-sol",
             "effort": "xhigh",
@@ -425,11 +400,6 @@
           "other"
         ],
         "context": "blank-slate",
-        "prefer": [
-          "claude-code",
-          "codex",
-          "pi"
-        ],
         "tools": {
           "claude-code": {
             "model": "claude-opus-5-5",

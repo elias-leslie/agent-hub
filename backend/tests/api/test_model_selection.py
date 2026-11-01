@@ -96,10 +96,12 @@ async def test_policy_can_add_task_types_without_code_change(monkeypatch) -> Non
 @pytest.mark.asyncio
 async def test_external_policy_is_reloaded(monkeypatch, tmp_path) -> None:
     import json
+
+    from app.config import settings
     policy = model_selection._load_policy()
     path = tmp_path / "policy.json"
     path.write_text(json.dumps(policy))
-    monkeypatch.setattr(model_selection.settings, "agent_hub_model_selection_policy_path", str(path))
+    monkeypatch.setattr(settings, "agent_hub_model_selection_policy_path", str(path))
     assert "new_category" not in (await model_selection.selection_policy())["policies"]
     policy["policies"]["new_category"] = policy["policies"]["general"]
     path.write_text(json.dumps(policy))
@@ -137,8 +139,9 @@ def test_effort_reports_adapter_mapping_and_unknown_harnesses() -> None:
 
 # ---- launch table: model, effort, Daybreak and context by job and tool ----------------------
 
-def _row(role: str, tool: str) -> dict:
-    (row,) = model_selection.launch_defaults(model_selection._load_policy(), role=role, tool=tool)["rows"]
+def _row(role: str, tool: str, model: str | None = None, project: str | None = None) -> dict:
+    (row,) = model_selection.launch_defaults(model_selection._load_policy(), role=role, tool=tool,
+                                             model=model, project=project)["rows"]
     return row
 
 
@@ -150,11 +153,10 @@ def test_every_work_role_launches_as_exactly_one_job_and_every_tool_resolves() -
     assert sorted(claimed) == sorted(WORK_ROLES)
     for key, job in launch["jobs"].items():
         assert job["context"] in {"full", "blank-slate"}
-        assert set(job["prefer"]) <= set(launch["tools"])
         for tool in launch["tools"]:
             row = _row(key, tool)
             assert row["why"], (key, tool)
-            if row["use"] and row["launchable"] and tool != "agent-hub":
+            if row["use"] and row["launchable"] and row["allowed"] and tool != "agent-hub":
                 assert row["model"] and row["effort"], (key, tool)
 
 
@@ -167,15 +169,15 @@ def test_owner_table_rows() -> None:
     assert (_row("coordinator", "claude-code")["model"], _row("coordinator", "claude-code")["effort"]) == ("claude-opus-5-5", "xhigh")
     review = _row("review", "claude-code")
     assert (review["model"], review["effort"], review["subagent"], review["context"]) == ("claude-opus-5-5", "high", "code-reviewer", "blank-slate")
-    assert not _row("review", "codex")["use"] and _row("review", "codex")["model"] is None
+    assert (_row("review", "codex")["model"], _row("review", "codex")["use"]) == ("gpt-6.1-sol", True)
     hunter = _row("hunting", "codex")
     assert (hunter["model"], hunter["effort"], hunter["daybreak"]) == ("gpt-6-sol", "xhigh", True)
     builder = _row("implementation", "codex")
     assert (builder["model"], builder["effort"], builder["daybreak"]) == ("gpt-6.1-sol", "xhigh", False)
     pi = _row("hunting", "pi")
-    assert (pi["model"], pi["effort"], pi["rank"]) == ("opencode-go/deepseek-v4.1-flash", "high", 1)
+    assert (pi["model"], pi["effort"], pi["allowed"]) == ("opencode-go/deepseek-v4.1-flash", "high", True)
     assert [alt["model"] for alt in pi["alternates"]] == ["opencode-go/glm-5.3", "opencode-go/glm-5.3-flash"]
-    assert _row("implementation", "pi")["rank"] == 3
+    assert "last choice" in _row("implementation", "pi")["note"] and "rank" not in pi and "prefer" not in pi
     assert _row("lookup", "claude-code")["model"] == "claude-haiku-5-5" and _row("lookup", "claude-code")["work_roles"] == []
     assert not _row("other", "antigravity")["launchable"] and _row("other", "agent-hub")["model"] is None
 
@@ -198,3 +200,68 @@ async def test_launch_defaults_api() -> None:
         typo = await client.get("/api/models/launch-defaults", params={"role": "tester"})
     assert one.status_code == 200 and one.json()["rows"][0]["model"] == "claude-opus-5-5"
     assert typo.status_code == 422 and "tester" in typo.text and "verification" in typo.text
+
+
+# ---- launch deny rows: hard rules checked for every tool and an explicit model ----------------
+
+HUNT_DENY = "Owner 2026-11-01: Claude never for active hunting or recon"
+
+
+@pytest.mark.parametrize(("role", "tool", "model"), [
+    ("hunting", "claude-code", None),
+    ("hunting", "claude-code", "gpt-6-sol"),  # Claude Code always runs Claude
+    ("recon", "claude-code", None),
+    ("hunting", "pi", "anthropic/claude-opus-5-5"),  # not in the catalog: the id names Claude
+    ("hunting", "agent-hub", "claude-opus-5-5"),
+    ("hunting", "codex", "claude-sonnet-5-5"),
+    ("recon", "antigravity", "claude-opus-4-8"),
+    ("hunting", "pi", "openrouter/opus-7"),
+])
+def test_deny_covers_every_tool_and_an_explicit_model(role: str, tool: str, model: str | None) -> None:
+    row = _row(role, tool, model=model)
+    assert (row["allowed"], row["deny_reason"], row["use"]) == (False, HUNT_DENY, False)
+
+
+def test_hunting_rows_without_claude_and_unknown_non_claude_ids_stay_allowed() -> None:
+    for tool, model in [("codex", None), ("pi", None), ("pi", "opencode-go/some-new-hunter-9"),
+                        ("agent-hub", None), ("codex", "gpt-7-unlisted")]:
+        row = _row("hunting", tool, model=model)
+        assert (row["allowed"], row["deny_reason"]) == (True, None), (tool, model)
+    assert _row("hunting", "codex")["model"] == "gpt-6-sol"  # today's fields are unchanged
+    assert _row("research", "claude-code", model="claude-opus-5-5", project="neri-hunters")["allowed"] is True
+
+
+def test_verification_is_denied_on_claude_only_in_neri_hunters() -> None:
+    denied = _row("verification", "claude-code", project="neri-hunters")
+    assert (denied["allowed"], denied["deny_reason"]) == (False, "Owner 2026-11-01: Claude never for full case/hunt review")
+    assert _row("verification", "pi", model="anthropic/claude-haiku-5-5", project="neri-hunters")["allowed"] is False
+    assert _row("verification", "codex", project="neri-hunters")["allowed"] is True
+    for project in (None, "neri", "summitflow"):
+        row = _row("verification", "claude-code", project=project)
+        assert (row["allowed"], row["model"], row["use"]) == (True, "claude-haiku-5-5", True), project
+
+
+def test_shipped_launch_policy_is_consistent_and_refuses_a_tools_row_a_deny_row_contradicts() -> None:
+    from app.routing.launch_policy import launch_policy_problems
+
+    policy = model_selection._load_policy()
+    assert launch_policy_problems(policy) == []
+    bad = deepcopy(policy)
+    bad["launch"]["jobs"]["hunting"]["tools"]["claude-code"] = {"model": "claude-opus-5-5", "effort": "high", "why": "x"}
+    bad["launch"]["jobs"]["recon"]["tools"]["pi"]["alternates"] = [{"model": "anthropic/claude-sonnet-5-5", "effort": "high"}]
+    bad["launch"]["jobs"]["review"]["tools"]["codex"] = {"model": None, "use": False, "why": "x"}
+    problems = launch_policy_problems(bad)
+    assert any("hunting.tools.claude-code" in p and "contradicts" in p for p in problems)
+    assert any("recon.tools.pi" in p and "contradicts" in p for p in problems)
+    assert any("'use' is retired" in p for p in problems)
+    # A deny scoped to one project leaves the job's Claude row valid elsewhere.
+    assert not any("testing.tools.claude-code" in p for p in problems)
+
+
+@pytest.mark.asyncio
+async def test_launch_defaults_api_checks_an_explicit_model_and_project() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"}) as client:
+        pi = await client.get("/api/models/launch-defaults", params={"role": "hunting", "tool": "pi", "model": "anthropic/claude-opus-5-5"})
+        tester = await client.get("/api/models/launch-defaults", params={"role": "verification", "tool": "claude-code", "project": "neri-hunters"})
+    assert pi.status_code == 200 and pi.json()["rows"][0]["deny_reason"] == HUNT_DENY
+    assert tester.status_code == 200 and tester.json()["rows"][0]["allowed"] is False
