@@ -265,3 +265,128 @@ async def test_launch_defaults_api_checks_an_explicit_model_and_project() -> Non
         tester = await client.get("/api/models/launch-defaults", params={"role": "verification", "tool": "claude-code", "project": "neri-hunters"})
     assert pi.status_code == 200 and pi.json()["rows"][0]["deny_reason"] == HUNT_DENY
     assert tester.status_code == 200 and tester.json()["rows"][0]["allowed"] is False
+
+
+# ---- usage facts per option: windows, reading age, credits, last refusal ---------------------
+
+def _facts_payload(role: str, readings, *, credits=None, refusals=None, project=None, tool=None) -> dict:
+    from datetime import UTC, datetime
+
+    from app.routing.launch_facts import Facts, attach
+
+    policy = model_selection._load_policy()
+    payload = model_selection.launch_defaults(policy, role=role, tool=tool, project=project)
+    now = datetime(2026, 11, 1, 20, 0, tzinfo=UTC)
+    return attach(payload, Facts(readings=readings, credits=credits or {}, refusals=refusals or []), policy["launch"], now)
+
+
+def _reading(provider: str, minutes: int, used: float, *, observed: str, resets: str | None):
+    from datetime import datetime
+
+    from app.models import SubscriptionUsageSnapshot
+
+    return SubscriptionUsageSnapshot(provider=provider, window_minutes=minutes, used_percent=used,
+                                     observed_at=datetime.fromisoformat(observed),
+                                     resets_at=datetime.fromisoformat(resets) if resets else None, source="test")
+
+
+def _usage(payload: dict, tool: str) -> dict:
+    return next(row for row in payload["rows"] if row["tool"] == tool)["usage"]
+
+
+def test_a_reading_whose_reset_passed_is_unknown_not_zero_percent_used() -> None:
+    old = _reading("claude", 300, 40, observed="2026-10-31T02:00:00+00:00", resets="2026-10-31T05:00:00+00:00")
+    usage = _usage(_facts_payload("research", [old]), "claude-code")
+    (window,) = usage["windows"]
+    assert usage["status"] == "unknown"
+    assert window["state"] == "unknown" and window["left_percent"] is None and window["used_percent"] is None
+    assert window["resets_at"] is None and window["age_seconds"] == 42 * 3600
+
+
+def test_a_window_missing_from_the_latest_reading_is_not_reported_and_does_not_make_the_option_unknown() -> None:
+    five = _reading("claude", 300, 1, observed="2026-10-31T02:00:00+00:00", resets="2026-10-31T05:00:00+00:00")
+    week = _reading("claude", 10080, 70, observed="2026-11-01T19:55:00+00:00", resets="2026-11-06T10:00:00+00:00")
+    usage = _usage(_facts_payload("research", [five, week]), "claude-code")
+    states = {w["label"]: w["state"] for w in usage["windows"]}
+    assert states == {"5h": "not_reported", "weekly": "ok"}
+    assert usage["status"] == "ok"
+    weekly = usage["windows"][1]
+    assert weekly["left_percent"] == 30 and weekly["age_seconds"] == 5 * 60 and weekly["resets_in_seconds"] == 4 * 86400 + 14 * 3600
+
+
+def test_an_old_reading_is_shown_with_its_age_while_its_reset_is_ahead() -> None:
+    week = _reading("claude", 10080, 20, observed="2026-10-30T20:00:00+00:00", resets="2026-11-06T10:00:00+00:00")
+    usage = _usage(_facts_payload("research", [week]), "claude-code")
+    assert usage["status"] == "ok" and usage["windows"][0]["age_seconds"] == 48 * 3600
+
+
+def test_a_window_at_100_percent_is_used_up_until_it_resets() -> None:
+    week = _reading("claude", 10080, 100, observed="2026-11-01T19:55:00+00:00", resets="2026-11-06T10:00:00+00:00")
+    usage = _usage(_facts_payload("research", [week]), "claude-code")
+    assert usage["status"] == "used_up" and usage["windows"][0]["state"] == "used_up"
+    assert usage["windows"][0]["left_percent"] == 0 and usage["windows"][0]["resets_at"].startswith("2026-11-06T10:00")
+
+
+def test_codex_week_at_100_percent_with_a_balance_runs_on_credits_and_says_how_long_they_last() -> None:
+    week = _reading("codex", 10080, 100, observed="2026-11-01T19:31:00+00:00", resets="2026-11-04T10:28:00+00:00")
+    five = _reading("codex", 300, 0, observed="2026-11-01T19:25:00+00:00", resets="2026-11-02T00:09:00+00:00")
+    credits = {"codex": {"balance": 12652.0, "pace_per_day_7d": 2803.0, "earliest_expiry": "2026-12-31T23:59:59+00:00"}}
+    usage = _usage(_facts_payload("coordinator", [week, five], credits=credits), "codex")
+    assert usage["status"] == "on_credits"
+    assert usage["credits"]["lasts_past_reset"] is True and usage["credits"]["reset_at"].startswith("2026-11-04T10:28")
+    assert usage["credits"]["earliest_expiry"].startswith("2026-12-31") and usage["credits"]["lasts_days"] == 4.5
+    # Same week at 100% with a fast pace: the credits do not reach the reset.
+    fast = {"codex": credits["codex"] | {"pace_per_day_7d": 9000.0}}
+    assert _usage(_facts_payload("coordinator", [week, five], credits=fast), "codex")["credits"]["lasts_past_reset"] is False
+    # Week at 100% and no balance: used up, not credits.
+    empty = {"codex": credits["codex"] | {"balance": 0.0}}
+    assert _usage(_facts_payload("coordinator", [week, five], credits=empty), "codex")["status"] == "used_up"
+
+
+def test_pi_usage_follows_the_provider_named_in_the_model_and_untracked_tools_say_so() -> None:
+    month = _reading("opencode-go", 43200, 45, observed="2026-11-01T19:55:00+00:00", resets="2026-11-26T20:32:00+00:00")
+    payload = _facts_payload("hunting", [month])
+    assert _usage(payload, "pi")["provider"] == "opencode-go" and _usage(payload, "pi")["status"] == "ok"
+    assert _usage(payload, "antigravity")["status"] == "untracked" and _usage(payload, "agent-hub")["status"] == "untracked"
+
+
+def test_last_refusal_is_keyed_on_the_requested_model_and_never_changes_allowed() -> None:
+    refusals = [
+        {"requested_model": "claude-opus-5-5", "at": "2026-11-01T17:10:11+00:00", "role": "coordinator", "project": "neri", "category": "cyber"},
+        {"requested_model": "claude-opus-5-5", "at": "2026-11-01T04:30:10+00:00", "role": None, "project": "neri", "category": "cyber"},
+        {"requested_model": "claude-sonnet-5-5", "at": "2026-10-30T01:00:00+00:00", "role": None, "project": None, "category": "cyber"},
+    ]
+    payload = _facts_payload("coordinator", [], refusals=refusals, project="neri", tool="claude-code")
+    (row,) = payload["rows"]
+    assert row["allowed"] is True and row["use"] is True
+    assert row["last_refusal"] == refusals[0] | {"count": 2}
+    # Not the model the row launches: no refusal shown.
+    sonnet = _facts_payload("implementation", [], refusals=refusals[:2], tool="claude-code")["rows"][0]
+    assert sonnet["last_refusal"] is None
+    assert sonnet["alternates"][0]["last_refusal"]["count"] == 2  # its Opus alternate
+
+
+def test_a_denied_option_keeps_its_deny_reason_and_shows_no_refusal_line() -> None:
+    refusals = [{"requested_model": "claude-opus-5-5", "at": "2026-11-01T17:10:11+00:00", "role": None, "project": None, "category": "cyber"}]
+    payload = _facts_payload("hunting", [], refusals=refusals)
+    claude = next(row for row in payload["rows"] if row["tool"] == "claude-code")
+    assert claude["allowed"] is False and "never for active hunting" in claude["deny_reason"]
+    assert claude["last_refusal"] is None
+
+
+@pytest.mark.asyncio
+async def test_launch_defaults_api_carries_facts_and_survives_unreadable_usage_tables() -> None:
+    from app.routing import launch_facts
+
+    async def broken(db):
+        raise RuntimeError("usage tables unreadable")
+
+    headers = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=headers) as client:
+        with patch.object(launch_facts, "load_facts", new=AsyncMock(return_value=launch_facts.Facts())):
+            ok = await client.get("/api/models/launch-defaults", params={"role": "research"})
+        with patch.object(launch_facts, "load_facts", new=broken):
+            down = await client.get("/api/models/launch-defaults", params={"role": "research"})
+    assert ok.status_code == 200 and all("usage" in row and "last_refusal" in row for row in ok.json()["rows"])
+    assert ok.json()["rows"][0]["model"] == "claude-opus-5-5"  # existing fields kept
+    assert down.status_code == 200 and "unreadable" in down.json()["facts_error"] and down.json()["rows"][0]["allowed"] is True

@@ -127,26 +127,48 @@ async def _hub_value(db: AsyncSession, start: datetime) -> tuple[list[dict], lis
     return projects, sorted(agents, key=lambda r: -r["api_equiv_usd"])
 
 
-async def _utilization(db: AsyncSession, now: datetime) -> list[dict[str, Any]]:
+async def latest_readings(db: AsyncSession, now: datetime) -> list[SubscriptionUsageSnapshot]:
+    """The newest reading of every provider window seen in the last 8 days (whichever source it came from:
+    a headless run updates no statusline). A reading whose ``resets_at`` has passed no longer says how much
+    is used: callers treat it as unknown, never as 0% used."""
     rows = (
         await db.execute(
             select(SubscriptionUsageSnapshot).where(SubscriptionUsageSnapshot.observed_at >= now - timedelta(days=8))
         )
     ).scalars().all()
     best: dict[tuple[str, int], SubscriptionUsageSnapshot] = {}
-    plan: dict[str, tuple[datetime, str]] = {}
     for r in rows:
         key = (r.provider, r.window_minutes)
         cur = best.get(key)
-        # The newest reading of a window wins, whichever source it came from (a headless run updates no statusline).
         if cur is None or (r.observed_at, r.used_percent) > (cur.observed_at, cur.used_percent):
             best[key] = r
-        if r.plan_type and (r.provider not in plan or r.observed_at > plan[r.provider][0]):
-            plan[r.provider] = (r.observed_at, r.plan_type)
+    return [best[key] for key in sorted(best)]
+
+
+def pace_per_day(drawn_by_day: dict[date, float], today: date) -> float:
+    """Credits drawn per day over the last 7 days, today included."""
+    return sum(drawn_by_day.get(today - timedelta(days=i), 0.0) for i in range(7)) / 7
+
+
+async def _utilization(db: AsyncSession, now: datetime) -> list[dict[str, Any]]:
+    """The costs page's windows. A window whose reset passed since its reading is flagged
+    ``reset_since_observed`` and drawn as 0% so the bar does not claim a stale level; routing facts
+    (``app.routing.launch_facts``) read ``latest_readings`` and treat that reading as unknown."""
+    plan: dict[str, tuple[datetime, str]] = {}
+    plan_rows = (
+        await db.execute(
+            select(SubscriptionUsageSnapshot.provider, SubscriptionUsageSnapshot.observed_at, SubscriptionUsageSnapshot.plan_type)
+            .where(SubscriptionUsageSnapshot.observed_at >= now - timedelta(days=8), SubscriptionUsageSnapshot.plan_type.is_not(None))
+        )
+    ).all()
+    for provider, observed_at, plan_type in plan_rows:
+        if plan_type and (provider not in plan or observed_at > plan[provider][0]):
+            plan[provider] = (observed_at, plan_type)
     out: dict[str, dict[str, Any]] = {}
-    for (provider, minutes), r in sorted(best.items()):
+    for r in await latest_readings(db, now):
+        minutes = r.window_minutes
         reset_passed = r.resets_at is not None and r.resets_at <= now
-        entry = out.setdefault(provider, {"provider": provider, "plan_type": plan.get(provider, (None, None))[1], "windows": []})
+        entry = out.setdefault(r.provider, {"provider": r.provider, "plan_type": plan.get(r.provider, (None, None))[1], "windows": []})
         entry["windows"].append({
             "window_minutes": minutes,
             "label": WINDOW_LABELS.get(minutes, f"{minutes}m"),
@@ -224,7 +246,7 @@ async def build_summary(db: AsyncSession, days: int = 30, now: datetime | None =
     if first_lot_day and first_lot_day < hist_start_day:
         drawn_since_lots += await _drawn_between(db, first_lot_day, hist_start_day)
     lot_states = draw_down([lot for lot in lots if lot.provider == "codex"], drawn_since_lots)
-    pace_7d = sum(drawn_by_day.get(today - timedelta(days=i), 0.0) for i in range(7)) / 7
+    pace_7d = pace_per_day(drawn_by_day, today)
     lots_out = []
     for st in lot_states:
         lot = st.lot

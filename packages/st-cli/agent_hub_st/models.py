@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from datetime import datetime
 from typing import Annotated, Any
 
 import typer
@@ -197,6 +198,120 @@ def _daybreak(row: dict) -> str:
     return {True: "on", False: "off"}.get(row.get("daybreak"), "-")
 
 
+def _when(iso: Any) -> str:
+    """Local MM-DD HH:MM of an ISO time, or - when it is missing."""
+    try:
+        return datetime.fromisoformat(str(iso)).astimezone().strftime("%m-%d %H:%M")
+    except (TypeError, ValueError):
+        return "-"
+
+
+def _span(seconds: Any) -> str:
+    """A length of time in the largest sensible unit: 5m, 4h, 2.6d."""
+    if not isinstance(seconds, (int, float)):
+        return "?"
+    if seconds < 60:
+        return "<1m"
+    if seconds < 3600:
+        return f"{int(seconds // 60)}m"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)}h"
+    return f"{seconds / 86400:.1f}d"
+
+
+def _count(value: Any) -> str:
+    number = float(value or 0)
+    return f"{number / 1000:.1f}K" if number >= 1000 else f"{number:.0f}"
+
+
+def _reset(window: dict[str, Any]) -> str:
+    return f"{_when(window['resets_at'])} ({_span(window.get('resets_in_seconds'))})" if window.get("resets_at") else ""
+
+
+def _window_text(window: dict[str, Any]) -> str:
+    label, state = window.get("label") or "window", window.get("state")
+    age = _span(window.get("age_seconds"))
+    if state == "not_reported":
+        return f"{label} not reported"
+    if state == "unknown":
+        return f"{label} unknown (its reset passed; last read {age} ago)"
+    if state == "used_up":
+        return f"{label} used up" + (f" until {_reset(window)}" if window.get("resets_at") else "") + f", read {age} ago"
+    return (f"{label} {window.get('left_percent'):g}% left" + (f", resets {_reset(window)}" if window.get("resets_at") else "")
+            + f", read {age} ago")
+
+
+_STATUS = {"ok": "has room", "used_up": "used up", "on_credits": "running on credits",
+           "unknown": "usage unknown", "untracked": "usage not tracked"}
+
+
+def _usage_line(usage: dict[str, Any]) -> str:
+    windows = [w for w in usage.get("windows") or [] if isinstance(w, dict)]
+    if not windows:
+        return "no usage readings" if usage.get("status") != "untracked" else ""
+    return "; ".join(_window_text(w) for w in windows)
+
+
+def _credit_line(usage: dict[str, Any]) -> str:
+    credit = usage.get("credits")
+    if not isinstance(credit, dict):
+        return ""
+    text = f"{_count(credit.get('balance'))} credits"
+    days = credit.get("lasts_days")
+    reset = _when(credit["reset_at"])[:5] if credit.get("reset_at") else None
+    if days is None:
+        text += "; none drawn in the last 7 days"
+    elif credit.get("lasts_past_reset") is True:
+        text += f"; at the last-7-day pace they last past the {reset} reset"
+    elif credit.get("lasts_past_reset") is False:
+        text += f"; at the last-7-day pace they run out in {days:g}d, before the {reset} reset"
+    else:
+        text += f"; about {days:g}d at the last-7-day pace"
+    if credit.get("earliest_expiry"):
+        text += f"; lot expires {_when(credit['earliest_expiry'])[:5]}"
+    return text
+
+
+def _refusal_line(refusal: Any) -> str:
+    if not isinstance(refusal, dict):
+        return ""
+    who = "/".join(str(part) for part in (refusal.get("role") or "role unknown", refusal.get("project")) if part)
+    count = f" ({refusal['count']} recorded)" if refusal.get("count", 1) > 1 else ""
+    return f"last refusal {_when(refusal.get('at'))}, {who}{count}"
+
+
+def _option_lines(row: dict[str, Any]) -> list[str]:
+    """One tool's lines in the options view: what it launches as, then its facts."""
+    tool = str(row.get("tool"))
+    if row.get("allowed") is False:
+        return [f"{tool}  DENIED: {row.get('deny_reason') or '-'}"]
+    if row.get("launchable") is False:
+        return [f"{tool}  not launchable from here: {row.get('why') or '-'}"]
+    if not row.get("model"):
+        return [f"{tool}  {row.get('why') or 'no model set'}"]
+    usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
+    head = f"{tool}  {_effort(row)}  {_STATUS.get(usage.get('status'), 'usage unknown')}"
+    alts = [f"{_effort(alt)} ({alt.get('when') or '-'})" for alt in row.get("alternates") or [] if isinstance(alt, dict)]
+    if alts:
+        head += "  | also: " + "; ".join(alts)
+    lines = [head]
+    lines += [f"    {text}" for text in (_usage_line(usage), _credit_line(usage), _refusal_line(row.get("last_refusal"))) if text]
+    return lines
+
+
+def _print_options(payload: dict[str, Any], role: str, project: str | None) -> None:
+    raw = payload.get("rows")
+    rows = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
+    where = f" project={project}" if project else ""
+    print(f"OPTIONS[{role}{where}] policy=v{payload.get('version', '-')} facts as of {_when(payload.get('facts_as_of'))}; "
+          f"you choose, then st aico create --work-role {role} --tool T [--model M]")
+    if payload.get("facts_error"):
+        print(f"  usage facts unavailable ({payload['facts_error']}); allowed and denied are still right")
+    for row in rows:
+        for line in _option_lines(row):
+            print(line)
+
+
 def _print_launch(payload: dict[str, Any]) -> None:
     raw = payload.get("rows")
     rows = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
@@ -218,6 +333,12 @@ def _print_launch(payload: dict[str, Any]) -> None:
         if row.get("subagent"):
             print(f"  native subagent: {row['subagent']}")
         print(f"  why={row.get('why') or '-'}")
+        usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
+        if row.get("allowed") is not False:
+            print(f"  usage: {_STATUS.get(usage.get('status'), 'usage unknown')}")
+            for text in (_usage_line(usage), _credit_line(usage), _refusal_line(row.get("last_refusal"))):
+                if text:
+                    print(f"    {text}")
         return
     print(f"LAUNCH[{len(rows)} rows] policy=v{payload.get('version', '-')} "
           "(st models route --role JOB --tool TOOL for one row with its reasons)")
@@ -272,8 +393,8 @@ def _print_route(advice: dict[str, Any]) -> None:
 @app.command("route")
 @usage(
     surface="st.models.route",
-    cmd="st models route [--role JOB --tool TOOL [--model M] [--project P] | --task TASK] [--json]",
-    when="which model, effort, Daybreak and context an agent gets for a job (--role, a work role or job such as testing or lookup) and tool; st aico create applies it by default. --task: completion-route advice; no options lists both",
+    cmd="st models route [--role JOB [--tool TOOL [--model M]] [--project P] | --task TASK] [--json]",
+    when="pick a model for a job: --role JOB [--project P] lists each tool's model and effort, whether it is allowed, what usage it has left until when, Codex credits and its last refusal, so you choose; --tool adds one row's detail; st aico create applies the table's model by default. --task: completion-route advice; no options lists both",
     task_types=("model-admin", "model-review"),
     on_demand="model administration",
     tier="reference",
@@ -286,7 +407,7 @@ def route_model(
     task: Annotated[str | None, typer.Option("--task", help="Completion-route task type; omit to list task types.")] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Print the API response as JSON.")] = False,
 ) -> None:
-    """Model, effort, Daybreak and context by job and tool; --task gives completion-route advice."""
+    """Options for a job (--role): model, effort, allowed, usage left and last refusal per tool; --task gives completion-route advice."""
     if task and (role or tool):
         raise typer.BadParameter("--task is completion-route advice; use it without --role/--tool")
     if (model or project) and not (role or tool):
@@ -299,6 +420,8 @@ def route_model(
         payload = {"task_types": _selection_policy_api(), "launch": _launch_api(None, None)}
     if as_json:
         output_json(payload)
+    elif role and not tool:
+        _print_options(payload, role, project)
     elif role or tool:
         _print_launch(payload)
     elif task:

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import time
 from unittest.mock import patch
 
+import pytest
 from agent_hub_st.models import app
 from typer.testing import CliRunner
 
@@ -176,3 +178,105 @@ def test_route_sends_role_and_tool_as_query_and_refuses_task_with_role() -> None
                                     tool_name="st models route")
     assert json.loads(result.output)["rows"][0]["daybreak"] is True
     assert runner.invoke(app, ["route", "--task", "coding", "--role", "review"]).exit_code != 0
+
+
+# ---- options view: st models route --role JOB [--project P] ----------------------------------
+
+def _options(role: str, readings, *, credits=None, refusals=None, project=None, tool=None) -> dict:
+    from datetime import UTC, datetime
+
+    from app.models import SubscriptionUsageSnapshot
+    from app.routing.launch_facts import Facts, attach
+    from app.routing.model_selection import _load_policy, launch_defaults
+
+    policy = _load_policy()
+    snaps = [SubscriptionUsageSnapshot(provider=p, window_minutes=m, used_percent=u, source="test",
+                                       observed_at=datetime.fromisoformat(o),
+                                       resets_at=datetime.fromisoformat(r) if r else None)
+             for p, m, u, o, r in readings]
+    payload = launch_defaults(policy, role=role, tool=tool, project=project)
+    now = datetime(2026, 11, 1, 20, 0, tzinfo=UTC)
+    return attach(payload, Facts(readings=snaps, credits=credits or {}, refusals=refusals or []), policy["launch"], now)
+
+
+READINGS = [
+    ("codex", 10080, 100, "2026-11-01T19:31:00+00:00", "2026-11-04T10:28:00+00:00"),
+    ("codex", 300, 0, "2026-11-01T19:25:00+00:00", "2026-11-02T00:09:00+00:00"),
+    ("opencode-go", 10080, 91, "2026-11-01T19:55:00+00:00", "2026-11-02T00:00:00+00:00"),
+    ("opencode-go", 43200, 45, "2026-11-01T19:55:00+00:00", "2026-11-26T20:32:00+00:00"),
+    ("claude", 300, 1, "2026-10-31T02:13:00+00:00", "2026-10-31T05:10:00+00:00"),
+    ("claude", 10080, 70, "2026-11-01T20:05:00+00:00", "2026-11-06T10:00:00+00:00"),
+]
+CREDITS = {"codex": {"balance": 12652.0, "pace_per_day_7d": 2803.0, "earliest_expiry": "2026-12-31T23:59:59+00:00"}}
+REFUSAL = [{"requested_model": "claude-opus-5-5", "at": "2026-11-01T17:10:11+00:00", "role": "coordinator",
+            "project": "neri", "category": "cyber"}]
+
+
+@pytest.fixture(autouse=True)
+def _utc(monkeypatch: pytest.MonkeyPatch):
+    """Times print in the caller's zone; the tests read them in UTC."""
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def _route_options(role: str, *args: str, **kwargs):
+    with patch("agent_hub_st.models._launch_api", return_value=_options(role, READINGS, credits=CREDITS,
+                                                                         refusals=REFUSAL, **kwargs)):
+        return runner.invoke(app, ["route", "--role", role, *args])
+
+
+def test_options_view_is_short_and_shows_each_tools_usage_credits_and_reading_age() -> None:
+    result = _route_options("research")
+    assert result.exit_code == 0
+    lines = result.output.splitlines()
+    assert 1 < len(lines) <= 15 and lines[0].startswith("OPTIONS[research] policy=v")
+    out = result.output
+    assert "claude-code  claude-opus-5-5 high  has room" in out and "| also: claude-sonnet-5-5 high" in out
+    assert "weekly 30% left, resets" in out and "read " in out and "5h not reported" in out
+    assert "codex  gpt-6.1-sol xhigh  running on credits" in out and "weekly used up until" in out
+    assert "12.7K credits; at the last-7-day pace they last past the 11-04 reset; lot expires 12-31" in out
+    assert "pi  deepseek-v4.1-flash high" in out.replace("opencode-go/", "") and "monthly 55% left" in out
+    assert "antigravity  not launchable" in out
+    assert "5h unknown" not in out  # a window missing from the latest reading is not reported, not unknown
+
+
+def test_options_view_shows_the_last_refusal_and_a_denied_option_only_its_reason() -> None:
+    coordinator = _route_options("coordinator", "--project", "neri", project="neri").output
+    assert "last refusal 11-01" in coordinator and "coordinator/neri" in coordinator
+    hunting = _route_options("hunting").output
+    (claude,) = [line for line in hunting.splitlines() if line.startswith("claude-code")]
+    assert claude == "claude-code  DENIED: Owner 2026-11-01: Claude never for active hunting or recon"
+    assert "last refusal" not in hunting and "claude-opus" not in hunting
+
+
+def test_options_view_says_unknown_when_a_reset_passed_and_when_facts_could_not_be_read() -> None:
+    old = [("claude", 10080, 20, "2026-10-31T02:00:00+00:00", "2026-10-31T05:00:00+00:00")]
+    payload = _options("research", old)
+    with patch("agent_hub_st.models._launch_api", return_value=payload):
+        out = runner.invoke(app, ["route", "--role", "research"]).output
+    assert "usage unknown" in out and "weekly unknown (its reset passed; last read 1.8d ago)" in out
+    assert "0%" not in out
+    payload["facts_error"] = "RuntimeError: down"
+    with patch("agent_hub_st.models._launch_api", return_value=payload):
+        assert "usage facts unavailable (RuntimeError: down)" in runner.invoke(app, ["route", "--role", "research"]).output
+
+
+def test_options_json_is_a_superset_of_the_launch_rows_and_tool_keeps_the_single_row_with_facts() -> None:
+    plain = _launch("research")
+    payload = _options("research", READINGS, credits=CREDITS)
+    with patch("agent_hub_st.models._launch_api", return_value=payload):
+        data = json.loads(runner.invoke(app, ["route", "--role", "research", "--json"]).output)
+    for old_row, row in zip(plain["rows"], data["rows"], strict=True):
+        assert {k: v for k, v in old_row.items() if k != "alternates"}.items() <= row.items()
+        for old_alt, alt in zip(old_row["alternates"], row["alternates"], strict=True):
+            assert old_alt.items() <= alt.items()
+        assert {"usage", "last_refusal"} <= set(row)
+    assert set(plain) <= set(data)
+    one = _options("research", READINGS, credits=CREDITS, tool="claude-code")
+    with patch("agent_hub_st.models._launch_api", return_value=one):
+        out = runner.invoke(app, ["route", "--role", "research", "--tool", "claude-code"]).output
+    assert out.startswith("LAUNCH[research claude-code] job=research") and "  usage: has room" in out
+    assert "weekly 30% left, resets" in out
