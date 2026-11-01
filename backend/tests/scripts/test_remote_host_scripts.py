@@ -229,25 +229,23 @@ def test_st_guard_runs_remote_commands_with_a_placeholder_database(tmp_path: Pat
 
 
 def test_st_guard_routes_neri_case_commands_to_the_hunter_client(tmp_path: Path) -> None:
-    # A hunter host started for one case runs its case commands through neri-hunter; the rest
-    # of st neri stays on the workstation, and a host without the client says how to set it up.
+    # A hunter host started for one case runs all of st neri through neri-hunter, which shows its
+    # usage and refuses the workstation's commands; a host without the client says how to set it up.
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     client = bin_dir / "neri-hunter"
     client.write_text('#!/bin/sh\necho "hunter: $*"\n', encoding="utf-8")
     client.chmod(0o755)
     for argv in (("neri", "show", "c1"), ("neri", "log", "c1", "a note"), ("-P", "neri", "neri", "check", "c1"),
-                 ("neri", "advance", "c1", "candidate"), ("neri", "ask", "c1", "t"), ("neri", "sync", "c1", "-m", "x")):
+                 ("neri", "advance", "c1", "candidate"), ("neri", "ask", "c1", "t"), ("neri", "sync", "c1", "-m", "x"),
+                 ("neri", "show"), ("neri", "--help"), ("neri", "next")):
         result = _guard(tmp_path, *argv, bin_dir=str(bin_dir))
         assert result.returncode == 0, result.stderr
         assert result.stdout == f"hunter: {' '.join(argv[argv.index('neri', 2 if argv[0] == '-P' else 0) + 1:])}\n"
-    for argv in (("neri", "next"), ("neri", "new", "p", "c"), ("neri", "program", "list"), ("neri", "hunter", "start"),
-                 ("neri",), ("neri", "--json", "show", "c1")):
-        result = _guard(tmp_path, *argv, bin_dir=str(bin_dir))
-        assert result.returncode == 2 and "workstation-only" in result.stderr and not result.stdout, argv
+    assert _guard(tmp_path, "neri", bin_dir=str(bin_dir)).stdout == "hunter: \n"
     missing = _guard(tmp_path, "neri", "show", "c1", bin_dir=str(tmp_path / "empty"))
     assert missing.returncode == 2 and not missing.stdout
-    assert "st neri show: runs through neri-hunter" in missing.stderr and "st neri hunter start" in missing.stderr
+    assert "st neri: runs through neri-hunter" in missing.stderr and "st neri hunter start" in missing.stderr
 
 
 def test_clean_snapshot_removes_read_only_trees_without_following_links(tmp_path: Path) -> None:

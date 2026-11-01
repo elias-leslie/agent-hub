@@ -37,10 +37,4 @@ bugout       lab runs from the workstation
 bugout-deployment lab runs from the workstation
 ominull      production observation runs from the workstation
 ominull-backup production backups run from the workstation
-neri         Neri state and case data stay on the workstation; a hunter host started for one case runs show, check, log, advance, ask and sync for it
-neri:show    route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
-neri:check   route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
-neri:log     route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
-neri:advance route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
-neri:ask     route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
-neri:sync    route neri-hunter the workstation sets it up: st neri hunter start <case> --host <this host>
+neri         route neri-hunter a hunter host started for one case runs st neri for it; the workstation sets it up: st neri hunter start <case> --host <this host>
