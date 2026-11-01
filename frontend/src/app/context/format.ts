@@ -5,6 +5,9 @@ export const STALE_AFTER_DAYS = 3
 /** Fewer starts than this and the median is shown with its n, not as a settled number. */
 export const FEW_STARTS = 3
 
+/** Starts needed in each range before a rise is flagged (the step finder's minimum). */
+export const FLAG_MIN_STARTS = 5
+
 export const HARNESS_LABEL: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
@@ -41,7 +44,7 @@ const ROLE_LABEL: Record<string, string> = {
   blank: 'Blank launch',
   unknown: 'No role (plain session)',
   'exec:coordinator': 'Headless coordinator (exec)',
-  lane: 'All launched roles (lane)',
+  lane: 'All roles',
 }
 
 /** Row label for a cell name: roles keep their launch-table word, launch modes get a plain label. */
@@ -50,6 +53,30 @@ export function roleLabel(cell: string): string {
   if (cell.startsWith('subagent:')) return cell.slice('subagent:'.length)
   if (cell.startsWith('agent:')) return cell.slice('agent:'.length)
   return cell.charAt(0).toUpperCase() + cell.slice(1)
+}
+
+/** What the Cost grid's "Launched roles" and the all-roles view each count (the grid keeps coordinator starts, the view does not). */
+export const LANE_NOTE =
+  'All roles counts every launched role except the coordinator, so it has fewer starts than the Cost grid’s Launched roles, which also includes coordinators.'
+
+/** Block kinds as plain words; an unlisted kind is shown with its underscores removed. */
+const KIND_WORD: Record<string, string> = {
+  guardrail: 'guardrail',
+  global_guardrail: 'guardrail',
+  mandate: 'mandate',
+  global_mandate: 'mandate',
+  prompt: 'prompt',
+  tool_capabilities: 'tool list',
+}
+
+export function kindLabel(kind: string | null | undefined): string {
+  if (!kind) return '—'
+  return KIND_WORD[kind] ?? kind.replaceAll('_', ' ')
+}
+
+/** Model ids without the vendor prefix: claude-opus-5-5 -> opus-5-5. */
+export function modelLabel(model: string): string {
+  return model.replace(/^claude-/, '')
 }
 
 export type CellGroup = 'roles' | 'other' | 'subagents' | 'agents'
@@ -92,7 +119,7 @@ export function flagText(cell: MatrixCell): string | null {
     return `Over budget: the last 24 h median is ${tok(cell.recent)}, the warn level is ${tok(cell.warn_tokens)}`
   }
   if (cell.flag === 'jump') {
-    return `Up ${signedPct(cell.delta_pct)} on the previous range (${tok(cell.prev_total)} before, ${tok(cell.total)} now); flagged from ${cell.jump_pct ?? '—'}%`
+    return `Up ${Math.abs(Math.round(cell.delta_pct ?? 0))}% on the previous range (${tok(cell.prev_total)} before, ${tok(cell.total)} now). Flagged because a rise of ${cell.jump_pct ?? '—'}% or more, with ${FLAG_MIN_STARTS} or more starts in each range, is flagged.`
   }
   return null
 }
@@ -101,6 +128,15 @@ export function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString([], {
     month: 'short',
     day: 'numeric',
+  })
+}
+
+/** A calendar day such as 2026-10-29, shown as that day whatever the viewer's timezone. */
+export function dayLabel(day: string): string {
+  return new Date(`${day.slice(0, 10)}T12:00:00Z`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 

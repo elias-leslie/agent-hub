@@ -5,6 +5,7 @@
  */
 
 import { fetchApi, getApiBaseUrl } from '../api-config'
+import { ContextHttpError } from './context-http'
 
 const BASE = `${getApiBaseUrl()}/api/context-observability/changes`
 
@@ -209,10 +210,7 @@ async function failure(response: Response): Promise<ReviewError> {
 
 async function getJson<T>(path: string, what: string): Promise<T> {
   const response = await fetchApi(`${BASE}${path}`)
-  if (!response.ok)
-    throw new Error(
-      `Agent Hub answered ${response.status} for ${what.toLowerCase()}`,
-    )
+  if (!response.ok) throw new ContextHttpError(response.status, what)
   return response.json()
 }
 

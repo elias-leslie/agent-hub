@@ -20,6 +20,7 @@ import {
   cellGroup,
   cellHref,
   FEW_STARTS,
+  FLAG_MIN_STARTS,
   flagText,
   GROUP_LABEL,
   harnessLabel,
@@ -39,8 +40,8 @@ function DeltaChip({ cell, days }: { cell: MatrixCell; days: number }) {
   if (cell.delta_pct == null) {
     return (
       <span
-        className="font-mono text-[11px] text-slate-600"
-        title={`No change shown: fewer than ${FEW_STARTS} starts in this or the previous ${days} days`}
+        className="font-mono text-xs text-slate-500"
+        title={`No change shown: fewer than ${FEW_STARTS} starts on the same model in this or the previous ${days} days`}
       >
         —
       </span>
@@ -50,7 +51,7 @@ function DeltaChip({ cell, days }: { cell: MatrixCell; days: number }) {
   return (
     <span
       className={cn(
-        'font-mono text-[11px]',
+        'font-mono text-xs',
         Math.round(cell.delta_pct) === 0
           ? 'text-slate-500'
           : up
@@ -91,7 +92,7 @@ function MatrixCellView({
       <div className="flex items-baseline justify-between gap-2">
         <span className="flex min-w-0 items-baseline gap-1.5">
           {showHarness && (
-            <span className="truncate text-[11px] text-slate-500 sm:hidden">
+            <span className="truncate text-xs text-slate-500 max-sm:text-[13px] sm:hidden">
               {harnessLabel(cell.harness)}
             </span>
           )}
@@ -102,7 +103,7 @@ function MatrixCellView({
         <span className="flex items-center gap-1.5">
           {flag && (
             <span
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-300"
+              className="inline-flex items-center gap-1 text-xs font-medium text-amber-300"
               title={flag}
             >
               <Flag className="h-3 w-3" aria-hidden="true" />
@@ -120,7 +121,7 @@ function MatrixCellView({
         brief={cell.brief}
         scale={scale}
       />
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500 max-sm:text-[13px]">
         <span
           className={cn(cell.n < FEW_STARTS && 'text-amber-300/80')}
           title={
@@ -148,10 +149,11 @@ function MatrixCellView({
 function MissingCell({ harness }: { harness: string }) {
   return (
     <div
-      className="flex items-center gap-2 rounded-lg border border-dashed border-slate-800/70 px-2.5 py-2 text-slate-600 max-sm:hidden"
+      className="flex items-center gap-2 rounded-lg border border-dashed border-slate-800/70 px-2.5 py-2 text-slate-500 max-sm:hidden"
       title={`${harnessLabel(harness)} has no measured start for this role in the range`}
     >
       <span className="font-mono text-base">—</span>
+      <span className="sr-only">no start</span>
     </div>
   )
 }
@@ -162,12 +164,14 @@ function GroupTable({
   harnesses,
   scale,
   days,
+  note,
 }: {
   title: string
   cells: MatrixCell[]
   harnesses: string[]
   scale: number
   days: number
+  note?: string
 }) {
   const roles = useMemo(() => {
     const byRole = new Map<string, MatrixCell[]>()
@@ -185,14 +189,18 @@ function GroupTable({
   const cols = 'sm:[grid-template-columns:var(--cols)]'
   return (
     <section className="panel-surface p-4 lg:p-5">
-      <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
         {title}
       </h2>
+      {note ? (
+        <p className="mb-3 mt-1 text-xs text-slate-500 max-sm:text-[13px]">
+          {note}
+        </p>
+      ) : (
+        <div className="mb-3" />
+      )}
       <div
-        className={cn(
-          'hidden gap-2 pb-1 text-[11px] text-slate-500 sm:grid',
-          cols,
-        )}
+        className={cn('hidden gap-2 pb-1 text-xs text-slate-500 sm:grid', cols)}
         style={colsStyle}
         aria-hidden="true"
       >
@@ -244,7 +252,7 @@ function AgentList({
   if (cells.length === 0) return null
   return (
     <details className="panel-surface p-4 lg:p-5">
-      <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 focus-ring-amber">
+      <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 focus-ring-amber">
         {GROUP_LABEL.agents} ({cells.length})
       </summary>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -268,15 +276,17 @@ function AgentList({
 
 function Summary({ data, cells }: { data: Matrix; cells: MatrixCell[] }) {
   const flagged = cells.filter((c) => c.flag)
+  const held = cells.filter((c) => c.flag_held && !c.flag)
   const young =
     data.coverage_from != null && ageDays(data.coverage_from) < data.days * 2
+  const jump = data.jump_pct ?? '—'
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         {flagged.length > 0 ? (
           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-300">
             <Flag className="h-4 w-4" aria-hidden="true" />
-            {flagged.length} over budget:
+            {flagged.length} flagged:
             {flagged.map((c) => (
               <Link
                 key={`${c.harness}/${c.cell}`}
@@ -291,7 +301,9 @@ function Summary({ data, cells }: { data: Matrix; cells: MatrixCell[] }) {
           </span>
         ) : (
           <span className="text-slate-400">
-            Nothing over budget in the last 24 hours.
+            Nothing flagged: no cell is over its warn level in the last 24
+            hours, and none is up {jump}% or more on the previous {data.days}{' '}
+            days.
           </span>
         )}
         <Link
@@ -302,14 +314,47 @@ function Summary({ data, cells }: { data: Matrix; cells: MatrixCell[] }) {
           Review context changes
         </Link>
       </div>
+      <p className="text-xs text-slate-500 max-sm:text-[13px]">
+        A cell is flagged when its 24 hour median is over its warn level, or
+        when it is up {jump}% or more on the previous {data.days} days with{' '}
+        {FLAG_MIN_STARTS} or more starts in each range.
+      </p>
+      {held.length > 0 && (
+        <p className="text-xs text-slate-500 max-sm:text-[13px]">
+          Up {jump}% or more but too few starts to flag:{' '}
+          {held.slice(0, 4).map((c, i) => (
+            <span
+              key={`${c.harness}/${c.cell}`}
+              title={c.flag_held ?? undefined}
+            >
+              {i > 0 && ', '}
+              {harnessLabel(c.harness)} {roleLabel(c.cell)} (
+              {signedPct(c.delta_pct)}, {c.n} starts)
+            </span>
+          ))}
+          {held.length > 4 && ` and ${held.length - 4} more`}.
+        </p>
+      )}
       {young && data.coverage_from && (
-        <p className="text-xs text-slate-500">
-          Measured starts begin {shortDate(data.coverage_from)}, so the change
-          against the previous {data.days} days is empty or thin where it would
-          reach further back.
+        <p className="text-xs text-slate-500 max-sm:text-[13px]">
+          Starts are measured from {shortDate(data.coverage_from)}, so the
+          change against the previous {data.days} days is empty or thin where it
+          would reach further back.
         </p>
       )}
     </div>
+  )
+}
+
+function CostKey({ days }: { days: number }) {
+  return (
+    <p className="text-xs text-slate-500 max-sm:text-[13px]">
+      n is the number of starts in the range. A dash beside a number means no
+      change is shown: fewer than {FEW_STARTS} starts on the same model in this
+      or the previous {days} days. A dashed box with a dash means that harness
+      has no start for the role. Stale means the last start was 3 or more days
+      ago.
+    </p>
   )
 }
 
@@ -348,7 +393,7 @@ function CostView() {
   const claude = data?.harnesses.find((h) => h.harness === 'claude')
 
   return (
-    <div className="page-shell">
+    <div className="page-shell context-scope">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
       <ContextHeader
         controls={
@@ -389,7 +434,7 @@ function CostView() {
       <main className="page-frame">
         <div className="page-container space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="max-w-3xl text-xs text-slate-400">
+            <p className="max-w-3xl text-xs text-slate-400 max-sm:text-[13px]">
               Median first turn of each start in the last {state.days} days:
               everything in front of the model before the brief, split into what
               the harness adds and what we deliver.{' '}
@@ -425,6 +470,7 @@ function CostView() {
             <>
               <Summary data={data} cells={cells} />
               <PartsLegend />
+              <CostKey days={state.days} />
               {cells.length === 0 ? (
                 <div className="panel-surface">
                   <EmptyNote>
@@ -445,6 +491,13 @@ function CostView() {
                         .filter((h) => grouped(g).some((c) => c.harness === h))}
                       scale={scale}
                       days={state.days}
+                      note={
+                        g === 'roles' &&
+                        data.launched_from &&
+                        ageDays(data.launched_from) < state.days
+                          ? `Launched roles were first recorded on ${shortDate(data.launched_from)}, so this table has no starts before then and looks the same at 7, 30 and 90 days.`
+                          : undefined
+                      }
                     />
                   ))}
                   <AgentList

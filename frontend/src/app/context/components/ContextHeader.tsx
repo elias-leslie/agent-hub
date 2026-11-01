@@ -43,7 +43,7 @@ export function RangeToggle({
             className={cn(
               'rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors focus-ring-amber',
               days === d
-                ? 'bg-amber-500 text-slate-950'
+                ? 'bg-amber-500 text-neutral-950'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
             )}
           >

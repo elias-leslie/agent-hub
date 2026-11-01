@@ -205,7 +205,7 @@ export function ReworkPanel({
             if (mode === 'edit') onSubmit({ edit })
             else if (narrow) onSubmit({ narrow })
           }}
-          className="h-9 rounded-lg bg-amber-500 px-4 text-xs font-semibold text-slate-950 hover:bg-amber-400 focus-ring-amber disabled:opacity-40"
+          className="h-9 rounded-lg bg-amber-500 px-4 text-xs font-semibold text-neutral-950 hover:bg-amber-400 focus-ring-amber disabled:opacity-40"
         >
           {busy ? 'Saving…' : mode === 'edit' ? 'Save edit' : 'Save narrowing'}
         </button>

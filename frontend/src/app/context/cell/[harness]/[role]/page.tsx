@@ -19,9 +19,9 @@ import {
   ago,
   CAUSE_META,
   harnessLabel,
+  kindLabel,
   roleLabel,
   shortDateTime,
-  shortRevision,
   signedPct,
   signedTok,
   tok,
@@ -43,9 +43,9 @@ const PART_ROWS: Array<{
   { key: 'harness_tools', label: 'Tool definitions', group: 'Harness' },
   {
     key: 'our_listings',
-    label: 'Our listings',
+    label: 'Skill, agent and MCP listings',
     group: 'Harness',
-    hint: 'Skill, agent and MCP listings our config adds',
+    hint: 'Listings the harness builds from our config; they count as the harness’s part, not as what Agent Hub delivers',
   },
   {
     key: 'ah_global',
@@ -58,12 +58,13 @@ const PART_ROWS: Array<{
   { key: 'brief', label: 'First message', group: 'Brief' },
 ]
 
-const METHOD_HINT: Record<string, string> = {
-  exact: 'Counted by the provider',
-  ratio: 'Split from the remainder by text length',
-  derived: 'Total minus the parts measured',
-  estimate: 'Estimated from characters (4 per token)',
-  unknown: 'Not measured',
+/** How a part's number was reached, in words the page can show without a key. */
+const METHOD_WORD: Record<string, string> = {
+  exact: 'counted',
+  ratio: 'estimated by text length',
+  derived: 'total minus the others',
+  estimate: 'estimated, 4 characters a token',
+  unknown: 'not measured',
 }
 
 function Parts({ cell }: { cell: CellView }) {
@@ -77,10 +78,12 @@ function Parts({ cell }: { cell: CellView }) {
       {rows.map((r) => {
         const part = cell.parts[r.key]
         const method = part.method ?? 'unknown'
+        // Agent Hub parts of 0 are a real start where nothing was delivered in that scope; only null is unknown.
+        const none = r.group === 'Ours' && part.tokens === 0
         return (
           <li
             key={r.key}
-            className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-2 sm:grid-cols-[6rem_1fr_5rem_8rem]"
+            className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 py-2 sm:grid-cols-[6rem_1fr_5rem_14rem]"
           >
             <span className="text-xs text-slate-500 max-sm:hidden">
               {r.group}
@@ -89,17 +92,16 @@ function Parts({ cell }: { cell: CellView }) {
               {r.label}
             </span>
             <span className="text-right font-mono text-sm text-slate-100">
-              {tok(part.tokens)}
+              {none ? 'none' : tok(part.tokens)}
             </span>
-            <span
-              className="col-span-2 text-[11px] text-slate-500 sm:col-span-1 sm:text-right"
-              title={METHOD_HINT[method]}
-            >
+            <span className="col-span-2 text-xs text-slate-500 sm:col-span-1 sm:text-right">
               {part.tokens == null
                 ? 'not measured'
-                : total > 0
-                  ? `${Math.round((part.tokens / total) * 100)}% · ${method}`
-                  : method}
+                : none
+                  ? 'nothing delivered in this scope'
+                  : total > 0
+                    ? `${Math.round((part.tokens / total) * 100)}% · ${METHOD_WORD[method] ?? method}`
+                    : (METHOD_WORD[method] ?? method)}
             </span>
           </li>
         )
@@ -108,16 +110,18 @@ function Parts({ cell }: { cell: CellView }) {
   )
 }
 
+/** Who last changed a block. Unknown is one phrase everywhere: not recorded. */
 function Writer({ block }: { block: CellBlock }) {
   if (!block.writer_at) {
-    return <span title="No revision in the last 30 days">—</span>
+    return <span>no change in the last 30 days</span>
   }
-  const who = block.writer_session ?? block.writer_kind ?? 'unknown writer'
+  const who = block.writer_session ?? block.writer_kind
   return (
     <span
       title={`${block.writer_action ?? 'changed'} ${shortDateTime(block.writer_at)}`}
     >
-      <span className="font-mono">{who}</span> · {ago(block.writer_at)}
+      {who ? <span className="font-mono">{who}</span> : 'writer not recorded'} ·{' '}
+      {ago(block.writer_at)}
     </span>
   )
 }
@@ -154,14 +158,11 @@ function Blocks({ cell }: { cell: CellView }) {
               style={{ width: `${(b.tokens / max) * 100}%` }}
             />
           </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
             <span>{b.scope ?? '—'}</span>
-            <span>{b.kind ?? b.source_type}</span>
-            <span className="font-mono" title={b.revision ?? undefined}>
-              r {shortRevision(b.revision)}
-            </span>
+            <span>{kindLabel(b.kind ?? b.source_type)}</span>
             <span>
-              last writer: <Writer block={b} />
+              last changed: <Writer block={b} />
             </span>
           </div>
         </li>
@@ -176,24 +177,35 @@ function Growth({ cell }: { cell: CellView }) {
     return <EmptyNote>No peak read for these sessions yet.</EmptyNote>
   }
   return (
-    <dl className="grid grid-cols-2 gap-4 text-xs sm:grid-cols-4">
-      {(
-        [
-          ['Median first turn', tok(g.median_first_turn)],
-          ['Median peak', tok(g.median_peak)],
-          ['Largest peak', tok(g.max_peak)],
+    <>
+      <p className="mb-3 text-xs text-slate-500">
+        A peak is the largest context a session reached while it ran, not its
+        first turn.{' '}
+        {cell.budget_warn != null
+          ? `The warn level of ${tok(cell.budget_warn)}`
+          : 'A warn level'}{' '}
+        is about the first turn only, so peaks above it are normal. A session is
+        compacted when it summarises its history because its context filled up.
+      </p>
+      <dl className="grid grid-cols-2 gap-4 text-xs sm:grid-cols-4">
+        {(
           [
-            'Compacted',
-            `${g.compacted} of ${g.measured} · ${g.compactions} ${g.compactions === 1 ? 'time' : 'times'}`,
-          ],
-        ] as const
-      ).map(([k, v]) => (
-        <div key={k}>
-          <dt className="text-slate-500">{k}</dt>
-          <dd className="font-mono text-base text-slate-100">{v}</dd>
-        </div>
-      ))}
-    </dl>
+            ['Median first turn', tok(g.median_first_turn)],
+            ['Median peak', tok(g.median_peak)],
+            ['Largest peak', tok(g.max_peak)],
+            [
+              'Sessions compacted',
+              `${g.compacted} of ${g.measured} (${g.compactions} ${g.compactions === 1 ? 'time' : 'times'} in all)`,
+            ],
+          ] as const
+        ).map(([k, v]) => (
+          <div key={k}>
+            <dt className="text-slate-500">{k}</dt>
+            <dd className="font-mono text-base text-slate-100">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   )
 }
 
@@ -232,15 +244,41 @@ function CellBody({ cell }: { cell: CellView }) {
   return (
     <>
       <section className="panel-surface space-y-3 p-4 lg:p-5">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <span className="font-mono text-3xl font-semibold text-slate-50">
-            {tok(latest.total)}
-          </span>
-          <span className="text-xs text-slate-400">
-            latest start {shortDateTime(latest.at)} ({ago(latest.at)})
-            {old && <span className="ml-1 text-amber-300">stale</span>}
-          </span>
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 max-sm:text-xs">
+              Latest start
+            </p>
+            <p className="flex flex-wrap items-baseline gap-x-3">
+              <span className="font-mono text-3xl font-semibold text-slate-50">
+                {tok(latest.total)}
+              </span>
+              <span className="text-xs text-slate-400">
+                {shortDateTime(latest.at)} ({ago(latest.at)})
+                {old && <span className="ml-1 text-amber-300">stale</span>}
+              </span>
+            </p>
+          </div>
+          {cell.median && (
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 max-sm:text-xs">
+                Median, last {cell.median.days} days
+              </p>
+              <p className="flex flex-wrap items-baseline gap-x-3">
+                <span className="font-mono text-3xl font-semibold text-slate-300">
+                  {tok(cell.median.total)}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {cell.median.n} {cell.median.n === 1 ? 'start' : 'starts'}
+                </span>
+              </p>
+            </div>
+          )}
         </div>
+        <p className="text-xs text-slate-500">
+          The bar, the split and the blocks below describe the latest start
+          only. One start can be far from the median.
+        </p>
         <TokenBar
           total={latest.total}
           harness={latest.harness_tokens}
@@ -251,14 +289,7 @@ function CellBody({ cell }: { cell: CellView }) {
         <PartsLegend />
         <p className="text-xs text-slate-500">
           {harnessLabel(cell.harness)} {latest.version ?? '—'} ·{' '}
-          {latest.model ?? '—'} · config{' '}
-          <span className="font-mono">
-            {cell.config_fp?.slice(0, 8) ?? '—'}
-          </span>
-          {' · '}
-          <span className="font-mono" title="Session of the latest start">
-            {latest.session_id.slice(0, 8)}
-          </span>
+          {latest.model ?? '—'}
         </p>
         <p className="flex flex-wrap items-center gap-x-3 text-xs text-slate-400">
           {cell.budget_warn != null ? (
@@ -319,12 +350,12 @@ function CellBody({ cell }: { cell: CellView }) {
         </Section>
       )}
 
-      <Section title="Where the first turn goes">
+      <Section title="Where the latest start’s first turn goes">
         <Parts cell={cell} />
       </Section>
 
       <Section
-        title={`What we delivered${cell.blocks_total != null ? ` · ${tok(cell.blocks_total)} in ${cell.blocks.length} blocks` : ''}`}
+        title={`What Agent Hub delivered to the latest start${cell.blocks_total != null ? ` · ${tok(cell.blocks_total)} in ${cell.blocks.length} blocks` : ''}`}
       >
         <Blocks cell={cell} />
       </Section>
@@ -366,7 +397,7 @@ function CellScreen() {
   })
   const data = query.data
   return (
-    <div className="page-shell">
+    <div className="page-shell context-scope">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
       <ContextHeader />
       <main className="page-frame">

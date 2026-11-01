@@ -183,7 +183,10 @@ async def _refusals(db: AsyncSession) -> list[dict[str, Any]]:
     rows = (await db.execute(
         select(SessionEvent.created_at, SessionEvent.usage, Session.provider_metadata, Session.project_id)
         .join(Session, Session.id == SessionEvent.session_id, isouter=True)
-        .where(kind == literal_column("'refused'"))  # a literal, so the partial index on refusals applies.order_by(SessionEvent.created_at.desc()).limit(REFUSAL_ROWS)
+        # a literal, so the partial index on refusals applies
+        .where(kind == literal_column("'refused'"))
+        .order_by(SessionEvent.created_at.desc())
+        .limit(REFUSAL_ROWS)
     )).all()
     out = []
     for created_at, usage, metadata, project in rows:

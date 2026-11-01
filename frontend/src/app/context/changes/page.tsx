@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { ContextHeader } from '../components/ContextHeader'
 import { EmptyNote, FailedNotice, Skeleton } from '../components/Notices'
 import { ago, shortDateTime, signedTok } from '../format'
+import { useNow } from '../useNow'
 import { ChangeRow, type RowActions } from './components/ChangeRow'
 import { DecidedList } from './components/DecidedList'
 import {
@@ -131,7 +132,7 @@ function GroupCard({
             {perDay != null && (
               <span className="font-mono">
                 {' '}
-                · {signedTok(perDay)} tok/day
+                · {signedTok(perDay)} tokens a day
                 {unknown ? ` (+${unknown} unknown)` : ''}
               </span>
             )}
@@ -192,15 +193,15 @@ function AutomaticList({ queue }: { queue: Queue }) {
   return (
     <details className="panel-surface p-3">
       <summary className="cursor-pointer text-xs font-semibold text-slate-300 focus-ring-amber">
-        Automatic changes by the system, last 7 days ({list.length})
+        Changes the system made itself, last 7 days ({list.length})
         <span className="font-normal text-slate-500">
           {' '}
-          · never counted as waiting
+          · not waiting for review
         </span>
       </summary>
       {list.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500">
-          No automatic changes in the last 7 days.
+          The system made no changes by itself in the last 7 days.
         </p>
       ) : (
         <ul className="mt-2 space-y-1.5">
@@ -290,8 +291,8 @@ function Unreviewed({
 
   const summary = queue?.summary
   const loadedAt = query.dataUpdatedAt
-  const stale =
-    !!queue && Date.now() - loadedAt > STALE_AFTER_MS && !query.isFetching
+  const now = useNow()
+  const stale = !!queue && now - loadedAt > STALE_AFTER_MS && !query.isFetching
 
   return (
     <div className="space-y-3">
@@ -354,7 +355,7 @@ function Unreviewed({
                 <span className="font-mono text-slate-300">
                   {signedTok(summary.tokens_per_day)}
                 </span>{' '}
-                tok/day
+                tokens a day added to first turns
                 {summary.unknown_reach > 0 &&
                   ` (${summary.unknown_reach} with reach not known yet)`}
               </>
@@ -369,7 +370,7 @@ function Unreviewed({
             title={shortDateTime(new Date(loadedAt).toISOString())}
           >
             {stale ? 'Stale: loaded ' : 'Loaded '}
-            {ago(new Date(loadedAt).toISOString())}
+            {ago(new Date(loadedAt).toISOString(), now)}
           </span>
         )}
       </div>
@@ -404,7 +405,7 @@ function Unreviewed({
         <div className="panel-surface">
           <EmptyNote>
             {rows.length === 0
-              ? 'Nothing waiting for review. Changes agents make to memories, prompts and placement rules show up here after they write them.'
+              ? 'Nothing waiting for review. Edits agents make to memories, prompts and placement rules show up here after they write them; then keep one, refuse it to undo it, or rework it.'
               : 'No waiting changes match these filters.'}
           </EmptyNote>
         </div>
@@ -496,7 +497,7 @@ function ChangesView() {
       : decisions.data?.filter((r) => r.decision === tab).length
 
   return (
-    <div className="page-shell">
+    <div className="page-shell context-scope">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
       <ContextHeader />
       <main className="page-container px-4 py-4 lg:px-8">
@@ -518,7 +519,7 @@ function ChangesView() {
                   className={cn(
                     'h-9 rounded-xl px-2.5 text-xs font-semibold transition-colors focus-ring-amber sm:px-3.5',
                     active
-                      ? 'bg-amber-500 text-slate-950'
+                      ? 'bg-amber-500 text-neutral-950'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100',
                   )}
                 >
@@ -527,7 +528,7 @@ function ChangesView() {
                     <span
                       className={cn(
                         'ml-1.5 font-mono',
-                        active ? 'text-slate-900' : 'text-slate-500',
+                        active ? 'text-neutral-900' : 'text-slate-500',
                       )}
                     >
                       {n}

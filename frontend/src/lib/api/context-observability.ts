@@ -4,6 +4,7 @@
  */
 
 import { fetchApi, getApiBaseUrl } from '../api-config'
+import { ContextHttpError } from './context-http'
 
 const BASE = `${getApiBaseUrl()}/api/context-observability`
 
@@ -48,7 +49,10 @@ export interface HarnessInfo {
 export interface Matrix {
   days: number
   generated_at: string
+  /** First start of any kind. */
   coverage_from: string | null
+  /** First start whose launched role was recorded; launched roles have no starts before it at any range. */
+  launched_from: string | null
   jump_pct: number | null
   harnesses: HarnessInfo[]
   cells: MatrixCell[]
@@ -140,6 +144,8 @@ export interface Trend {
   steps: TrendStep[]
   /** Days the chart shows moving by the step threshold that are not steps, with the reason. */
   dips: TrendDip[]
+  /** Starts per model in the range; steps compare one model at a time, so a mix can explain a dip. */
+  models: Array<{ model: string; n: number }>
 }
 
 export interface TrendDip {
@@ -225,6 +231,15 @@ export interface CellView {
   budget_jump_pct: number | null
   state: CellState | null
   growth: CellGrowth
+  /** The median of every start in the lookback, to read next to the latest start. */
+  median: {
+    days: number
+    n: number
+    total: number | null
+    harness_tokens: number | null
+    ours: number | null
+    brief: number | null
+  } | null
   latest_move: {
     at: string
     kind: string
@@ -243,9 +258,7 @@ async function getJson<T>(
   const response = await fetchApi(
     `${BASE}/${path}?${new URLSearchParams(params)}`,
   )
-  if (!response.ok) {
-    throw new Error(`Context ${path} failed: ${response.status}`)
-  }
+  if (!response.ok) throw new ContextHttpError(response.status)
   return response.json()
 }
 

@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react'
+import { ContextHttpError } from '@/lib/api/context-http'
 import { ago } from '../format'
 
 /** A request failed. With stale data on screen the banner says so; without any, it replaces the content. */
@@ -15,17 +16,24 @@ export function FailedNotice({
   updatedAt?: number
   onRetry: () => void
 }) {
+  const owner = error instanceof ContextHttpError && error.needsOwner
   const reason = error instanceof Error ? error.message : 'unknown error'
+  const loaded = updatedAt
+    ? `, loaded ${ago(new Date(updatedAt).toISOString())}`
+    : ''
+  const text = owner
+    ? hasData
+      ? `Couldn't refresh ${what}: owner access is needed. Showing the last data${loaded}.`
+      : `Couldn't load ${what}: owner access is needed. Open Agent Hub as the owner and retry.`
+    : hasData
+      ? `Couldn't refresh ${what} (${reason}). Showing the last data${loaded}.`
+      : `Couldn't load ${what}: ${reason}.`
   return (
     <div
       role="alert"
       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-200"
     >
-      <span>
-        {hasData
-          ? `Couldn't refresh ${what} (${reason}). Showing the last data${updatedAt ? `, loaded ${ago(new Date(updatedAt).toISOString())}` : ''}.`
-          : `Couldn't load ${what}: ${reason}.`}
-      </span>
+      <span>{text}</span>
       <button
         type="button"
         onClick={onRetry}

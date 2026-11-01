@@ -246,6 +246,23 @@
   --color-slate-950: oklch(0.145 0 0);
 }
 
+/*
+ * The Context pages colour their status text with the light shades of amber, red, emerald and sky. On the light scheme
+ * those shades sit on a near-white page, so the page scope below swaps them for the dark shades. The dark scheme keeps
+ * the Tailwind defaults.
+ */
+:root:not(.dark) .context-scope {
+  --color-amber-100: oklch(0.414 0.112 45.9);
+  --color-amber-200: oklch(0.473 0.137 46.2);
+  --color-amber-300: oklch(0.555 0.163 48.4);
+  --color-red-200: oklch(0.444 0.177 26.9);
+  --color-red-300: oklch(0.505 0.213 27.5);
+  --color-emerald-100: oklch(0.378 0.077 168.9);
+  --color-emerald-200: oklch(0.432 0.095 166.9);
+  --color-emerald-300: oklch(0.508 0.118 165.6);
+  --color-sky-200: oklch(0.443 0.11 240.8);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

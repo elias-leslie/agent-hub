@@ -82,32 +82,35 @@ export function PartsLegend({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400',
+        'flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 max-sm:text-[13px]',
         className,
       )}
     >
       {items.map(([name, color, hint]) => (
-        <span
-          key={name}
-          className="inline-flex items-center gap-1.5"
-          title={hint}
-        >
-          <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
-          {name}
+        <span key={name} className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2 w-2 shrink-0 rounded-sm"
+            style={{ background: color }}
+          />
+          <span>
+            {name} <span className="text-slate-500">({hint})</span>
+          </span>
         </span>
       ))}
-      <span
-        className="inline-flex items-center gap-1.5"
-        title="Part of the total the split could not place"
-      >
+      <span className="inline-flex items-center gap-1.5">
         <span
-          className="h-2 w-2 rounded-sm"
+          className="h-2 w-2 shrink-0 rounded-sm"
           style={{
             background:
               'repeating-linear-gradient(135deg, #475569 0 2px, #1e293b 2px 4px)',
           }}
         />
-        Not split
+        <span>
+          Not split{' '}
+          <span className="text-slate-500">
+            (the part of the total the split could not place)
+          </span>
+        </span>
       </span>
     </div>
   )

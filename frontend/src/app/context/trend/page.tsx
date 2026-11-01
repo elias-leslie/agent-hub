@@ -20,7 +20,11 @@ import {
   ago,
   CAUSE_META,
   cellHref,
+  dayLabel,
+  FLAG_MIN_STARTS,
   harnessLabel,
+  LANE_NOTE,
+  modelLabel,
   PART_COLOR,
   roleLabel,
   shortDate,
@@ -66,7 +70,7 @@ function Headline({ trend }: { trend: Trend }) {
         <p className="mt-1 text-xs text-slate-400">
           {h.delta_pct == null
             ? h.prev_n < 3
-              ? `No comparison: ${h.prev_n === 0 ? 'no' : `only ${h.prev_n}`} earlier starts on the same model${trend.coverage_from ? ` (measured starts begin ${shortDate(trend.coverage_from)})` : ''}.`
+              ? `No comparison: ${h.prev_n === 0 ? 'no' : `only ${h.prev_n}`} earlier starts on the same model${trend.coverage_from ? ` (starts of this role are recorded from ${shortDate(trend.coverage_from)})` : ''}.`
               : 'No comparison: too few starts in this window on the same model.'
             : `${signedTok(h.delta)} against the previous ${trend.days} days (${tok(h.prev_total)}, ${h.prev_n} starts)${covered ? '' : ', where the data reaches back'}.`}
         </p>
@@ -96,11 +100,33 @@ function Headline({ trend }: { trend: Trend }) {
             <> · warn level {tok(trend.warn_tokens)}</>
           )}
           {trend.jump_pct != null && (
-            <> · steps flagged from {trend.jump_pct}%</>
+            <> · a step is a lasting move of {trend.jump_pct}% or more</>
           )}
         </div>
       </dl>
     </section>
+  )
+}
+
+function Dips({ trend }: { trend: Trend }) {
+  if (trend.dips.length === 0) return null
+  return (
+    <div className="mt-4 border-t border-slate-800/70 pt-3">
+      <h4 className="text-xs font-semibold text-slate-300">
+        Days that moved by {trend.jump_pct ?? '—'}% or more but are not steps
+      </h4>
+      <ul className="mt-2 space-y-2">
+        {trend.dips.map((d) => (
+          <li key={d.day} className="text-xs text-slate-400">
+            <span className="font-mono text-slate-200">
+              {dayLabel(d.day)} · {tok(d.before_total)} → {tok(d.total)} (
+              {signedPct(d.pct)})
+            </span>
+            <span className="block">Not a step: {d.reason}.</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -115,65 +141,72 @@ function StepList({
 }) {
   if (trend.steps.length === 0) {
     return (
-      <EmptyNote>
-        No step of {trend.jump_pct ?? '—'}% or more in this range, so nothing is
-        marked.
-      </EmptyNote>
+      <>
+        <EmptyNote>
+          No step in this range. A step is a lasting move of{' '}
+          {trend.jump_pct ?? '—'}% or more, with {FLAG_MIN_STARTS} or more
+          starts on each side, so nothing is marked.
+        </EmptyNote>
+        <Dips trend={trend} />
+      </>
     )
   }
   return (
-    <ul className="space-y-2">
-      {[...trend.steps].reverse().map((s: TrendStep) => {
-        const meta = CAUSE_META[s.cause] ?? CAUSE_META.none
-        const on = selected === s.at
-        return (
-          <li key={s.at}>
-            <button
-              type="button"
-              aria-pressed={on}
-              onClick={() => onSelect(on ? null : s.at)}
-              className={cn(
-                'w-full rounded-xl border px-3 py-2.5 text-left transition-colors focus-ring-amber',
-                on
-                  ? 'border-slate-500 bg-slate-800/70'
-                  : 'border-slate-800/80 bg-slate-950/40 hover:border-slate-700',
-              )}
-            >
-              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold"
-                  style={{ color: meta.color }}
-                >
+    <>
+      <ul className="space-y-2">
+        {[...trend.steps].reverse().map((s: TrendStep) => {
+          const meta = CAUSE_META[s.cause] ?? CAUSE_META.none
+          const on = selected === s.at
+          return (
+            <li key={s.at}>
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => onSelect(on ? null : s.at)}
+                className={cn(
+                  'w-full rounded-xl border px-3 py-2.5 text-left transition-colors focus-ring-amber',
+                  on
+                    ? 'border-slate-500 bg-slate-800/70'
+                    : 'border-slate-800/80 bg-slate-950/40 hover:border-slate-700',
+                )}
+              >
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span
-                    className="h-2.5 w-2.5 rotate-45"
-                    style={{ background: meta.color }}
-                  />
-                  {meta.label}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold"
+                    style={{ color: meta.color }}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rotate-45"
+                      style={{ background: meta.color }}
+                    />
+                    {meta.label}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {shortDateTime(s.at)}
+                  </span>
+                  <span className="font-mono text-xs text-slate-200">
+                    {stepHeadline(s)}
+                  </span>
                 </span>
-                <span className="text-xs text-slate-400">
-                  {shortDateTime(s.at)}
+                <span className="mt-1 block text-xs text-slate-400">
+                  {s.summary}
                 </span>
-                <span className="font-mono text-xs text-slate-200">
-                  {stepHeadline(s)}
-                </span>
-              </span>
-              <span className="mt-1 block text-xs text-slate-400">
-                {s.summary}
-              </span>
-              {s.markers.length > 0 && (
-                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
-                  {s.markers.map((m) => (
-                    <span key={`${m.kind}-${m.at}-${m.label}`}>
-                      {m.kind} · {m.label}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </button>
-          </li>
-        )
-      })}
-    </ul>
+                {s.markers.length > 0 && (
+                  <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
+                    {s.markers.map((m) => (
+                      <span key={`${m.kind}-${m.at}-${m.label}`}>
+                        {m.kind} · {m.label}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      <Dips trend={trend} />
+    </>
   )
 }
 
@@ -234,7 +267,7 @@ function TrendView() {
   const latestOld = data?.latest_at ? ageDays(data.latest_at) >= 3 : false
 
   return (
-    <div className="page-shell">
+    <div className="page-shell context-scope">
       <div className="page-backdrop bg-grid-pattern opacity-60" />
       <ContextHeader
         controls={
@@ -341,16 +374,30 @@ function TrendView() {
                       onSelect={setSelected}
                     />
                     <p className="mt-2 text-xs text-slate-500">
-                      Areas are the daily median of each part, so they may not
-                      add up to the dots.{' '}
+                      Each shaded band is the day’s median of one part. Dots are
+                      single starts, so the bands and dots can differ.{' '}
                       {data.points_total > data.points.length
                         ? `${data.points.length} of ${data.points_total} starts drawn.`
                         : `${data.points_total} starts.`}
                       {data.coverage_from &&
                       ageDays(data.coverage_from) < state.days
-                        ? ` Measured starts begin ${shortDate(data.coverage_from)}.`
+                        ? ` Starts of this role are recorded from ${shortDate(data.coverage_from)}.`
                         : ''}
                     </p>
+                    {data.models.length > 1 && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        These starts mix models (
+                        {data.models
+                          .slice(0, 3)
+                          .map((m) => `${modelLabel(m.model)} ${m.n}`)
+                          .join(', ')}
+                        ). Steps compare one model at a time, so a dip on the
+                        chart can be starts of a different model.
+                      </p>
+                    )}
+                    {role === 'lane' && (
+                      <p className="mt-1 text-xs text-slate-500">{LANE_NOTE}</p>
+                    )}
                   </section>
                   <section className="panel-surface p-4 lg:p-5">
                     <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">

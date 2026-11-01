@@ -24,9 +24,11 @@ const VERB: Record<DecisionKind, string> = {
   refuse: 'Refused',
 }
 const EMPTY: Record<DecisionKind, string> = {
-  keep: 'Nothing kept yet. Changes you keep are listed here.',
-  rework: 'Nothing reworked yet. Changes you narrow or edit are listed here.',
-  refuse: 'Nothing refused yet. Changes you refuse are listed here.',
+  keep: 'Nothing kept yet. Keep marks a change as reviewed and fine; it is then listed here.',
+  rework:
+    'Nothing reworked yet. Rework edits a change in place or narrows who gets it; it is then listed here.',
+  refuse:
+    'Nothing refused yet. Refuse undoes a change: a new memory or prompt is archived, an edit is put back; it is then listed here.',
 }
 
 function placementTitle(id: string) {

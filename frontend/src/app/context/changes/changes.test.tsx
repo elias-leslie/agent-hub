@@ -170,7 +170,7 @@ describe('Changes page', () => {
     expect(
       screen.getByRole('button', { name: /^Unreviewed/ }),
     ).toHaveTextContent('1')
-    expect(screen.getByText(/never counted as waiting/)).toBeInTheDocument()
+    expect(screen.getByText(/not waiting for review/)).toBeInTheDocument()
   })
 
   it('warns inline on refuse when owner edits would be undone', async () => {
