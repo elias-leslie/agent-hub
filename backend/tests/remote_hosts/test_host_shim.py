@@ -34,6 +34,9 @@ ROWS = [
 class FakeHub:
     def __init__(self) -> None:
         self.granted = ["dummy", "filed"]
+        self.rows = list(ROWS)
+        # Agent Hub's public launch rules answer: (status, body)
+        self.launch: tuple[int, Any] = (200, {"rows": [{"allowed": True, "deny_reason": None}]})
         self.truncate = False  # promise more body than is sent, like a dropped forward
         self.requests: list[tuple[str, str, str | None, Any]] = []
         hub = self
@@ -54,16 +57,18 @@ class FakeHub:
                 length = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(length)) if length else None
                 hub.requests.append((method, self.path, self.headers.get("Authorization"), body))
+                if method == "GET" and self.path.startswith("/api/models/launch-defaults?"):
+                    return self._answer(*hub.launch)
                 if self.headers.get("Authorization") != f"Bearer {TOKEN}":
                     return self._answer(401, {"detail": "no"})
                 if method == "GET" and self.path == "/api/host-credentials/tools":
-                    return self._answer(200, {"host": "agent-work", "granted_tools": hub.granted, "credentials": ROWS})
+                    return self._answer(200, {"host": "agent-work", "granted_tools": hub.granted, "credentials": hub.rows})
                 tool = self.path.rsplit("/", 2)[-1] if method == "GET" else self.path.split("/")[-2]
                 if tool not in hub.granted:
                     return self._answer(403, {"detail": "no"})
                 if method == "PUT":
                     return self._answer(200, {"stored": True, "expires_at": (body or {}).get("expires_at")})
-                rows = [row for row in ROWS if row["tool_slug"] == tool]
+                rows = [row for row in hub.rows if row["tool_slug"] == tool]
                 return self._answer(200, {"tool": tool, "credentials": [
                     {key: row[key] for key in ("name", "config_dir", "env_var", "auth_file")} | {"value": SECRET}
                     for row in rows
@@ -96,12 +101,13 @@ def host(tmp_path: Path, hub: FakeHub) -> dict[str, Any]:
     report = tmp_path / "report.json"
     for path in (home, runtime, native):
         path.mkdir(mode=0o700)
-    for command in ("dummy-tool", "filed-tool", "codex"):
+    for command in ("dummy-tool", "filed-tool", "codex", "claude"):
         tool = native / command
         tool.write_text(
             f"#!{sys.executable}\nimport json, os, sys\n"
             "auth = os.path.expanduser('~/.filed/auth/creds.json')\n"
             f"json.dump({{'argv': sys.argv, 'key': os.environ.get('DUMMY_KEY'), "
+            "'claude': os.environ.get('CLAUDE_CODE_OAUTH_TOKEN'), "
             f"'file': open(auth).read() if os.path.exists(auth) else None}}, open({str(report)!r}, 'w'))\n"
         )
         tool.chmod(0o755)
@@ -323,3 +329,64 @@ def test_the_host_token_never_goes_through_an_environment_proxy(host: dict[str, 
     result = _run(host, "dummy-tool", env={"http_proxy": proxy, "HTTP_PROXY": proxy, "all_proxy": proxy})
     assert result.returncode == 0, result.stderr
     assert hub.requests[-1][2] == f"Bearer {TOKEN}"
+
+
+# Claude credentials and the session's work role -------------------------------------------------
+
+CLAUDE_ROW = {"tool_slug": "claude-code", "name": "oauth-token", "command": "claude", "config_dir": "~/.claude",
+              "env_var": "CLAUDE_CODE_OAUTH_TOKEN", "auth_file": None, "rotates": False, "stored": True,
+              "expired": False, "expires_at": None, "undecodable": False}
+DENY = "Owner 2026-11-01: Claude never for active hunting or recon"
+
+
+def _claude_host(host: dict[str, Any], hub: FakeHub) -> None:
+    hub.rows.append(CLAUDE_ROW)
+    hub.granted.append("claude-code")
+    _install(host)
+
+
+def _fetched(hub: FakeHub, tool: str) -> bool:
+    return any(path == f"/api/host-credentials/{tool}" for _, path, _, _ in hub.requests)
+
+
+def test_claude_credentials_are_refused_to_a_session_whose_work_role_is_denied(host: dict[str, Any], hub: FakeHub) -> None:
+    _claude_host(host, hub)
+    hub.launch = (200, {"rows": [{"job": "hunting", "allowed": False, "deny_reason": DENY}]})
+    result = _run(host, "claude", "-p", "second opinion", env={"ST_WORK_ROLE": "hunting", "AICO_PROJECT_ID": "neri-hunters"})
+    assert result.returncode == 1
+    assert result.stderr.strip() == f"agent-hub-cred-exec: claude-code: Claude is not allowed for hunting work: {DENY}"
+    assert not host["report"].exists() and not _fetched(hub, "claude-code")
+    rules = [(path, auth) for _, path, auth, _ in hub.requests if path.startswith("/api/models/")]
+    assert rules == [("/api/models/launch-defaults?role=hunting&tool=claude-code&project=neri-hunters", None)]
+
+
+def test_claude_credentials_go_to_an_allowed_work_role(host: dict[str, Any], hub: FakeHub) -> None:
+    _claude_host(host, hub)
+    result = _run(host, "claude", env={"ST_WORK_ROLE": "coordinator"})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(host["report"].read_text())["claude"] == SECRET
+
+
+@pytest.mark.parametrize("answer", [(500, {"error": "internal"}), (200, {"rows": [{"job": "hunting"}]}), "down"])
+def test_without_the_rules_claude_is_refused_for_case_work_only(
+    host: dict[str, Any], hub: FakeHub, answer: Any,
+) -> None:
+    _claude_host(host, hub)
+    if answer != "down":
+        hub.launch = answer
+    for role in ("hunting", "recon", "verification"):
+        env = {"ST_WORK_ROLE": role, **({"AGENT_HUB_URL": "http://127.0.0.1:9"} if answer == "down" else {})}
+        result = _run(host, "claude", env=env)
+        assert result.returncode == 1 and "launch rules could not be read" in result.stderr
+        assert len(result.stderr.strip().splitlines()) == 1 and not host["report"].exists()
+    assert not _fetched(hub, "claude-code")
+    if answer != "down":  # the credential fetch itself needs Agent Hub
+        assert _run(host, "claude", env={"ST_WORK_ROLE": "coordinator"}).returncode == 0
+
+
+def test_other_tools_and_sessions_without_a_work_role_are_not_checked(host: dict[str, Any], hub: FakeHub) -> None:
+    _claude_host(host, hub)
+    hub.launch = (200, {"rows": [{"allowed": False, "deny_reason": DENY}]})
+    assert _run(host, "dummy-tool", env={"ST_WORK_ROLE": "hunting"}).returncode == 0
+    assert _run(host, "claude").returncode == 0  # the owner's own use on the host
+    assert not any(path.startswith("/api/models/") for _, path, _, _ in hub.requests)

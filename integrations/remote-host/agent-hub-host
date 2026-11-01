@@ -45,6 +45,11 @@ TIMEOUT = 10
 # Never through a proxy from the environment: requests carry the host token.
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 STATES = ("signed_in", "expired", "unknown", "needs_sign_in")  # best first, for a tool's overall state
+# Claude credentials go only to a session whose work role Agent Hub's launch rules allow
+# (GET /api/models/launch-defaults, the same answer `st aico create` obeys). When the rules can't be
+# read, the safety floor holds: never Claude for these work roles (model-choice plan, owner 2026-11-01).
+CLAUDE_TOOL = "claude-code"
+CLAUDE_FLOOR_ROLES = ("hunting", "recon", "verification")
 
 
 class Refused(Exception):
@@ -178,9 +183,48 @@ def _place_file(tool: str, item: dict[str, Any]) -> None:
         raise Refused(f"cannot place the credential file for {target} ({exc.strerror or type(exc).__name__})") from None
 
 
+def _launch_rules(role: str, project: str | None) -> dict[str, Any] | None:
+    """Agent Hub's allowed/deny_reason for Claude in this work role and project, or None when it
+    can't be read. A public model read: the host token is never sent with it."""
+    query = urllib.parse.urlencode({"role": role, "tool": CLAUDE_TOOL, **({"project": project} if project else {})})
+    request = urllib.request.Request(f"{_hub_url()}/api/models/launch-defaults?{query}",
+                                     headers={"Accept": "application/json"})
+    try:
+        with OPENER.open(request, timeout=TIMEOUT) as response:
+            data = json.loads(response.read())
+        rows = data["rows"]
+        row = rows[0] if isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], dict) else {}
+    except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError, KeyError, TypeError):
+        return None
+    allowed = row.get("allowed", data.get("allowed"))
+    if not isinstance(allowed, bool):
+        return None
+    return {"allowed": allowed, "deny_reason": row.get("deny_reason", data.get("deny_reason"))}
+
+
+def _claude_refusal(tool: str) -> str | None:
+    """Why this session may not have Claude credentials, else None. The work role is the one Tether
+    set for the session (ST_WORK_ROLE, also passed into hunt containers); without one, no check."""
+    role = os.environ.get("ST_WORK_ROLE", "").strip()
+    if tool != CLAUDE_TOOL or not role:
+        return None
+    rules = _launch_rules(role, os.environ.get("AICO_PROJECT_ID", "").strip() or None)
+    if rules is None:
+        if role in CLAUDE_FLOOR_ROLES:
+            return (f"Agent Hub's launch rules could not be read, and Claude is never used for {role} "
+                    "work without them")
+        return None
+    if rules["allowed"]:
+        return None
+    reason = " ".join(str(rules["deny_reason"] or "Agent Hub's launch rules deny it").split())[:300]
+    return f"Claude is not allowed for {role} work: {reason}"
+
+
 def launch(tool: str, command: str, args: list[str]) -> NoReturn:
     env = dict(os.environ)
     if not (args and args[0] in PASSTHROUGH):
+        if (refusal := _claude_refusal(tool)) is not None:
+            raise Refused(refusal)
         answer = _request("GET", f"/api/host-credentials/{urllib.parse.quote(tool, safe='')}")
         items = answer.get("credentials") if isinstance(answer, dict) else None
         if not items:
