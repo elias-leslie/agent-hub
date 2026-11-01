@@ -31,6 +31,7 @@ CONTRACT_SCHEMA = "agent-hub.context.v1"
 INSERT_CHUNK = 500
 BIND_WINDOW_BEFORE = timedelta(hours=24)  # a delivery is built shortly before its session's first call
 BIND_WINDOW_AFTER = timedelta(minutes=5)
+BIND_SKEW = timedelta(seconds=30)  # a binding written just after the first call still belongs to it
 WORK_ROLE_PREFIX = "work-role:"
 COORDINATOR_TAG = "aico-coordinator"
 
@@ -144,8 +145,8 @@ async def record_delivery(response: Any, *, source: str) -> None:
         async with async_session() as db:
             await _insert(db, [values])
             await db.commit()
-    except Exception:
-        logger.warning("context delivery not recorded", exc_info=True)
+    except Exception as exc:  # one short line: the CLI path runs on every agent launch and its stderr is passed on
+        logger.warning("context delivery not recorded: %s: %s", type(exc).__name__, _first_line(exc))
 
 
 def _contract_files(root: Path, since: float) -> list[Path]:
@@ -165,20 +166,35 @@ def _contract_files(root: Path, since: float) -> list[Path]:
 
 
 def import_contract_values(roots: Iterable[Path], *, since: datetime) -> list[dict[str, Any]]:
-    """Row values from every delivery contract file written since `since` (blocking: run in a thread)."""
+    """Row values from every delivery contract file written since `since` (blocking: run in a thread).
+
+    One unreadable or oddly shaped file is logged and skipped, never fails the import.
+    """
     rows: dict[str, dict[str, Any]] = {}
     for root in roots:
         for path in _contract_files(root, since.timestamp()):
             try:
-                contract = json.loads(path.read_text())
-            except (OSError, ValueError):
+                values = _values_from_file(path)
+            except Exception as exc:
+                logger.warning("context delivery file skipped %s: %s: %s", path, type(exc).__name__, _first_line(exc))
                 continue
-            if not isinstance(contract, dict) or contract.get("schema_version") != CONTRACT_SCHEMA:
-                continue
-            values = values_from_contract(contract, source="file")
             if values and values["generated_at"] >= since:
                 rows.setdefault(values["delivery_id"], values)
     return list(rows.values())
+
+
+def _first_line(exc: BaseException) -> str:
+    return (str(exc).splitlines() or [""])[0][:200]
+
+
+def _values_from_file(path: Path) -> dict[str, Any] | None:
+    try:
+        contract = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(contract, dict) or contract.get("schema_version") != CONTRACT_SCHEMA:
+        return None
+    return values_from_contract(contract, source="file")
 
 
 async def import_delivery_files(db: AsyncSession, *, since: datetime, roots: Iterable[Path] | None = None) -> int:
@@ -187,6 +203,73 @@ async def import_delivery_files(db: AsyncSession, *, since: datetime, roots: Ite
 
     values = await asyncio.to_thread(import_contract_values, list(roots if roots is not None else delivery_roots()), since=since)
     return await _insert(db, values)
+
+
+BINDING_SCHEMA = "agent-hub.context-binding.v1"
+# (surface, native session id, native sub-agent id or "") -> bindings as (bound_at, delivery_id, contract_path)
+BindingKey = tuple[str, str, str]
+Bindings = dict[BindingKey, list[tuple[datetime, str, str | None]]]
+
+
+def load_bindings(roots: Iterable[Path], *, since: datetime) -> Bindings:
+    """Binding files the thin clients wrote since `since`: which delivery each native session or sub-agent started with.
+
+    Blocking: run in a thread. A bad file is logged and skipped.
+    """
+    out: Bindings = {}
+    for root in roots:
+        try:
+            surfaces = [p for p in root.iterdir() if p.is_dir()]
+        except OSError:
+            continue
+        for surface in surfaces:
+            for path in surface.glob("*/*/bindings/*.json"):
+                try:
+                    if path.stat().st_mtime < since.timestamp():
+                        continue
+                    binding = json.loads(path.read_text())
+                    if binding.get("schema_version") != BINDING_SCHEMA:
+                        continue
+                    bound_at, delivery_id, sid = _parse_dt(binding.get("bound_at")), binding.get("canonical_delivery_id"), binding.get("native_session_id")
+                    if bound_at is None or not delivery_id or not sid:
+                        continue
+                    key = (str(binding.get("consumer_surface") or surface.name), str(sid), str(binding.get("native_subagent_id") or ""))
+                    contract_path = binding.get("contract_path")
+                    out.setdefault(key, []).append((bound_at, str(delivery_id), contract_path if isinstance(contract_path, str) else None))
+                except Exception as exc:
+                    logger.warning("context binding file skipped %s: %s: %s", path, type(exc).__name__, _first_line(exc))
+    return out
+
+
+def pick_binding(bindings: Bindings, key: BindingKey, at: datetime) -> tuple[str, str | None] | None:
+    """(delivery_id, contract_path) in effect at the session's first call: the latest binding before it, else the earliest."""
+    options = sorted(bindings.get(key) or [])
+    if not options:
+        return None
+    before = [o for o in options if o[0] <= at + BIND_SKEW]
+    chosen = before[-1] if before else options[0]
+    return chosen[1], chosen[2]
+
+
+async def find_delivery_by_id(db: AsyncSession, delivery_id: str, contract_path: str | None = None) -> dict[str, Any] | None:
+    """The stored delivery; when it is not stored yet (older than the import window) it is read from its contract file."""
+    row = (await db.execute(select(ContextDelivery).where(ContextDelivery.delivery_id == delivery_id[:64]))).scalars().first()
+    if row is None and contract_path:
+        values = await _contract_values_at(Path(contract_path))
+        if values and values["delivery_id"] == delivery_id[:64]:
+            await _insert(db, [values])
+            return values
+    return _row_dict(row) if row else None
+
+
+async def _contract_values_at(path: Path) -> dict[str, Any] | None:
+    import asyncio
+
+    try:
+        return await asyncio.to_thread(_values_from_file, path)
+    except Exception as exc:
+        logger.warning("context delivery file skipped %s: %s: %s", path, type(exc).__name__, _first_line(exc))
+        return None
 
 
 def sha256_text(text: str) -> str:

@@ -23,7 +23,18 @@ from app.models import UsageSession
 from app.utils.native_homes import claude_project_roots, codex_session_roots
 
 from . import extra_capture, first_turn
-from .deliveries import find_delivery_by_hash, find_delivery_in_text, import_delivery_files
+from .deliveries import (
+    BIND_WINDOW_BEFORE,
+    Bindings,
+    delivery_roots,
+    find_delivery_by_hash,
+    find_delivery_by_id,
+    find_delivery_in_text,
+    import_delivery_files,
+    load_bindings,
+    pick_binding,
+    sha256_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,24 +68,41 @@ def head_for_codex(path: Path) -> HeadResult | None:
     raw = first_turn.read_codex_head(path)
     if raw is None or raw.get("aid") or not raw.get("sid"):
         return None
-    return HeadResult("codex", raw["sid"], "", raw, first_turn.launch_mode_for(path, raw.get("cwd"), None))
+    return HeadResult("codex", raw["sid"], "", raw, first_turn.launch_mode_for(path, raw.get("cwd"), None, raw.get("originator")))
 
 
-async def bind_and_compute(db: AsyncSession, head: HeadResult) -> dict[str, Any]:
-    """Column values for one session's first turn (parts, role from the bound delivery, config fingerprint)."""
+async def bind_delivery(db: AsyncSession, head: HeadResult, bindings: Bindings) -> tuple[dict[str, Any] | None, int | None]:
+    """The delivery a session started with, and (Codex) how many characters of its developer text it occupies.
+
+    The client's binding file names the exact delivery for the native session or sub-agent id; the payload hash (Claude)
+    or the embedded text (Codex) is the fallback only for a session that has no binding file.
+    """
     raw = head.raw
-    delivery: dict[str, Any] | None = None
-    ah_chars: int | None = None
+    surface = PROVIDER_SURFACE[head.provider]
+    bound = pick_binding(bindings, (surface, head.session_id, head.agent_id), raw["first_at"])
+    if bound is not None:
+        delivery = await find_delivery_by_id(db, *bound)
+        ah_chars = None
+        if delivery is not None and head.provider == "codex":
+            n = int(delivery.get("rendered_chars") or 0)
+            if n > 0 and any(len(t) >= n and sha256_text(t[:n]) == delivery["payload_hash"] for t in raw.get("dev_texts") or []):
+                ah_chars = n
+        return delivery, ah_chars
     if head.provider == "claude":
         for item in raw.get("inst_files") or []:
             if CLAUDE_DELIVERY_MARKER in str(item.get("path")):
                 delivery = await find_delivery_by_hash(db, item["sha"], raw["first_at"])
                 if delivery:
-                    break
-    else:
-        found = await find_delivery_in_text(db, PROVIDER_SURFACE["codex"], raw.get("dev_texts") or [], raw["first_at"])
-        if found:
-            delivery, ah_chars = found
+                    return delivery, None
+        return None, None
+    found = await find_delivery_in_text(db, surface, raw.get("dev_texts") or [], raw["first_at"])
+    return found if found else (None, None)
+
+
+async def bind_and_compute(db: AsyncSession, head: HeadResult, bindings: Bindings | None = None) -> dict[str, Any]:
+    """Column values for one session's first turn (parts, role from the bound delivery, config fingerprint)."""
+    raw = head.raw
+    delivery, ah_chars = await bind_delivery(db, head, bindings or {})
     parts = first_turn.compute_parts(raw, delivery=delivery, launch_mode=head.launch_mode, ah_chars_in_text=ah_chars)
     return {
         "harness": head.provider, "harness_version": (raw.get("version") or None) and str(raw["version"])[:40],
@@ -85,17 +113,35 @@ async def bind_and_compute(db: AsyncSession, head: HeadResult) -> dict[str, Any]
     }
 
 
+async def load_head_bindings(heads: list[HeadResult]) -> Bindings:
+    """Binding files written since just before the earliest of these first turns (none needed without heads)."""
+    if not heads:
+        return {}
+    since = min(h.raw["first_at"] for h in heads) - BIND_WINDOW_BEFORE
+    return await asyncio.to_thread(load_bindings, delivery_roots(), since=since)
+
+
 async def apply_first_turns(db: AsyncSession, heads: Iterable[HeadResult]) -> int:
-    """Store first-turn columns on existing usage_sessions rows. Returns rows updated."""
+    """Store first-turn columns on existing usage_sessions rows. Returns rows updated.
+
+    A session whose binding or computation fails is logged and skipped; the others are stored.
+    """
+    heads = list(heads)
+    bindings = await load_head_bindings(heads)
     updated = 0
     for head in heads:
-        values = await bind_and_compute(db, head)
-        result = await db.execute(
-            update(UsageSession).where(
-                UsageSession.provider == head.provider, UsageSession.session_id == head.session_id[:100],
-                UsageSession.agent_id == head.agent_id[:100],
-            ).values(**values)
-        )
+        try:
+            async with db.begin_nested():
+                values = await bind_and_compute(db, head, bindings)
+                result = await db.execute(
+                    update(UsageSession).where(
+                        UsageSession.provider == head.provider, UsageSession.session_id == head.session_id[:100],
+                        UsageSession.agent_id == head.agent_id[:100],
+                    ).values(**values)
+                )
+        except Exception as exc:
+            logger.warning("first turn not stored for %s/%s: %s: %s", head.provider, head.session_id, type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
+            continue
         updated += cast(CursorResult[Any], result).rowcount or 0
     return updated
 
@@ -111,7 +157,8 @@ def _heads_since(since: float, until: datetime | None) -> list[HeadResult]:
     for path, reader in files:
         try:
             head = reader(path)
-        except OSError:
+        except Exception as exc:  # one odd transcript must not stop the rest
+            logger.warning("first turn unreadable %s: %s: %s", path, type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
             continue
         if head is not None and (until is None or head.raw["first_at"] <= until):
             out.append(head)

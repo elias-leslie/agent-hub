@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.schema import CreateTable
 
@@ -102,3 +102,47 @@ async def test_unbound_session_still_records_its_total_and_leaves_role_unknown(d
     assert (row.first_turn_tokens, row.work_role, row.delivery_id) == (14_000, None, None)
     assert row.parts["ours"]["tokens"] is None and row.parts["harness"]["tokens"] is None
     assert first_turn.est_tokens(40) == row.parts["brief"]["tokens"]
+
+
+def _claude_raw(sha: str) -> dict:
+    return {
+        "harness": "claude", "total": 9000, "first_at": AT, "model": "claude-opus-5-5", "version": "2.1.316", "fp": "shape-a",
+        "sys_chars": 4000, "tools_chars": 8000, "listing_chars": 4000, "brief_chars": 400,
+        "inst_files": [{"path": "/h/context-deliveries/claude_code/p/s/c/CLAUDE.md", "chars": len(RENDERED), "sha": sha}],
+    }
+
+
+async def test_a_binding_file_beats_an_identical_payload_built_for_another_role(db: AsyncSession) -> None:
+    # Same rendered text for two roles; the hunter's delivery is the newest, but this session is the implementation lane.
+    await _store(db, _contract("impl", RENDERED, minutes=6, tags=["work-role:implementation"]),
+                 _contract("hunt", RENDERED, minutes=2, tags=["work-role:hunting"]))
+    db.add_all([UsageSession(provider="claude", session_id=sid, agent_id=aid, first_at=AT, last_at=AT)
+                for sid, aid in (("s-impl", ""), ("s-nobind", ""))])
+    await db.flush()
+    bindings = {("claude_code", "s-impl", ""): [(AT - timedelta(minutes=5), "impl", None)]}
+    sha = deliveries.sha256_text(RENDERED)
+    heads = [capture.HeadResult("claude", "s-impl", "", _claude_raw(sha), "project"),
+             capture.HeadResult("claude", "s-nobind", "", _claude_raw(sha), "project")]
+
+    for head in heads:
+        values = await capture.bind_and_compute(db, head, bindings)
+        await db.execute(update(UsageSession).where(UsageSession.session_id == head.session_id).values(**values))
+
+    rows = {r.session_id: r for r in (await db.execute(select(UsageSession))).scalars()}
+    assert (rows["s-impl"].delivery_id, rows["s-impl"].work_role) == ("impl", "implementation")
+    assert (rows["s-nobind"].delivery_id, rows["s-nobind"].work_role) == ("hunt", "hunting")  # hash fallback: no binding file
+
+
+async def test_a_session_whose_binding_cannot_be_applied_does_not_stop_the_others(db: AsyncSession) -> None:
+    await _store(db, _contract("d1", RENDERED, minutes=5, tags=["work-role:review"]))
+    db.add_all([UsageSession(provider="claude", session_id=sid, agent_id="", first_at=AT, last_at=AT) for sid in ("bad", "ok")])
+    await db.flush()
+    sha = deliveries.sha256_text(RENDERED)
+    bad = _claude_raw(sha)
+    del bad["sys_chars"]  # a head shaped unlike the others raises inside the computation
+
+    updated = await capture.apply_first_turns(db, [capture.HeadResult("claude", "bad", "", bad, "project"),
+                                                   capture.HeadResult("claude", "ok", "", _claude_raw(sha), "project")])
+
+    rows = {r.session_id: r for r in (await db.execute(select(UsageSession))).scalars()}
+    assert updated == 1 and rows["ok"].first_turn_tokens == 9000 and rows["bad"].first_turn_tokens is None

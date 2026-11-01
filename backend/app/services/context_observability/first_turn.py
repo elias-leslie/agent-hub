@@ -23,6 +23,7 @@ CHARS_PER_TOKEN = 4  # Agent Hub's own estimate (services/memory/budget.py): our
 
 HARNESS_PART_NAMES = ("harness_core", "harness_tools", "our_listings")
 BLANK_SLATE_MARKER = "blank-slate"
+CODEX_EXEC_ORIGINATOR = "codex_exec"  # session_meta.originator of a headless `codex exec` run
 
 # Claude Code records the whole request shape once per session; `instructions` carries our delivered CLAUDE.md.
 _CLAUDE_LISTING_ATTACHMENTS = ("skill_listing", "agent_listing_delta", "mcp_instructions_delta", "deferred_tools_delta")
@@ -81,11 +82,14 @@ def _iter_head(path: Path):
                 yield rec
 
 
-def launch_mode_for(path: Path, cwd: str | None, agent_type: str | None) -> str:
+def launch_mode_for(path: Path, cwd: str | None, agent_type: str | None, originator: str | None = None) -> str:
+    """subagent:<type> | blank | exec (a headless `codex exec` run) | project (an interactive or lane launch)."""
     if agent_type is not None:
         return f"subagent:{agent_type or 'unknown'}"
     if BLANK_SLATE_MARKER in str(path) or BLANK_SLATE_MARKER in (cwd or ""):
         return "blank"
+    if originator == CODEX_EXEC_ORIGINATOR:
+        return "exec"
     return "project"
 
 

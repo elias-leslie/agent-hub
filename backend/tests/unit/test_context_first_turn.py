@@ -110,6 +110,8 @@ def test_launch_mode_and_identity(tmp_path: Path) -> None:
     assert first_turn.launch_mode_for(sub, None, first_turn.claude_agent_type(sub)) == "subagent:Explore"
     assert first_turn.launch_mode_for(tmp_path / "-srv-blank-slate" / "s.jsonl", None, None) == "blank"
     assert first_turn.launch_mode_for(tmp_path / "p" / "s.jsonl", "/srv/x", None) == "project"
+    assert first_turn.launch_mode_for(tmp_path / "p" / "s.jsonl", "/srv/x", None, "codex_exec") == "exec"
+    assert first_turn.launch_mode_for(tmp_path / "p" / "s.jsonl", "/srv/x", None, "codex-tui") == "project"
 
 
 def _codex_records(*, root: str = "root-1", own: str = "root-1", delivered: str | None = DELIVERED) -> list[dict]:
@@ -278,3 +280,64 @@ def test_config_step_names_the_new_shape_and_says_the_version_did_not_change() -
 def test_medians_ignore_unknown_values_and_are_none_without_any() -> None:
     assert baseline.med([None, 3, 1, 2, None]) == 2 and baseline.med([None]) is None
     assert baseline.med([4, 1, 3, 2]) == 3  # upper median, as the DESIGN measurement scripts took it
+
+
+def test_a_malformed_contract_or_binding_file_is_skipped_and_the_rest_still_import(tmp_path: Path) -> None:
+    root = tmp_path / "deliveries"
+    sess = root / "claude_code" / "agent-hub" / "sess"
+    (sess / "bindings").mkdir(parents=True)
+    (sess / "bad.json").write_text(json.dumps(_fixture_contract(metadata=["not", "a", "dict"])))
+    (sess / "worse.json").write_text(json.dumps(_fixture_contract(delivery_id="d-8", estimated_tokens="many")))
+    (sess / "good.json").write_text(json.dumps(_fixture_contract()))
+    good = {"schema_version": deliveries.BINDING_SCHEMA, "bound_at": "2026-11-01T12:00:00+00:00",
+            "canonical_delivery_id": "d-9", "native_session_id": "n1", "native_subagent_id": None, "consumer_surface": "claude_code"}
+    (sess / "bindings" / "a.json").write_text(json.dumps(good))
+    (sess / "bindings" / "b.json").write_text(json.dumps([1, 2]))
+
+    rows = deliveries.import_contract_values([root], since=datetime(2026, 10, 1, tzinfo=UTC))
+    bindings = deliveries.load_bindings([root], since=datetime(2026, 10, 1, tzinfo=UTC))
+
+    assert [r["delivery_id"] for r in rows] == ["d-9"]
+    assert set(bindings) == {("claude_code", "n1", "")}
+
+
+def test_the_binding_in_effect_at_the_first_call_wins() -> None:
+    at = datetime(2026, 11, 1, 12, tzinfo=UTC)
+    key = ("claude_code", "n1", "")
+    bindings = {key: [(at - timedelta(minutes=3), "early", None), (at - timedelta(seconds=10), "late", "/c.json"), (at + timedelta(minutes=9), "after", None)]}
+
+    assert deliveries.pick_binding(bindings, key, at) == ("late", "/c.json")
+    assert deliveries.pick_binding(bindings, key, at - timedelta(minutes=30)) == ("early", None)
+    assert deliveries.pick_binding(bindings, ("claude_code", "other", ""), at) is None
+
+
+def test_every_real_delivery_site_passes_its_record_name_and_previews_pass_none() -> None:
+    import ast
+
+    app = Path(__file__).resolve().parents[2] / "app"
+    expected = {
+        "api/runtime_context.py": "api", "api/host_context.py": "host", "cli/runtime_context.py": "cli",
+        "services/memory/context_injector_ops.py": "agent", "services/workflow_runs/engine.py": "workflow",
+    }
+    found: dict[str, list[str | None]] = {}
+    for path in app.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "build_canonical_context_delivery":
+                names = [kw.value.value for kw in node.keywords if kw.arg == "record" and isinstance(kw.value, ast.Constant)]
+                found.setdefault(str(path.relative_to(app)), []).append(names[0] if names else None)
+
+    recorded = {rel: names for rel, names in found.items() if any(names)}
+    assert recorded == {rel: [name] for rel, name in expected.items()}
+    assert all(n is None for rel, names in found.items() if rel not in expected for n in names)
+
+
+def test_a_failed_backfill_waits_for_its_retry_time() -> None:
+    now = datetime(2026, 11, 1, 12, tzinfo=UTC)
+    later = (now + timedelta(minutes=30)).isoformat()
+    earlier = (now - timedelta(minutes=1)).isoformat()
+    state = collector.CONTEXT_BACKFILL_STATE
+
+    assert collector._context_backfill_waiting({state: (0, {"retry_after": later})}, now)
+    assert not collector._context_backfill_waiting({state: (0, {"retry_after": earlier})}, now)
+    assert not collector._context_backfill_waiting({}, now)
+    assert not collector._context_backfill_done({state: (0, {"retry_after": later})})

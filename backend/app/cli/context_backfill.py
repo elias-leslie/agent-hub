@@ -22,6 +22,8 @@ from app.services.context_observability import baseline, capture
 
 TOLERANCE = 0.03
 LANE_TRIM_AT = datetime(2026, 11, 1, 14, 53, tzinfo=UTC)
+# The same Claude Code request-shape change trimmed blank-slate sessions; a fixed time keeps the before/after check honest.
+BLANK_TRIM_AT = LANE_TRIM_AT
 SUBAGENT_SINCE = datetime(2026, 11, 1, tzinfo=UTC)
 CODEX_LANE_AS_OF = datetime(2026, 10, 31, tzinfo=UTC)
 
@@ -52,13 +54,9 @@ EXPECTED = (
 PI_MODEL = "deepseek-v4.1-flash"
 
 
-def split_at_biggest_drop(rows: list[baseline.FirstTurn]) -> tuple[list[baseline.FirstTurn], list[baseline.FirstTurn]]:
-    """Split one cell at the config change with the largest drop in median first turn: (before, after)."""
-    steps = [s for s in baseline.config_steps(rows) if s["delta"] is not None and s["delta"] < 0]
-    if not steps:
-        return list(rows), []
-    cut = min(steps, key=lambda s: s["delta"])["at"]
-    return [r for r in rows if r.at < cut], [r for r in rows if r.at >= cut]
+def _is_launched(r: baseline.FirstTurn) -> bool:
+    """A launch that carries a delivery and a role: interactive or lane (project) or a headless `codex exec` lane."""
+    return r.launch_mode in ("project", "exec")
 
 
 def _is_project(r: baseline.FirstTurn) -> bool:
@@ -71,7 +69,7 @@ def baseline_groups(rows: list[baseline.FirstTurn]) -> dict[tuple[str, str], lis
     codex = [r for r in rows if r.harness == "codex"]
     pi = [r for r in rows if r.harness == "pi" and r.model == PI_MODEL]
     lane_impl = [r for r in claude if _is_project(r) and r.role == "implementation"]
-    blank_before, blank_after = split_at_biggest_drop([r for r in claude if r.launch_mode == "blank"])
+    blank = [r for r in claude if r.launch_mode == "blank"]
     sub_rows = [r for r in claude if r.at >= SUBAGENT_SINCE]
     return {
         ("claude", "coordinator / owner-opened"): [
@@ -81,15 +79,17 @@ def baseline_groups(rows: list[baseline.FirstTurn]) -> dict[tuple[str, str], lis
         ("claude", "lane impl after trim"): [r for r in lane_impl if r.at >= LANE_TRIM_AT],
         ("claude", "hunter"): [r for r in claude if _is_project(r) and r.role == "hunting"],
         ("claude", "tester (user-tester subagent)"): [r for r in claude if r.launch_mode == "subagent:user-tester"],
-        ("claude", "blank before"): blank_before, ("claude", "blank after"): blank_after,
+        ("claude", "blank before"): [r for r in blank if r.at < BLANK_TRIM_AT],
+        ("claude", "blank after"): [r for r in blank if r.at >= BLANK_TRIM_AT],
         ("claude", "general-purpose subagent"): [r for r in sub_rows if r.launch_mode == "subagent:general-purpose"],
         ("claude", "code-reviewer subagent"): [r for r in sub_rows if r.launch_mode == "subagent:code-reviewer"],
         ("claude", "Explore subagent"): [r for r in sub_rows if r.launch_mode == "subagent:Explore"],
-        # The Neri coordinators; the luna workflow-proof exec runs are another cell.
-        ("codex", "coordinator"): [r for r in codex if _is_project(r) and r.role == "coordinator" and "luna" not in (r.model or "")],
-        ("codex", "lane (implementation)"): [r for r in codex if _is_project(r) and r.role == "implementation"],
-        ("codex", "review"): [r for r in codex if _is_project(r) and r.role == "review"],
-        ("codex", "hunter"): [r for r in codex if _is_project(r) and r.role == "hunting"],
+        # Interactive Neri coordinators only: the headless `codex exec` coordinator runs (workflow proofs) are another launch mode.
+        # Codex lanes, reviews and hunters are often `codex exec` launches, so those rows take both modes.
+        ("codex", "coordinator"): [r for r in codex if _is_project(r) and r.role == "coordinator"],
+        ("codex", "lane (implementation)"): [r for r in codex if _is_launched(r) and r.role == "implementation"],
+        ("codex", "review"): [r for r in codex if _is_launched(r) and r.role == "review"],
+        ("codex", "hunter"): [r for r in codex if _is_launched(r) and r.role == "hunting"],
         ("codex", "blank"): [r for r in codex if r.launch_mode == "blank"],
         ("pi", "coordinator"): [r for r in pi if r.delivery_id and r.role == "coordinator"],
         ("pi", "hunter"): [r for r in pi if r.delivery_id and r.role == "hunting"],

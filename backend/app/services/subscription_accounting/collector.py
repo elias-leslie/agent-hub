@@ -260,7 +260,8 @@ def _note_first_turn(result: PassResult, path: Path, state: dict[str, Any], prov
     state["ft_done"] = True
     try:
         head = context_capture.head_for_claude(path) if provider == "claude" else context_capture.head_for_codex(path)
-    except OSError:
+    except Exception as exc:  # a transcript format change must never fail the ledger pass
+        logger.warning("first turn unreadable %s: %s: %s", path, type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
         return
     if head is not None:
         result.heads.append(head)
@@ -855,7 +856,6 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
             return {"skipped": True}
         rows = (await db.execute(select(SubscriptionUsageCursor))).scalars().all()
         cursors = {r.path: (int(r.offset), dict(r.state or {})) for r in rows}
-        await _import_deliveries_once(db, cursors)
         result = await asyncio.to_thread(scan, cursors, replay=replay)
         lots = (await db.execute(select(CreditLot).where(CreditLot.provider == "codex"))).scalars().all()
         credit_state = dict(cursors.get(CODEX_CREDIT_STATE, (0, {}))[1])
@@ -878,23 +878,26 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
 
 CONTEXT_BACKFILL_STATE = "@context_backfill"
 CONTEXT_BACKFILL_VERSION = 1
+CONTEXT_BACKFILL_RETRY = timedelta(hours=1)  # a failed backfill waits this long before the next attempt
 
 
 def _context_backfill_done(cursors: dict[str, tuple[int, dict[str, Any]]]) -> bool:
     return cursors.get(CONTEXT_BACKFILL_STATE, (0, {}))[1].get("version") == CONTEXT_BACKFILL_VERSION
 
 
-async def _import_deliveries_once(db: AsyncSession, cursors: dict[str, tuple[int, dict[str, Any]]]) -> None:
-    """Before the first pass that measures first turns: the delivery history sessions will bind to."""
-    if _context_backfill_done(cursors):
-        return
+def _context_backfill_waiting(cursors: dict[str, tuple[int, dict[str, Any]]], now: datetime) -> bool:
+    retry_after = cursors.get(CONTEXT_BACKFILL_STATE, (0, {}))[1].get("retry_after")
     try:
-        added = await context_capture.import_delivery_files(db, since=datetime.now(UTC) - timedelta(days=context_capture.BACKFILL_DAYS + 1))
-        await db.commit()
-        logger.info("context observability: %d deliveries imported", added)
-    except Exception:
-        await db.rollback()
-        logger.warning("context delivery import failed", exc_info=True)
+        return isinstance(retry_after, str) and datetime.fromisoformat(retry_after) > now
+    except ValueError:
+        return False
+
+
+async def _store_context_backfill_state(db: AsyncSession, state: dict[str, Any]) -> None:
+    stmt = pg_insert(SubscriptionUsageCursor).values(path=CONTEXT_BACKFILL_STATE, offset=0, state=state)
+    await db.execute(stmt.on_conflict_do_update(
+        index_elements=["path"], set_={"state": stmt.excluded.state, "updated_at": func.now()},
+    ))
 
 
 async def _backfill_context_once(db: AsyncSession, cursors: dict[str, tuple[int, dict[str, Any]]]) -> None:
@@ -902,21 +905,24 @@ async def _backfill_context_once(db: AsyncSession, cursors: dict[str, tuple[int,
 
     Never fails the pass: the usage ledger is the collector's job, this is a separate commit.
     """
-    if _context_backfill_done(cursors):
+    now = datetime.now(UTC)
+    if _context_backfill_done(cursors) or _context_backfill_waiting(cursors, now):
         return
     try:
         summary = await context_capture.backfill(db)
-        stmt = pg_insert(SubscriptionUsageCursor).values(
-            path=CONTEXT_BACKFILL_STATE, offset=0, state={"version": CONTEXT_BACKFILL_VERSION, **summary},
-        )
-        await db.execute(stmt.on_conflict_do_update(
-            index_elements=["path"], set_={"state": stmt.excluded.state, "updated_at": func.now()},
-        ))
+        await _store_context_backfill_state(db, {"version": CONTEXT_BACKFILL_VERSION, **summary})
         await db.commit()
         logger.info("context observability backfill: %s", summary)
-    except Exception:
+    except Exception as exc:
         await db.rollback()
-        logger.warning("context observability backfill failed", exc_info=True)
+        logger.warning("context observability backfill failed: %s: %s", type(exc).__name__, (str(exc).splitlines() or [""])[0][:200], exc_info=True)
+        try:  # remember the failure so the next minute's pass does not repeat the whole read
+            retry_at = (now + CONTEXT_BACKFILL_RETRY).isoformat()
+            await _store_context_backfill_state(db, {"retry_after": retry_at, "error": type(exc).__name__})
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.warning("context observability backfill retry time not stored", exc_info=True)
 
 
 async def _capture_context_extra(db: AsyncSession, result: PassResult) -> None:
@@ -969,7 +975,8 @@ async def _persist(
         return
     ledger_cutoff = datetime.now(UTC) - timedelta(days=LEDGER_RETAIN_DAYS)
     await db.execute(delete(UsageCall).where(UsageCall.occurred_at < ledger_cutoff))
-    await db.execute(delete(UsageSession).where(UsageSession.last_at < ledger_cutoff))
+    # Sessions with a measured first turn are trend history: only ledger-only rows are pruned.
+    await db.execute(delete(UsageSession).where(UsageSession.last_at < ledger_cutoff, UsageSession.first_turn_tokens.is_(None)))
     cutoff = datetime.now(UTC) - timedelta(days=CURSOR_RETAIN_DAYS)
     await db.execute(
         delete(SubscriptionUsageCursor).where(

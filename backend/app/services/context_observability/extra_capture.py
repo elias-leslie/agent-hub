@@ -75,7 +75,8 @@ def read_pi_heads(paths: list[Path], *, since: datetime, until: datetime | None)
     for path in paths:
         try:
             raw = pi_turn.read_pi_head(path)
-        except OSError:
+        except Exception as exc:  # one odd session file must not stop the rest
+            logger.warning("pi first turn unreadable %s: %s: %s", path, type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
             continue
         if raw and raw["first_at"] >= since and (until is None or raw["first_at"] <= until):
             out.append((path, raw))
@@ -106,25 +107,34 @@ async def apply_pi(
 ) -> int:
     n = 0
     for path, raw in heads:
-        sid = raw["sid"][:100]
-        launch = pi_turn.launch_mode(path, raw.get("cwd"))
-        delivery = None if launch == "blank" else await find_pi_delivery(db, raw)  # a blank-slate launch gets no delivery
-        parts = pi_turn.compute_parts(raw, delivery=delivery, launch=launch)
-        parts["version_basis"] = pi_turn.version_basis(raw["started"], now) if version else "unknown"
         try:
-            last = datetime.fromtimestamp(path.stat().st_mtime, UTC)
-        except OSError:
-            last = raw["first_at"]
-        await db.execute(_upsert({
-            "provider": PI_PROVIDER, "session_id": sid, "agent_id": "", "project": _project(raw.get("cwd"))[:200], "kind": "other",
-            "first_at": raw["started"], "last_at": max(last, raw["first_at"]), "harness": PI_PROVIDER, "harness_version": version,
-            "work_role": delivery["work_role"] if delivery else None, "coordinator": delivery["coordinator"] if delivery else None,
-            "launch_mode": launch[:80], "model": (raw.get("model") or None) and str(raw["model"])[:100],
-            "first_turn_tokens": int(raw["total"]), "first_turn_at": raw["first_at"], "parts": parts,
-            "delivery_id": delivery["delivery_id"] if delivery else None, "config_fp": None,
-        }))
+            async with db.begin_nested():
+                await _apply_pi_one(db, path, raw, now=now, version=version)
+        except Exception as exc:  # one odd session must not stop the rest
+            logger.warning("pi first turn not stored %s: %s: %s", path, type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
+            continue
         n += 1
     return n
+
+
+async def _apply_pi_one(db: AsyncSession, path: Path, raw: dict[str, Any], *, now: datetime, version: str | None) -> None:
+    sid = raw["sid"][:100]
+    launch = pi_turn.launch_mode(path, raw.get("cwd"))
+    delivery = None if launch == "blank" else await find_pi_delivery(db, raw)  # a blank-slate launch gets no delivery
+    parts = pi_turn.compute_parts(raw, delivery=delivery, launch=launch)
+    parts["version_basis"] = pi_turn.version_basis(raw["started"], now) if version else "unknown"
+    try:
+        last = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    except OSError:
+        last = raw["first_at"]
+    await db.execute(_upsert({
+        "provider": PI_PROVIDER, "session_id": sid, "agent_id": "", "project": _project(raw.get("cwd"))[:200], "kind": "other",
+        "first_at": raw["started"], "last_at": max(last, raw["first_at"]), "harness": PI_PROVIDER, "harness_version": version,
+        "work_role": delivery["work_role"] if delivery else None, "coordinator": delivery["coordinator"] if delivery else None,
+        "launch_mode": launch[:80], "model": (raw.get("model") or None) and str(raw["model"])[:100],
+        "first_turn_tokens": int(raw["total"]), "first_turn_at": raw["first_at"], "parts": parts,
+        "delivery_id": delivery["delivery_id"] if delivery else None, "config_fp": None,
+    }))
 
 
 async def capture_pi(db: AsyncSession, *, since: datetime, until: datetime | None, now: datetime, skip_done: bool) -> dict[str, int]:
