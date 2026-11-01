@@ -87,7 +87,8 @@ async def retire_stale_archives(
                     and_(Memory.last_accessed_at.is_(None), Memory.created_at < cutoff),
                 ),
             )
-        )
+        ).with_for_update().execution_options(populate_existing=True)
+        # Locked: a row promoted or restored meanwhile is re-checked against these conditions and skipped.
         result = await session.execute(stale_stmt)
         stale = list(result.scalars().all())
 

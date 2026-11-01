@@ -392,7 +392,7 @@ def create_mock_db_session() -> AsyncMock:
     mock_session.sync_session = MagicMock(info={})
 
     # refresh sets common timestamp fields like the real database would
-    async def mock_refresh(obj: Any) -> None:
+    async def mock_refresh(obj: Any, attribute_names: Any = None) -> None:
         now = datetime.now(UTC)
         if hasattr(obj, "created_at") and obj.created_at is None:
             obj.created_at = now

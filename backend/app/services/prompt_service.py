@@ -398,6 +398,9 @@ async def restore_prompt_revision(
             .where(PromptRevision.prompt_slug == slug, PromptRevision.prompt_id.is_(None))
             .values(prompt_id=prompt.id)
         )
+        # Load the owning agent so its system_prompt mirror and the caller's cache invalidation see it.
+        await db.refresh(prompt, attribute_names=["owner_agent"])
+        _sync_owned_agent_system_prompt_mirror(prompt)
     await record_prompt_revision(
         db,
         prompt,
@@ -407,6 +410,7 @@ async def restore_prompt_revision(
     )
     await db.commit()
     await db.refresh(prompt)
+    await db.refresh(prompt, attribute_names=["owner_agent"])  # the API's agent cache invalidation reads it
     return prompt
 
 

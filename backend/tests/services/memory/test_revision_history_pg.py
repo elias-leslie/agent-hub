@@ -8,9 +8,10 @@ private tables in a throwaway schema, so nothing persists.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -20,7 +21,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import Enum, make_url, select, text
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
 from app.core.request_actor import RequestWriter, bind_request_writer
@@ -44,41 +45,80 @@ pytestmark = pytest.mark.integration
 VECTOR = [0.25] * 768
 
 
-@pytest_asyncio.fixture
-async def pg_db() -> AsyncGenerator[AsyncSession]:
+def _test_db_url() -> Any:
     configured = os.environ.get("TEST_AGENT_HUB_DB_URL")
     if not configured:
         pytest.skip("TEST_AGENT_HUB_DB_URL is required")
     url = make_url(configured).set(drivername="postgresql+asyncpg")
     assert url.database and url.database.endswith("_test"), "History tests require a test database"
-    engine = create_async_engine(url)
+    return url
+
+
+def _create_tables(sync_connection: Any) -> None:
+    with_fks = (Memory.__table__, MemoryRevision.__table__)
+    for table in (Agent.__table__, *with_fks, Prompt.__table__, PromptRevision.__table__):
+        for column in table.columns:
+            if isinstance(column.type, Enum):
+                column.type.create(sync_connection, checkfirst=True)
+        keep = None if table in with_fks or table is PromptRevision.__table__ else []
+        sync_connection.execute(CreateTable(table, include_foreign_key_constraints=keep))
+    sync_connection.execute(text(
+        "CREATE TABLE context_deliveries (id serial PRIMARY KEY, generated_at timestamptz NOT NULL, payload_hash text,"
+        " session_id text, surface text, work_role text, project_id text, coordinator boolean)"
+    ))
+
+
+@pytest_asyncio.fixture
+async def pg_db() -> AsyncGenerator[AsyncSession]:
+    engine = create_async_engine(_test_db_url())
     schema = f"revision_history_{uuid.uuid4().hex}"
     async with engine.connect() as connection:
         transaction = await connection.begin()
         await connection.execute(text(f"CREATE SCHEMA {schema}"))
         # public stays on the path for the pgvector type.
         await connection.execute(text(f"SET LOCAL search_path TO {schema}, public"))
-
-        def create_tables(sync_connection: Any) -> None:
-            with_fks = (Memory.__table__, MemoryRevision.__table__)
-            for table in (Agent.__table__, *with_fks, Prompt.__table__, PromptRevision.__table__):
-                for column in table.columns:
-                    if isinstance(column.type, Enum):
-                        column.type.create(sync_connection, checkfirst=True)
-                keep = None if table in with_fks or table is PromptRevision.__table__ else []
-                sync_connection.execute(CreateTable(table, include_foreign_key_constraints=keep))
-
-        await connection.run_sync(create_tables)
-        await connection.execute(text(
-            "CREATE TABLE context_deliveries (id serial PRIMARY KEY, generated_at timestamptz NOT NULL, payload_hash text,"
-            " session_id text, surface text, work_role text, project_id text, coordinator boolean)"
-        ))
+        await connection.run_sync(_create_tables)
         async with AsyncSession(
             bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint"
         ) as session:
             yield session
         await transaction.rollback()
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def pg_engine() -> AsyncGenerator[AsyncEngine]:
+    """Committed tables in a throwaway schema, so two connections can contend for one row lock."""
+    url = _test_db_url()
+    schema = f"revision_locks_{uuid.uuid4().hex}"
+    # The schema name doubles as application_name, so a lock wait is found among this test's connections only.
+    engine = create_async_engine(
+        url, connect_args={"server_settings": {"search_path": f"{schema}, public", "application_name": schema}})
+    async with engine.begin() as connection:
+        await connection.execute(text(f"CREATE SCHEMA {schema}"))
+        await connection.run_sync(_create_tables)
+    try:
+        yield engine
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text(f"DROP SCHEMA {schema} CASCADE"))
+        await engine.dispose()
+
+
+async def _behind_row_lock(engine: AsyncEngine, work: Awaitable[Any]) -> asyncio.Task[Any]:
+    """Start ``work`` and return once Postgres shows one of the engine's connections waiting on a lock."""
+    task = asyncio.ensure_future(work)
+    async with engine.connect() as watcher:
+        for _ in range(200):
+            waiting = (await watcher.execute(text(
+                "SELECT count(*) FROM pg_stat_activity"
+                " WHERE application_name = current_setting('application_name') AND wait_event_type = 'Lock'"
+            ))).scalar()
+            if waiting or task.done():
+                break
+            await asyncio.sleep(0.025)
+    assert not task.done(), "expected the second writer to wait on the row lock"
+    return task
 
 
 @pytest.fixture(autouse=True)
@@ -181,15 +221,150 @@ async def test_restore_recreates_a_hard_deleted_memory_and_reattaches_its_histor
     pg_db.expunge_all()
     assert all(r.memory_id is None for r in await _revisions(pg_db, memory_id))
 
-    with pytest.raises(RevisionConflictError):  # the delete revision recorded version 3
-        await repo.restore_revision(str(memory_id), original.id, expected_version=2, db=pg_db)
-    restored = await repo.restore_revision(str(memory_id), original.id, expected_version=3, db=pg_db)
+    with pytest.raises(RevisionConflictError) as conflict:  # saw the live v3; the delete since is v4
+        await repo.restore_revision(str(memory_id), original.id, expected_version=3, db=pg_db)
+    assert (conflict.value.expected, conflict.value.current) == (3, 4)
+    restored = await repo.restore_revision(str(memory_id), original.id, expected_version=4, db=pg_db)
 
     assert restored is not None
-    assert (restored.memory.content, restored.memory.context_kind, restored.memory.version) == (original.content, "policy", 4)
+    assert (restored.memory.content, restored.memory.context_kind, restored.memory.version) == (original.content, "policy", 5)
     history = await _revisions(pg_db, memory_id)
-    assert [r.action for r in history] == ["create", "update", "update", "delete", "restore"]
+    assert [(r.action, r.version) for r in history] == [
+        ("create", 1), ("update", 2), ("update", 3), ("delete", 4), ("restore", 5)]
     assert all(r.memory_id == memory_id for r in history)
+
+
+async def test_recreated_memory_keeps_sensitivity_review_counters_and_created_at(pg_db: AsyncSession) -> None:
+    repo = MemoryRepository()
+    memory, original = await _memory_with_history(pg_db, repo)
+    memory_id, created_at = memory.id, memory.created_at
+    await repo.update(memory_id, db=pg_db, sensitivity_tier="confidential", review_status="clean", loaded_count=7,
+                      referenced_count=3, helpful_count=2, harmful_count=1, lifecycle_score=0.75)
+    assert await repo.delete(memory_id, db=pg_db)
+    await pg_db.flush()
+    pg_db.expunge_all()
+
+    restored = await repo.restore_revision(str(memory_id), original.id, expected_version=5, db=pg_db)
+
+    assert restored is not None
+    row = restored.memory
+    assert (row.sensitivity_tier, row.review_status, row.lifecycle_score) == ("confidential", "clean", 0.75)
+    assert (row.loaded_count, row.referenced_count, row.helpful_count, row.harmful_count) == (7, 3, 2, 1)
+    assert row.created_at == created_at
+
+
+async def test_restore_saves_the_row_with_a_stale_embedding_when_the_embedder_is_down(
+    pg_db: AsyncSession, fake_embedder: AsyncMock
+) -> None:
+    repo = MemoryRepository()
+    memory, original = await _memory_with_history(pg_db, repo)
+    fake_embedder.side_effect = RuntimeError("Gemini unavailable")
+
+    restored = await repo.restore_revision(str(memory.id), original.id, expected_version=3, db=pg_db)
+
+    assert restored is not None and restored.embedding_stale
+    fake_embedder.assert_awaited_once_with(original.content)  # not retried under the row lock
+    assert (restored.memory.content, restored.memory.embedding, restored.memory.version) == (original.content, None, 4)
+    assert (await _revisions(pg_db, memory.id))[-1].action == "restore"
+
+
+async def _committed_history(engine: AsyncEngine, repo: MemoryRepository) -> tuple[uuid.UUID, MemoryRevision]:
+    async with AsyncSession(engine, expire_on_commit=False) as setup:
+        memory, original = await _memory_with_history(setup, repo)
+        await setup.commit()
+        return memory.id, original
+
+
+async def test_update_waits_for_a_restore_holding_the_row_and_builds_on_it(pg_engine: AsyncEngine) -> None:
+    repo = MemoryRepository()
+    memory_id, original = await _committed_history(pg_engine, repo)
+
+    async with AsyncSession(pg_engine) as owner, AsyncSession(pg_engine) as agent:
+        await repo.restore_revision(str(memory_id), original.id, expected_version=3, db=owner)  # v4, lock held
+        update = await _behind_row_lock(pg_engine, repo.update(memory_id, db=agent, summary="agent edit"))
+        await owner.commit()
+        assert await update
+        await agent.commit()
+
+    async with AsyncSession(pg_engine) as check:
+        row = await check.get(Memory, memory_id)
+        history = await _revisions(check, memory_id)
+    assert row is not None
+    assert (row.version, row.scope, row.tier, row.summary) == (5, "project", 2, "agent edit")
+    latest = history[-1]
+    assert (latest.action, latest.version, latest.scope, latest.tier, latest.summary) == (
+        "update", 5, "project", 2, "agent edit")
+    assert len({r.version for r in history}) == len(history)
+
+
+async def test_delete_waits_for_a_restore_holding_the_row_and_records_what_it_deletes(pg_engine: AsyncEngine) -> None:
+    repo = MemoryRepository()
+    memory_id, original = await _committed_history(pg_engine, repo)
+
+    async with AsyncSession(pg_engine) as owner, AsyncSession(pg_engine) as agent:
+        await repo.restore_revision(str(memory_id), original.id, expected_version=3, db=owner)
+        delete = await _behind_row_lock(pg_engine, repo.delete(memory_id, db=agent))
+        await owner.commit()
+        assert await delete
+        await agent.commit()
+
+    async with AsyncSession(pg_engine) as check:
+        assert await check.get(Memory, memory_id) is None
+        deleted = (await _revisions(check, memory_id))[-1]
+    assert (deleted.action, deleted.version, deleted.content, deleted.scope) == ("delete", 5, original.content, "project")
+
+
+async def test_retirement_skips_an_archive_promoted_while_it_waited_for_the_lock(
+    pg_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services.memory.retirement import retire_stale_archives
+
+    old = datetime.now(UTC) - timedelta(days=400)
+    async with AsyncSession(pg_engine, expire_on_commit=False) as setup:
+        stale = Memory(content="**Archive**: still wanted.", memory_type="reference", scope="global", tier=4,
+                       status="active", version=1, created_at=old, updated_at=old, metadata_={})
+        fresh = Memory(content="**Fresh**: keeps the system active.", memory_type="reference", scope="global", tier=3,
+                       status="active", version=1, metadata_={})
+        setup.add_all([stale, fresh])
+        await setup.commit()
+    monkeypatch.setattr("app.services.memory.retirement.async_session", lambda: AsyncSession(pg_engine))
+
+    repo = MemoryRepository()
+    async with AsyncSession(pg_engine) as owner:
+        await repo.update(stale.id, db=owner, tier=2)  # promoted, lock held
+        retire = await _behind_row_lock(pg_engine, retire_stale_archives())
+        await owner.commit()
+        result = await retire
+
+    assert result["retired"] == 0
+    async with AsyncSession(pg_engine) as check:
+        row = await check.get(Memory, stale.id)
+    assert row is not None
+    assert (row.status, row.tier, row.content, row.version) == ("active", 2, "**Archive**: still wanted.", 2)
+
+
+async def test_consolidation_archives_the_duplicate_with_a_revision(
+    pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services.memory import redundancy
+
+    survivor = Memory(content="**Rule**: one.", memory_type="reference", scope="global", tier=3, status="active",
+                      version=1, loaded_count=2, metadata_={})
+    duplicate = Memory(content="**Rule**: one!", memory_type="reference", scope="global", tier=3, status="active",
+                       version=3, loaded_count=5, metadata_={})
+    pg_db.add_all([survivor, duplicate])
+    await pg_db.flush()
+    _use_session(monkeypatch, "app.services.memory.redundancy", pg_db)
+    monkeypatch.setattr(redundancy, "log_tier_change", AsyncMock())
+
+    await redundancy._consolidate_pair(str(survivor.id), str(duplicate.id),
+                                       {"similarity": 0.99, "id_b": str(duplicate.id), "tier_b": "reference"})
+
+    assert (duplicate.status, duplicate.superseded_by, duplicate.version) == ("archived", survivor.id, 4)
+    assert survivor.loaded_count == 7
+    (revision,) = await _revisions(pg_db, duplicate.id)
+    assert (revision.action, revision.status, revision.version, revision.changed_by) == (
+        "consolidate", "archived", 4, "system:redundancy")
 
 
 async def test_retirement_keeps_the_text_in_history_and_restore_brings_it_back(
@@ -238,7 +413,7 @@ async def test_ttl_cleanup_deletes_with_revisions(pg_db: AsyncSession, monkeypat
     assert await pg_db.get(Memory, stale_id) is None
     (deleted,) = await _revisions(pg_db, stale_id)
     assert (deleted.action, deleted.content, deleted.version, deleted.changed_by) == (
-        "delete", "**Stale reference**: unused.", 5, "system:ttl-cleanup")
+        "delete", "**Stale reference**: unused.", 6, "system:ttl-cleanup")  # a delete takes the next version
 
 
 async def test_scope_normalization_writes_a_revision_per_row(pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -306,6 +481,25 @@ async def test_prompt_restore_recreates_a_deleted_prompt_and_checks_the_latest_r
     history = await list_prompt_revisions(pg_db, "ctx-check")
     assert history[0].action == "restore"
     assert all(r.prompt_id == restored.id for r in history)
+
+
+async def test_prompt_restore_of_a_deleted_agent_system_prompt_updates_its_agent(pg_db: AsyncSession) -> None:
+    agent = Agent(slug="ctx-agent", name="Ctx agent", system_prompt="second", primary_model_id="m")
+    pg_db.add(agent)
+    await pg_db.flush()
+    await create_prompt(pg_db, slug="ctx-agent-system", name="Ctx agent", content="first",
+                        owner_agent_id=agent.id, prompt_type="agent_system")
+    await update_prompt(pg_db, "ctx-agent-system", content="second")
+    first = next(r for r in await list_prompt_revisions(pg_db, "ctx-agent-system") if r.content == "first")
+    assert await delete_prompt(pg_db, "ctx-agent-system")
+
+    restored = await restore_prompt_revision(pg_db, "ctx-agent-system", first.id)
+
+    assert restored is not None and restored.content == "first"
+    await pg_db.refresh(agent)
+    assert agent.system_prompt == "first"
+    owner_agent = restored.__dict__.get("owner_agent")  # what the API's cache invalidation reads
+    assert owner_agent is not None and owner_agent.slug == "ctx-agent"
 
 
 async def test_revision_writer_resolves_through_the_context_delivery(pg_db: AsyncSession) -> None:

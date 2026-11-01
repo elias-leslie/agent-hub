@@ -230,6 +230,16 @@ class MemoryRevision(Base):
     writer_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     writer_delivery: Mapped[str | None] = mapped_column(String(128), nullable=True)
     writer_session: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Row bookkeeping a restore leaves alone on a live memory; kept so a hard-deleted memory is
+    # recreated with it. NULL on revisions written before these columns existed.
+    sensitivity_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    review_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    loaded_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    referenced_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    helpful_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    harmful_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lifecycle_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    memory_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     memory: Mapped[Memory | None] = relationship("Memory", back_populates="revisions", lazy="raise")

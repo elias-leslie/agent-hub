@@ -234,7 +234,8 @@ class CrudRepository(RevisionRepository):
         now = datetime.now(UTC)
 
         async def _update(session: AsyncSession) -> bool:
-            memory = await session.get(Memory, uid)
+            # Locked and re-read, so a concurrent restore or delete is applied before, not overwritten.
+            memory = await session.get(Memory, uid, with_for_update=True, populate_existing=True)
             if memory is None:
                 return False
             for key, value in kwargs.items():
@@ -265,7 +266,8 @@ class CrudRepository(RevisionRepository):
         uid = _uuid.UUID(str(memory_id)) if isinstance(memory_id, str) else memory_id
 
         async def _delete(session: AsyncSession) -> bool:
-            memory = await session.get(Memory, uid)
+            # Locked and re-read, so the delete revision records the state that is actually deleted.
+            memory = await session.get(Memory, uid, with_for_update=True, populate_existing=True)
             if memory is None:
                 return False
             await self.record_revision(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid as _uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -23,6 +24,13 @@ from app.services.global_context_notes import (
 from .budget import count_tokens
 from .embedder import get_embedder
 from .fingerprint import content_fingerprint
+
+logger = logging.getLogger(__name__)
+
+# Bookkeeping columns a revision records but restore leaves alone on a live memory;
+# a hard-deleted memory is recreated with them (``memory_created_at`` -> ``created_at``).
+_ROW_STATE = ("sensitivity_tier", "review_status", "loaded_count", "referenced_count",
+              "helpful_count", "harmful_count", "lifecycle_score")
 
 
 def _delivery_switches(row: Memory | MemoryRevision) -> dict[str, object]:
@@ -59,6 +67,9 @@ class RevisionRepository:
         A change to a global-scope mandate (or one that stops being one) queues
         one Nightshift note with the diff against the previous revision,
         including changes to who receives it, when and in what form.
+
+        A delete revision takes the next version: a delete is a change, so a caller
+        who saw the live memory at version N conflicts with it on restore.
         """
         previous = (await db.execute(
             select(MemoryRevision).where(MemoryRevision.memory_id == memory.id)
@@ -67,7 +78,7 @@ class RevisionRepository:
         revision = MemoryRevision(
             memory_id=memory.id,
             memory_uuid=str(memory.id),
-            version=version or int(memory.version or 1),
+            version=version or int(memory.version or 1) + (1 if action == "delete" else 0),
             action=action,
             content=memory.content,
             name=memory.name,
@@ -96,6 +107,8 @@ class RevisionRepository:
             changed_by=attribute(changed_by),
             change_reason=change_reason,
             **writer_columns(),
+            **{column: getattr(memory, column) for column in _ROW_STATE},
+            memory_created_at=memory.created_at,
             # Wall-clock, not the transaction start, so revisions written in one transaction still order.
             created_at=datetime.now(UTC),
         )
@@ -249,11 +262,14 @@ class RevisionRepository:
         """Restore a memory to a historical revision, recreating it when it was hard-deleted.
 
         Every stored field of the revision comes back and the embedding is recomputed
-        for the restored text. The memory row is locked (``FOR UPDATE``) for the change;
+        for the restored text; when the embedder fails the row is still written with no
+        vector (stale: semantic search skips it, the next restore or content edit embeds
+        it). The memory row is locked (``FOR UPDATE``) for the change;
         ``expected_version`` is the ``memories.version`` the caller saw (for a deleted
         memory, the version its delete revision recorded) and a mismatch raises
-        ``RevisionConflictError`` without changing anything. Returns None when the
-        revision does not exist.
+        ``RevisionConflictError`` without changing anything. A recreated memory gets
+        sensitivity, review status, counters, lifecycle score and created_at from its
+        latest revision. Returns None when the revision does not exist.
         """
         uid = _uuid.UUID(str(memory_uuid))
 
@@ -266,9 +282,10 @@ class RevisionRepository:
                 select(Memory.content, Memory.embedding.is_(None)).where(Memory.id == uid)
             )).first()
             embedding = None
+            embed_tried = False
             retired = revision.status == "retired"  # tombstones keep no vector
             if not retired and _needs_embedding(revision, None if peek is None else (peek[0], bool(peek[1]))):
-                embedding = await get_embedder().embed(revision.content)
+                embedding, embed_tried = await _embed_or_none(memory_uuid, revision.content), True
 
             memory = (await session.execute(
                 select(Memory).where(Memory.id == uid).with_for_update()
@@ -285,15 +302,17 @@ class RevisionRepository:
             if retired:
                 embedding = None
             elif _needs_embedding(revision, locked_state):
-                if embedding is None:  # the row changed between the peek and the lock
-                    embedding = await get_embedder().embed(revision.content)
+                if embedding is None and not embed_tried:  # the row changed between the peek and the lock
+                    embedding = await _embed_or_none(memory_uuid, revision.content)
             elif memory is not None:
                 embedding = memory.embedding
             snapshot = _restore_snapshot(revision, embedding)
 
             now = datetime.now(UTC)
             if memory is None:
-                memory = Memory(id=uid, version=latest_version + 1, created_at=now, updated_at=now, **snapshot)
+                row_state = await _latest_row_state(session, memory_uuid)
+                memory = Memory(id=uid, version=latest_version + 1, updated_at=now,
+                                **({"created_at": now} | row_state), **snapshot)
                 session.add(memory)
                 try:
                     await session.flush()
@@ -327,7 +346,8 @@ class RevisionRepository:
             if commit:
                 await session.commit()
                 await session.refresh(memory)
-            return RestoredMemory(memory=memory, revision_id=str(restored.id), restored_from=str(revision.id))
+            return RestoredMemory(memory=memory, revision_id=str(restored.id), restored_from=str(revision.id),
+                                  embedding_stale=not retired and embedding is None)
 
         if db:
             return await _restore_with_session(db, False)
@@ -350,6 +370,7 @@ class RestoredMemory:
     memory: Memory
     revision_id: str  # the new "restore" revision
     restored_from: str  # the revision whose state came back
+    embedding_stale: bool = False  # saved without a vector because the embedder failed
 
 
 def _needs_embedding(revision: MemoryRevision, current: tuple[str, bool] | None) -> bool:
@@ -358,6 +379,35 @@ def _needs_embedding(revision: MemoryRevision, current: tuple[str, bool] | None)
         return True
     content, missing = current
     return missing or content != revision.content
+
+
+async def _embed_or_none(memory_uuid: str, content: str) -> list[float] | None:
+    """The restored text's vector, or None (left stale) when the embedder is down."""
+    try:
+        return await get_embedder().embed(content)
+    except Exception as exc:  # any embedder failure leaves the vector stale; it never fails the restore
+        logger.warning("Restore of memory %s saved without an embedding (embedder failed): %s", memory_uuid[:8], exc)
+        return None
+
+
+async def _latest_row_state(session: AsyncSession, memory_uuid: str) -> dict[str, object]:
+    """Bookkeeping columns for a recreated memory: from the latest revision that recorded them,
+    else (history older than that capture) created_at from the earliest revision."""
+    state = (await session.execute(
+        select(*(getattr(MemoryRevision, c) for c in _ROW_STATE), MemoryRevision.memory_created_at)
+        .where(MemoryRevision.memory_uuid == memory_uuid, MemoryRevision.sensitivity_tier.is_not(None))
+        .order_by(MemoryRevision.version.desc(), MemoryRevision.created_at.desc()).limit(1)
+    )).first()
+    if state is None:
+        first = (await session.execute(
+            select(func.min(MemoryRevision.created_at)).where(MemoryRevision.memory_uuid == memory_uuid)
+        )).scalar()
+        return {} if first is None else {"created_at": first}
+    values = dict(zip(_ROW_STATE, state[:-1], strict=True))
+    result: dict[str, object] = {column: value for column, value in values.items() if value is not None}
+    if state[-1] is not None:
+        result["created_at"] = state[-1]
+    return result
 
 
 def _restore_snapshot(revision: MemoryRevision, embedding: object) -> dict[str, object]:

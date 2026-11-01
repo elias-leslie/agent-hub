@@ -13,14 +13,17 @@ Rules:
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.db import async_session
 from app.models.memory_unified import Memory
 
 from ._repo_helpers import TIER_REVERSE
+from ._repo_revisions import RevisionRepository
 from .tier_operations import log_tier_change
 
 logger = logging.getLogger(__name__)
@@ -181,11 +184,19 @@ async def _consolidate_pair(
     subordinate_id: str,
     pair: dict[str, Any],
 ) -> None:
-    """Merge stats from subordinate into survivor and archive subordinate."""
+    """Merge stats from subordinate into survivor and archive subordinate.
+
+    Both rows are locked; the archive bumps the subordinate's version and writes a
+    revision, so it shows in history and can be restored.
+    """
     async with async_session() as session:
-        # Fetch both
-        survivor = await session.get(Memory, survivor_id)
-        subordinate = await session.get(Memory, subordinate_id)
+        rows = {
+            str(row.id): row for row in (await session.execute(
+                select(Memory).where(Memory.id.in_([uuid.UUID(str(survivor_id)), uuid.UUID(str(subordinate_id))]))
+                .order_by(Memory.id).with_for_update().execution_options(populate_existing=True)
+            )).scalars()
+        }
+        survivor, subordinate = rows.get(str(survivor_id)), rows.get(str(subordinate_id))
 
         if not survivor or not subordinate:
             logger.warning("Consolidation skipped — memory not found: %s / %s", survivor_id[:8], subordinate_id[:8])
@@ -200,6 +211,13 @@ async def _consolidate_pair(
         # Archive subordinate
         subordinate.status = "archived"
         subordinate.superseded_by = survivor.id
+        subordinate.version = int(subordinate.version or 1) + 1
+        subordinate.updated_at = datetime.now(UTC)
+        await session.flush()
+        await RevisionRepository().record_revision(
+            session, subordinate, action="consolidate", changed_by="system:redundancy",
+            change_reason=f"Near-duplicate of {survivor_id[:8]} (similarity {pair['similarity']:.4f})",
+        )
 
         await session.commit()
 

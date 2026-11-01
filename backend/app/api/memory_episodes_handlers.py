@@ -320,7 +320,9 @@ async def handle_restore_episode_revision(
         success=True,
         episode_id=full_uuid,
         injection_tier=restored.memory.injection_tier,
-        message=f"Restored revision {restored.restored_from}",
+        message=f"Restored revision {restored.restored_from}" + (
+            "; embedding unavailable, so semantic search skips it until it is re-embedded"
+            if restored.embedding_stale else ""),
         version=restored.memory.version,
         revision_id=restored.revision_id,
     )
