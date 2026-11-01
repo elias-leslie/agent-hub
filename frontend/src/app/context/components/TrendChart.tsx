@@ -13,6 +13,7 @@ import {
 import type { Trend, TrendStep } from '@/lib/api/context-observability'
 import {
   CAUSE_META,
+  markerText,
   PART_COLOR,
   shortDate,
   shortDateTime,
@@ -93,9 +94,7 @@ function ChartTooltip({
         {s.markers.length > 0 && (
           <ul className="mt-1 space-y-0.5 text-slate-400">
             {s.markers.map((m) => (
-              <li key={`${m.kind}-${m.at}-${m.label}`}>
-                {m.kind}: {m.label}
-              </li>
+              <li key={`${m.kind}-${m.at}-${m.label}`}>{markerText(m)}</li>
             ))}
           </ul>
         )}

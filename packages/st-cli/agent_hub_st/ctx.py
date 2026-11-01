@@ -142,7 +142,8 @@ def trend(harness: Harness, role: Role, days: Annotated[int, typer.Option("--day
         lines.append(f"  step {when(step.get('at'))} {tok(step.get('before_total'))}->{tok(step.get('after_total'))} {pct(step.get('pct'))} "
                      f"cause={step.get('cause') or UNKNOWN} (harness {tok(parts.get('harness'), sign=True)}, ours {tok(parts.get('ours'), sign=True)})")
     if not steps:
-        lines.append("  no step: a lasting move of 25% or more with 5+ starts each side")
+        jump = payload.get("jump_pct")
+        lines.append(f"  no step: a lasting move of {jump}% or more with 5+ starts each side" if jump else "  no step finder: no jump level is set")
     elif len(steps) > 4:
         lines.append(f"  +{len(steps) - 4} older steps")
     for dip in rows(payload.get("dips"))[:2]:

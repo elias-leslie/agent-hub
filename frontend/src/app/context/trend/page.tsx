@@ -24,6 +24,7 @@ import {
   FLAG_MIN_STARTS,
   harnessLabel,
   LANE_NOTE,
+  markerText,
   modelLabel,
   PART_COLOR,
   roleLabel,
@@ -195,7 +196,7 @@ function StepList({
                   <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
                     {s.markers.map((m) => (
                       <span key={`${m.kind}-${m.at}-${m.label}`}>
-                        {m.kind} · {m.label}
+                        {markerText(m)}
                       </span>
                     ))}
                   </span>

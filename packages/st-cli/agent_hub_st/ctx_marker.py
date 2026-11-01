@@ -9,7 +9,7 @@ from .ctx_format import UNKNOWN, fp, obj, short, tok, when
 
 def _cell(marker: dict[str, Any]) -> str:
     """The sessions a config marker is about: their role, or how they were launched when they have none."""
-    return str(marker.get("work_role") or marker.get("launch_mode") or UNKNOWN)
+    return str(marker.get("role") or marker.get("launch_mode") or UNKNOWN)
 
 
 def marker_line(marker: dict[str, Any]) -> str:

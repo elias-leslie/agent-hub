@@ -217,7 +217,7 @@ async def test_a_step_where_the_model_the_fingerprint_and_the_version_all_change
     assert (result.parts["harness"], result.parts["ours"]) == (5400, 5900) and result.delta == 11300
     assert result.cause == "mixed"
     assert result.changed == ["model", "config_fp", "version"]
-    assert "Changed together: model, config_fp, version" in result.summary
+    assert "Changed together: model, request shape, version" in result.summary
     assert result.before is not None and result.before.model == "claude-opus-5-5"  # compared on one model only
 
 

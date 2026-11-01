@@ -33,7 +33,9 @@ from .steps import (
     window,
 )
 
-LOOKBACK_DAYS = 30
+MAX_TREND_DAYS = 90  # the longest range the Trend (and the steps list) takes
+LOOKBACK_DAYS = MAX_TREND_DAYS + BASELINE_DAYS  # `why` reads this far back, so it finds every step a Trend range shows, with its week before
+DEFAULT_STEPS_DAYS = 30
 RECENT_HOURS = 24
 BLOCK_LIMIT = 15
 STEP_MATCH_S = 60  # `why --at` within this of a step's time is that step
@@ -73,6 +75,9 @@ class Why:
     blocks: list[BlockChange] = field(default_factory=list)
     summary: str = ""
     changed: list[str] = field(default_factory=list)  # what changed at the step: model | config_fp | version
+
+
+CHANGED_WORDS = {"config_fp": "request shape"}  # `changed` keeps the field name for callers; text says it in words
 
 
 def _k(tokens: int | None) -> str:
@@ -212,7 +217,7 @@ def _summary(w: Why, names: list[str]) -> str:
     at = f" at {w.at:%Y-%m-%d %H:%MZ}" if w.at else ""
     bits = []
     if w.config_fp.get("from") != w.config_fp.get("to"):
-        bits.append(f"config_fp {str(w.config_fp.get('from'))[:8]} -> {str(w.config_fp.get('to'))[:8]}")
+        bits.append("request shape changed")
     if w.version.get("from") != w.version.get("to"):
         bits.append(f"{w.harness} {w.version.get('from')} -> {w.version.get('to')}")
     elif w.version.get("to"):
@@ -221,7 +226,7 @@ def _summary(w: Why, names: list[str]) -> str:
         bits.append(f"model {w.model.get('from')} -> {w.model.get('to')}")
     split = f"harness {_signed(w.parts.get('harness'))}, ours {_signed(w.parts.get('ours'))}, brief {_signed(w.parts.get('brief'))}"
     knob = f" Knob: {', '.join(names)}." if names else ""
-    together = f" Changed together: {', '.join(w.changed)}." if len(w.changed) > 1 and w.cause in ("mixed", "unknown") else ""
+    together = f" Changed together: {', '.join(CHANGED_WORDS.get(c, c) for c in w.changed)}." if len(w.changed) > 1 and w.cause in ("mixed", "unknown") else ""
     return f"{lead}{at}: cause {w.cause}. {'; '.join(bits)}. {split}.{together}{knob}"
 
 
@@ -306,6 +311,8 @@ async def why(db: AsyncSession, harness: str, role: str, *, at: datetime | None 
     """Explain a cell. With `at`, the move at that time; with `recent`, the last 24 h against the week before (the
     window a budget card is about); otherwise the newest step, else the last 24 h against the week before."""
     now = now or datetime.now(UTC)
+    if at is not None and at.tzinfo is None:
+        at = at.replace(tzinfo=UTC)  # a time typed without a zone is UTC, as every time here is printed
     policy = policy or await load_policy(db)
     rows = cell_rows(await load_first_turns(db, since=now - timedelta(days=LOOKBACK_DAYS), harness=harness), harness, role)
     if at is not None:
@@ -327,15 +334,17 @@ async def why(db: AsyncSession, harness: str, role: str, *, at: datetime | None 
                          kind="recent", model=_dominant_model([r for r in rows if r.at >= now - timedelta(hours=RECENT_HOURS)]))
 
 
-async def steps_with_markers(db: AsyncSession, harness: str, role: str, *, days: int = LOOKBACK_DAYS, now: datetime | None = None,
+async def steps_with_markers(db: AsyncSession, harness: str, role: str, *, days: int = DEFAULT_STEPS_DAYS, now: datetime | None = None,
                              policy: Policy | None = None) -> list[Step]:
     """The cell's steps (every move of at least jump_pct) with the markers between the last start before and the first after."""
     now = now or datetime.now(UTC)
     policy = policy or await load_policy(db)
     if policy.jump_pct is None:
         return []
-    rows = cell_rows(await load_first_turns(db, since=now - timedelta(days=days), harness=harness), harness, role)
-    steps = find_steps(rows, policy.jump_pct)
+    edge = now - timedelta(days=days)
+    # Rows go back as far as the Trend loads them, so a step near the range's start has its whole week before it.
+    rows = cell_rows(await load_first_turns(db, since=edge - timedelta(days=days + 1), until=now, harness=harness), harness, role)
+    steps = [s for s in find_steps(rows, policy.jump_pct) if s.at >= edge]
     for step in steps:
         lo = step.before.end or step.at - timedelta(days=1)
         hi = step.after.start or step.at

@@ -15,7 +15,6 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from itertools import pairwise
 
 from .baseline import FirstTurn, cell_label, med
 from .markers import Marker
@@ -138,11 +137,14 @@ def _judge(before: Window, after: Window, min_pct: float) -> tuple[tuple[int, fl
     return total, body[1]
 
 
-def _state_change(prev: FirstTurn, row: FirstTurn) -> str | None:
-    """"config" or "version" when both sides know the value and it differs; an unknown value is not a change."""
-    if prev.config_fp and row.config_fp and prev.config_fp != row.config_fp:
+def _state_change(before: Window, after: Window) -> str | None:
+    """"config" or "version" when both sides know the value and it differs; an unknown value is not a change.
+
+    The two sides are the windows `why` prints (what each side's starts mostly had), so the kind and the explanation
+    read the same values."""
+    if before.config_fp and after.config_fp and before.config_fp != after.config_fp:
         return "config"
-    if prev.version and row.version and prev.version != row.version:
+    if before.version and after.version and before.version != after.version:
         return "version"
     return None
 
@@ -151,15 +153,17 @@ def _boundary_steps(rows: list[FirstTurn], min_pct: float) -> list[Found]:
     """A state that stayed and was not already running: sessions of two kinds that interleave in one cell (another
     harness version still open, another tool set) swap places run after run, and only the first sighting counts."""
     found = []
-    for prev, run in pairwise(_runs(rows)):
+    for run in _runs(rows)[1:]:  # the first run is the state already running when the data starts
         at = run[0].at
-        kind = _state_change(prev[0], run[0])
         before_rows = [r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at]
-        if kind is None or len(before_rows) < MIN_BASELINE:
+        if len(before_rows) < MIN_BASELINE:
             continue
         if sum(1 for r in before_rows if _state(r) == _state(run[0])) >= MIN_AFTER:
             continue  # this state was already running in the week before: sessions of two kinds side by side, not a change
         before, after = window(before_rows), window(run)
+        kind = _state_change(before, after)
+        if kind is None:
+            continue  # the week before mostly had the new state too: no change between the two sides
         judged = _judge(before, after, min_pct)
         if judged is None:
             continue
@@ -211,6 +215,48 @@ def find_steps(rows: list[FirstTurn], min_pct: float) -> list[Step]:
     return [f.step for f in find_step_rows(rows, min_pct)]
 
 
+def _part_status(day_rows: list[FirstTurn], base_rows: list[FirstTurn], min_pct: float, near_step: bool) -> str:
+    """Why one (model, role) part of a dip day was not a step: what the step finder saw in that part alone."""
+    n_day, n_base = len(day_rows), len(base_rows)
+    if n_day < MIN_DAY:
+        return f"only {n_day} start{'s' if n_day != 1 else ''} that day; a step needs {MIN_DAY}"
+    if n_base < MIN_BASELINE:
+        got = "no starts" if n_base == 0 else f"only {n_base} start{'s' if n_base != 1 else ''}"
+        return f"{got} in the week before; a step needs {MIN_BASELINE}"
+    before, after = window(base_rows), window(day_rows)
+    body = _pct(before.body, after.body)
+    if body is None:
+        return "no first turn with a known brief on one side, so the move without the brief is unknown"
+    if abs(body[1]) < min_pct:
+        return f"moved {body[1]:+.0f}% without the brief, under the {min_pct:g}% a step needs (a pasted brief is not a context change)"
+    if near_step:
+        return "next to a config or version step, which explains it"
+    return "moved the same way as the day before, which is the step"
+
+
+def _dip_reason(day_rows: list[FirstTurn], ordered: list[FirstTurn], start: datetime, min_pct: float, found: list[Found]) -> str:
+    """The real reason a dip day is not a step. Steps split by model and role, so each (model, role) part of the day is read
+    alone: its starts that day and in the week before, and its move without the brief."""
+    week = start - timedelta(days=BASELINE_DAYS)
+    parts: dict[tuple[str | None, str], list[FirstTurn]] = {}
+    for row in day_rows:
+        parts.setdefault((row.model, row.cell), []).append(row)
+    roles = {cell for _, cell in parts}
+    lines = []
+    for (model, cell), rows_day in sorted(parts.items(), key=lambda kv: -len(kv[1])):
+        base = [r for r in ordered if r.model == model and r.cell == cell and week <= r.at < start]
+        near = any(f.step.kind != "day" and (f.step.model, f.step.role) == (model, cell)
+                   and start <= f.step.at < start + timedelta(days=2) for f in found)
+        status = _part_status(rows_day, base, min_pct, near)
+        name = (model or "unknown model").removeprefix("claude-") + (f" {cell}" if len(roles) > 1 else "")
+        lines.append((name, status))
+    if len(lines) == 1:
+        return lines[0][1]
+    shown = "; ".join(f"{name}: {status}" for name, status in lines[:3])
+    more = f"; {len(lines) - 3} more" if len(lines) > 3 else ""
+    return f"no model and role on its own is a step (each is judged alone). {shown}{more}"
+
+
 def find_dips(rows: list[FirstTurn], min_pct: float, found: list[Found]) -> list[Dip]:
     """Days where the cell's daily median (all its starts together, as the Trend chart draws it) is min_pct or more
     away from the week before but the step finder did not flag: the same rule, with the reason it did not apply."""
@@ -225,19 +271,12 @@ def find_dips(rows: list[FirstTurn], min_pct: float, found: list[Found]) -> list
         move = _pct(before.total, after.total)
         if move is None or abs(move[1]) < min_pct or day in stepped:
             continue
-        if any(f.step.at.date() in (day, day - timedelta(days=1)) for f in found) or (dips and dips[-1].day == day - timedelta(days=1)):
-            continue  # a step of its own explains this day, or it is the return from the dip before
-        if len(day_rows) < MIN_DAY:
-            reason = f"only {len(day_rows)} start{'s' if len(day_rows) != 1 else ''} that day; a step needs {MIN_DAY}"
-        elif len(base_rows) < MIN_BASELINE:
-            reason = f"only {len(base_rows)} start{'s' if len(base_rows) != 1 else ''} in the week before; a step needs {MIN_BASELINE}"
-        else:
-            reason = f"no single model had {MIN_DAY} starts that day and {MIN_BASELINE} in the week before"
-        mix = Counter(r.model.removeprefix("claude-") for r in day_rows if r.model).most_common()
-        if len(mix) > 1:
-            reason += "; the day mixes models (" + ", ".join(f"{m} {n}" for m, n in mix[:3]) + "): a different model's starts can move a median"
+        if any(f.step.at.date() in (day, day - timedelta(days=1)) for f in found):
+            continue  # a step of its own explains this day
+        if dips and dips[-1].day == day - timedelta(days=1) and (dips[-1].pct > 0) != (move[1] > 0):
+            continue  # the return from the dip before: the week before still holds the dip, so the move runs the other way
         dips.append(Dip(day=day, total=after.total, before_total=before.total, pct=move[1], n_day=len(day_rows), n_before=len(base_rows),
-                        reason=reason))
+                        reason=_dip_reason(day_rows, ordered, start, min_pct, found)))
     return dips
 
 

@@ -253,7 +253,7 @@ def test_a_mistyped_command_names_st_ctx_in_its_usage(capsys: pytest.CaptureFixt
 
 
 def test_a_config_marker_says_what_changed() -> None:
-    marker = {"at": "2026-11-01T14:53:00Z", "kind": "config", "harness": "claude", "work_role": "implementation", "launch_mode": "project",
+    marker = {"at": "2026-11-01T14:53:00Z", "kind": "config", "harness": "claude", "role": "implementation", "launch_mode": "project",
               "ref": "08535d69aa", "label": "08535d69aa", "detail": {"from_fp": "6c6aaea6ff", "model": "claude-opus-5-5", "version": "2.1.316"}}
     out = run(["markers"], {("GET", "/api/context-observability/markers"): [marker]}).output
     assert "claude implementation sessions on claude-opus-5-5 v2.1.316 sent a new request shape, 6c6aaea6 -> 08535d69" in out

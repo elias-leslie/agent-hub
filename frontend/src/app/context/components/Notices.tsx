@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react'
 import { ContextHttpError } from '@/lib/api/context-http'
 import { ago } from '../format'
+import { useNow } from '../useNow'
 
 /** A request failed. With stale data on screen the banner says so; without any, it replaces the content. */
 export function FailedNotice({
@@ -16,10 +17,11 @@ export function FailedNotice({
   updatedAt?: number
   onRetry: () => void
 }) {
+  const now = useNow()
   const owner = error instanceof ContextHttpError && error.needsOwner
   const reason = error instanceof Error ? error.message : 'unknown error'
   const loaded = updatedAt
-    ? `, loaded ${ago(new Date(updatedAt).toISOString())}`
+    ? `, loaded ${ago(new Date(updatedAt).toISOString(), now)}`
     : ''
   const text = owner
     ? hasData

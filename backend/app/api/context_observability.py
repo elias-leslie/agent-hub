@@ -75,7 +75,7 @@ async def get_aico_roots(
 
 
 @router.get("/trend", response_model=view_service.Trend)
-async def get_trend(db: DB, harness: Harness, role: Role, auth: Auth = None, days: Annotated[int, Query(ge=1, le=90)] = 30) -> view_service.Trend:
+async def get_trend(db: DB, harness: Harness, role: Role, auth: Auth = None, days: Annotated[int, Query(ge=1, le=why_service.MAX_TREND_DAYS)] = 30) -> view_service.Trend:
     """One cell over time: per-start points, daily medians, harness versions seen, and the steps with the cause `why` gives each."""
     return await view_service.trend(db, harness, role, days=days)
 
@@ -96,7 +96,7 @@ async def get_why(
 
 
 @router.get("/steps", response_model=list[Step])
-async def get_steps(db: DB, harness: Harness, role: Role, auth: Auth = None, days: Annotated[int, Query(ge=1, le=90)] = 30) -> list[Step]:
+async def get_steps(db: DB, harness: Harness, role: Role, auth: Auth = None, days: Annotated[int, Query(ge=1, le=why_service.MAX_TREND_DAYS)] = 30) -> list[Step]:
     """Moves of at least the global jump_pct in this cell, with the markers between the starts either side."""
     return await why_service.steps_with_markers(db, harness, role, days=days)
 

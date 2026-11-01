@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Memory, UsageSession
 from app.models.memory_unified import MemoryRevision
 from app.services.context_observability import views
+from app.services.context_observability import why as why_service
 from tests.services import test_context_why_pg as why_tests
 from tests.services.test_context_why_pg import NOW, STEP_AT, _block, _delivery, _policy, _session
 
@@ -39,6 +40,8 @@ async def client(db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> AsyncGene
     monkeypatch.setattr(views, "matrix", lambda db, *, days, now=None: real_matrix(db, days=days, now=NOW))
     monkeypatch.setattr(views, "trend", lambda db, h, r, *, days, now=None: real_trend(db, h, r, days=days, now=NOW))
     monkeypatch.setattr(views, "cell", lambda db, h, r, *, now=None: real_cell(db, h, r, now=NOW))
+    real_why = why_service.why
+    monkeypatch.setattr(why_service, "why", lambda db, h, r, *, at=None, now=None, policy=None, recent=False: real_why(db, h, r, at=at, now=NOW))
     app = FastAPI()
     app.include_router(router, prefix="/api")
     app.dependency_overrides[get_db] = lambda: db
@@ -117,3 +120,47 @@ async def test_cell_has_the_latest_start_its_blocks_with_the_last_writer_growth_
 
     none = (await client.get("/api/context-observability/cell", params={"harness": "codex", "role": "review"})).json()
     assert (none["latest"], none["blocks"], none["blocks_total"], none["growth"]["measured"]) == (None, [], None, 0)
+
+
+async def _two_steps(db: AsyncSession) -> None:
+    """A step 60 days ago and another 5 days ago whose week before reaches back past a 7-day range's edge."""
+    n = 0
+
+    def add(start: datetime, hours: float, count: int, total: int, fp: str) -> None:
+        nonlocal n
+        for i in range(count):
+            n += 1
+            db.add(_session(n, start + timedelta(hours=hours * i), total, fp=fp))
+
+    add(NOW - timedelta(days=75), 6, 60, 40000, "fp-a")
+    add(NOW - timedelta(days=60), 12, 36, 52000, "fp-b")  # +30%, 60 days ago: only a 90-day Trend range holds it
+    add(NOW - timedelta(days=12), 6, 14, 52000, "fp-b")
+    add(NOW - timedelta(days=8), 6, 14, 45000, "fp-b")  # the week before the second step is not one size
+    add(NOW - timedelta(days=5), 1, 6, 30000, "fp-c")
+    await _policy(db)
+    await db.flush()
+
+
+@pytest.mark.parametrize("days", [7, 14, 30, 90])
+async def test_every_trend_step_reads_the_same_in_why_at_every_range(db: AsyncSession, client: AsyncClient, days: int) -> None:
+    await _two_steps(db)
+    params = {"harness": "claude", "role": "implementation"}
+
+    steps = (await client.get("/api/context-observability/trend", params={**params, "days": days})).json()["steps"]
+
+    assert len(steps) == (2 if days == 90 else 1)
+    for step in steps:
+        assert "config_fp" not in step["summary"] and "request shape changed" in step["summary"]
+        why = (await client.get("/api/context-observability/why", params={**params, "at": step["at"]})).json()
+        assert (why["before"]["total"], why["after"]["total"], why["before"]["n"], why["after"]["n"], why["kind"], why["cause"]) == (
+            step["before_total"], step["after_total"], step["n_before"], step["n_after"], step["kind"], step["cause"])
+
+
+async def test_a_time_without_a_zone_is_utc(db: AsyncSession, client: AsyncClient) -> None:
+    await _two_steps(db)
+    at = (NOW - timedelta(days=5)).replace(tzinfo=None).isoformat()
+
+    response = await client.get("/api/context-observability/why", params={"harness": "claude", "role": "implementation", "at": at})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["kind"] == "config"

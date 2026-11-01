@@ -176,3 +176,19 @@ export const CAUSE_META: Record<string, { label: string; color: string }> = {
   brief: { label: 'Brief', color: '#94a3b8' },
   none: { label: 'No cause found', color: '#64748b' },
 }
+
+/** A step's marker in words: a config marker's label is a request-shape hash, which says nothing to a reader. */
+export function markerText(marker: { kind: string; label: string }): string {
+  switch (marker.kind) {
+    case 'config':
+      return 'request shape changed'
+    case 'harness_version':
+      return `new version ${marker.label}`
+    case 'knob':
+      return `our config file ${marker.label} changed`
+    case 'placement':
+      return `placement change: ${marker.label}`
+    default:
+      return `${marker.kind}: ${marker.label}`
+  }
+}

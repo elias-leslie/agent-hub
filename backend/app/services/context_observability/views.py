@@ -322,9 +322,12 @@ async def trend(db: AsyncSession, harness: str, role: str, *, days: int, now: da
     steps: list[TrendStep] = []
     dips: list[TrendDip] = []
     if policy.jump_pct is not None and window:
-        every = find_step_rows(window, policy.jump_pct)
+        # Steps and dips are found in every row loaded (back to the comparison period), then kept when they fall in the range:
+        # a step in the range's first week still has its whole week before it, as in `why`.
+        every = find_step_rows(rows, policy.jump_pct)
         dips = [TrendDip(day=d.day.isoformat(), total=d.total, before_total=d.before_total, pct=d.pct, n_day=d.n_day, n_before=d.n_before,
-                         reason=d.reason) for d in find_dips(window, policy.jump_pct, every)]
+                         reason=d.reason) for d in find_dips(rows, policy.jump_pct, every) if d.day >= edge.date()]
+        every = [f for f in every if f.step.at >= edge]
         for item in every[-MAX_STEPS:]:
             step = item.step
             why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role,
@@ -401,7 +404,8 @@ class CellLatestMove(BaseModel):
 
 
 class CellMedian(BaseModel):
-    """The median first turn of every start of the cell in the lookback: the number the Cost grid shows."""
+    """The median first turn of every start of the cell in the 30-day lookback. The Cost grid defaults to 7 days, so its
+    number for the same cell can differ; it matches the grid only when the grid is set to 30 days."""
 
     days: int
     n: int

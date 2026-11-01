@@ -145,6 +145,15 @@ def _no_rise(w: Why | None, policy: Policy) -> bool:
     return w.delta <= 0 or (w.pct is not None and policy.jump_pct is not None and w.pct < policy.jump_pct / 2)
 
 
+def _size_fields(state: CellState, reason: str) -> list[dict[str, str]]:
+    """The two sizes a budget item shows, on the basis its text uses: a jump is judged without the brief (one model), a
+    warn level on the plain median of every start."""
+    if reason == "jump" and state.body_recent is not None and state.body_baseline is not None:
+        return [{"label": "Now, without the brief (24 h median)", "value": _k(state.body_recent)},
+                {"label": "Week before, without the brief", "value": _k(state.body_baseline)}]
+    return [{"label": "Now (24 h median)", "value": _k(state.recent)}, {"label": "Week before", "value": _k(state.baseline)}]
+
+
 def budget_notice(state: CellState, w: Why | None, policy: Policy, *, reason: str | None = None, held: bool = False) -> dict[str, Any]:
     """The item for a cell. `reason` overrides state.reason (an item held open between its clear line and its level)."""
     cell = f"{state.harness} {state.cell}"
@@ -157,7 +166,8 @@ def budget_notice(state: CellState, w: Why | None, policy: Policy, *, reason: st
         lead = (f"{cell} first turn rose {state.body_pct:.0f}% (without the brief) to {_k(state.body_recent)} "
                 f"(week before: {_k(state.body_baseline)}).")
     else:
-        lead = f"{cell} first turn is {_k(state.recent)}, still {state.body_pct or 0:.0f}% above the week before ({_k(state.body_baseline)})."
+        lead = (f"{cell} first turn (without the brief) is {_k(state.body_recent)}, still {state.body_pct or 0:.0f}% above "
+                f"the week before ({_k(state.body_baseline)}).")
     if w is None:
         cause = "Cause: not worked out."
     elif reason == "warn" and _no_rise(w, policy):
@@ -174,7 +184,7 @@ def budget_notice(state: CellState, w: Why | None, policy: Policy, *, reason: st
                    f"\nBudget row: context_budgets {state.harness}/{state.cell} (most specific match). "
                    "It clears itself when the cell is clearly back under.")[:4000],
         "key": budget_key(state.harness, state.cell), "open": _open_url(f"/context/cell/{state.harness}/{state.cell}"),
-        "fields": [{"label": "Now (24 h median)", "value": _k(state.recent)}, {"label": "Week before", "value": _k(state.baseline)},
+        "fields": [*_size_fields(state, reason),
                    {"label": "Budget", "value": _k(state.warn_tokens)}, {"label": "Starts in 24 h", "value": str(state.n_recent)}],
         "actions": ["look-into", "open", "mute"], "primary": "look-into",
     }

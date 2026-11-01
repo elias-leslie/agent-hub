@@ -407,3 +407,80 @@ async def test_a_pass_stops_sending_after_the_first_failure_and_never_waits_past
     assert calls == ["slow"]
     assert await alerts.Sender(budget_s=5).run(fine) is True
     assert await alerts.Sender(budget_s=0).run(fine) is None  # no time left: nothing starts
+
+
+# ---- second review (fixes 2): kind, dip reasons, budget numbers ----
+
+
+def _runs_of(start: datetime, *groups: tuple[int, int, str, str]) -> list[FirstTurn]:
+    """(count, total, fingerprint, version) groups, one start every 10 minutes, one after another."""
+    rows: list[FirstTurn] = []
+    for count, total, fp, version in groups:
+        rows += _series(start + timedelta(minutes=10 * len(rows)), count, total, fp=fp, version=version)
+    return rows
+
+
+def test_a_steps_kind_is_read_from_the_two_sides_why_prints():
+    # The week before is mostly one request shape on 2.1.301 plus a run on 2.1.300; the step starts on the other shape,
+    # still 2.1.301. Comparing the first start of the run before with the new run's said "version"; the sides say config.
+    other, run = ("fp-c", "2.1.301"), ("fp-a", "2.1.300")
+    before = [(4, 30000, *other), (5, 30000, *run), (4, 30000, *other), (5, 30000, *run), (4, 30000, *other), (5, 30000, *run), (4, 30000, *other)]
+    rows = _runs_of(NOW - timedelta(days=3), *before, (6, 45000, "fp-a", "2.1.301"))
+
+    (step,) = steps.find_steps(rows, 25)
+
+    assert (step.before.version, step.after.version) == ("2.1.301", "2.1.301")
+    assert (step.before.config_fp, step.after.config_fp) == ("fp-c", "fp-a")
+    assert step.kind == "config"
+
+
+def test_a_dip_made_by_a_model_that_had_no_week_before_says_so_not_that_no_model_had_starts():
+    t0 = NOW - timedelta(days=14)
+    rows = [_turn(t0 + timedelta(hours=8 * k), 30000, model="opus") for k in range(20)]
+    day = t0 + timedelta(days=7, hours=1)
+    rows += [_turn(day + timedelta(minutes=10 * k), 30000, model="opus") for k in range(10)]
+    rows += [_turn(day + timedelta(minutes=10 * k + 5), 60000, model="haiku") for k in range(10)]
+
+    (dip,) = steps.find_dips(rows, 25, steps.find_step_rows(rows, 25))
+
+    assert "opus: moved +0% without the brief, under the 25%" in dip.reason
+    assert "haiku: no starts in the week before; a step needs 5" in dip.reason
+    assert "no single model had" not in dip.reason
+
+
+def test_a_lane_day_split_over_roles_says_there_were_too_few_starts_in_each_role():
+    t0 = datetime(2026, 10, 19, tzinfo=UTC)
+    roles = ["a", "b", "c"]
+    rows = [_turn(t0 + timedelta(hours=8 * k), 30000, role=roles[k % 3]) for k in range(21)]
+    day = t0 + timedelta(days=7, hours=1)
+    rows += [_turn(day + timedelta(minutes=10 * k), 45000, role=roles[k % 3]) for k in range(12)]
+
+    (dip,) = steps.find_dips(rows, 25, steps.find_step_rows(rows, 25))
+
+    assert (dip.n_day, dip.reason.count("only 4 starts that day; a step needs 5")) == (12, 3)
+    assert "opus a:" in dip.reason and "opus c:" in dip.reason
+
+
+def test_a_second_low_day_moving_the_same_way_is_listed_not_called_a_return():
+    t0 = datetime(2026, 10, 19, tzinfo=UTC)
+    rows = [_turn(t0 + timedelta(hours=6 * k), 30000) for k in range(28)]
+    low1, low2 = t0 + timedelta(days=7, hours=1), t0 + timedelta(days=8, hours=1)
+    rows += [_turn(low1 + timedelta(minutes=10 * k), 15000) for k in range(3)] + [_turn(low2 + timedelta(minutes=10 * k), 15000) for k in range(3)]
+
+    dips = steps.find_dips(rows, 25, steps.find_step_rows(rows, 25))
+
+    assert [d.day for d in dips] == [low1.date(), low2.date()]
+
+
+def test_a_held_budget_item_states_the_numbers_on_the_basis_its_text_uses():
+    # last 24 h: 31K with the brief, 24K without it; the week before 20K without the brief (+20%) and 25K with it
+    state = CellState("claude", "implementation", 8, 31000, 30, 25000, 30000, 25, 20.0, "jump", body_recent=24000, body_baseline=20000)
+
+    held = alerts.budget_notice(state, _why(), _policy(Budget("*", "*", 60000)), held=True)
+    fresh = alerts.budget_notice(state, _why(), _policy(Budget("*", "*", 60000)))
+
+    assert "first turn (without the brief) is 24.0K, still 20% above the week before (20.0K)" in held["body"]
+    assert "31.0K" not in held["body"]
+    for notice in (held, fresh):
+        fields = {f["label"]: f["value"] for f in notice["fields"]}
+        assert fields["Now, without the brief (24 h median)"] == "24.0K" and fields["Week before, without the brief"] == "20.0K"
