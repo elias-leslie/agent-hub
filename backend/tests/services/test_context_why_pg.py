@@ -45,13 +45,15 @@ from app.services.context_observability.policy import load_policy
 
 pytestmark = pytest.mark.integration
 
-MIGRATION = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "d3b8f1a6c294_context_markers_config_first_sighting.py"
+VERSIONS = Path(__file__).resolve().parents[2] / "alembic" / "versions"
+MIGRATION = VERSIONS / "a7c3e9d41b52_context_budgets_knobs_markers.py"  # the policy rows
+MARKERS_MIGRATION = VERSIONS / "d3b8f1a6c294_context_markers_config_first_sighting.py"  # the markers view as it is now
 NOW = datetime(2026, 11, 1, 18, tzinfo=UTC)
 STEP_AT = datetime(2026, 11, 1, 14, 53, 44, tzinfo=UTC)
 
 
-def _migration() -> Any:
-    spec = importlib.util.spec_from_file_location("context_markers_migration", MIGRATION)
+def _migration(path: Path = MIGRATION) -> Any:
+    spec = importlib.util.spec_from_file_location(f"context_migration_{path.stem}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -68,7 +70,7 @@ def _create_tables(sync_connection: Any) -> None:
             if isinstance(column.type, Enum):
                 column.type.create(sync_connection, checkfirst=True)
         sync_connection.execute(CreateTable(table, include_foreign_key_constraints=None if table in fks else []))
-    sync_connection.execute(text(_migration().MARKERS_VIEW_SQL))
+    sync_connection.execute(text(_migration(MARKERS_MIGRATION).MARKERS_VIEW_SQL))
 
 
 @pytest_asyncio.fixture
@@ -274,15 +276,18 @@ async def test_markers_list_revisions_of_delivered_context_versions_configs_and_
                          payload={"context": {"consumer_profile": "agent_startup"}, "before_placements": [], "after_placements": [{"x": 1}]}))
     db.add(ContextRecord(id=str(uuid.uuid4()), kind="change", actor="api", source_keys=[], created_at=STEP_AT,
                          payload={"before_placements": [], "after_placements": []}))
-    db.add_all([_session(1, STEP_AT, 1000, fp="a"), _session(2, STEP_AT + timedelta(hours=1), 1000, fp="a"),
-                _session(3, STEP_AT + timedelta(hours=2), 1000, fp="b", version="2.1.317")])
+    # a, a, b is a change; b back to a and to b again is two kinds of session side by side (not new); another version starts over
+    db.add_all([_session(1, STEP_AT, 1000, fp="a"), _session(2, STEP_AT + timedelta(minutes=10), 1000, fp="a"),
+                _session(3, STEP_AT + timedelta(minutes=20), 1000, fp="b"), _session(4, STEP_AT + timedelta(minutes=30), 1000, fp="a"),
+                _session(5, STEP_AT + timedelta(minutes=40), 1000, fp="b"),
+                _session(6, STEP_AT + timedelta(hours=2), 1000, fp="c", version="2.1.317")])
     await db.flush()
 
     found = await view_markers(db, STEP_AT - timedelta(hours=1), STEP_AT + timedelta(hours=3))
 
     kinds = sorted((m.kind, m.ref if m.kind != "memory" else "memory") for m in found)
     assert kinds == sorted([("memory", "memory"), ("prompt", "safety-directive"), ("harness_version", "2.1.316"), ("harness_version", "2.1.317"),
-                            ("config", "a"), ("config", "b"), ("placement", next(m.ref for m in found if m.kind == "placement"))])
+                            ("config", "b"), ("placement", next(m.ref for m in found if m.kind == "placement"))])
     memory = next(m for m in found if m.kind == "memory")
     assert (memory.ref, memory.detail["writer_session"], memory.label) == (delivered, "aico-widget-lane", f"mem {delivered[:4]}")
     config_b = next(m for m in found if m.kind == "config" and m.ref == "b")

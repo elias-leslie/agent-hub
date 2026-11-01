@@ -40,6 +40,14 @@ async def _earliest(db: AsyncSession) -> datetime | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def _earliest_launched(db: AsyncSession) -> datetime | None:
+    """The oldest measured first turn of a launched session with a role (a lane or the coordinator): roles were tagged later
+    than the first measured start, so the launched-role rows reach back less far than `_earliest`."""
+    stmt = select(func.min(UsageSession.first_turn_at)).where(
+        UsageSession.first_turn_tokens.is_not(None), UsageSession.work_role.is_not(None), UsageSession.launch_mode.in_(("project", "exec")))
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 def _dominant(values: list[str | None]) -> str | None:
     known = [v for v in values if v]
     return Counter(known).most_common(1)[0][0] if known else None
@@ -88,13 +96,14 @@ class Matrix(BaseModel):
     days: int
     generated_at: datetime
     coverage_from: datetime | None  # the oldest measured start overall; younger than the window means the data does not reach back that far
+    launched_from: datetime | None  # the oldest measured start that carries a role (launched sessions): later than coverage_from
     jump_pct: int | None
     harnesses: list[HarnessInfo]
     cells: list[MatrixCell]
 
 
 def build_matrix(rows: list[FirstTurn], policy: Policy, states: list[CellState], *, days: int, now: datetime,
-                 coverage_from: datetime | None = None) -> Matrix:
+                 coverage_from: datetime | None = None, launched_from: datetime | None = None) -> Matrix:
     """rows: first turns from now - 2 * days (the second half is the comparison window)."""
     edge, old = now - timedelta(days=days), now - timedelta(days=2 * days)
     state_by = {(s.harness, s.cell): s for s in states}
@@ -144,7 +153,8 @@ def build_matrix(rows: list[FirstTurn], policy: Policy, states: list[CellState],
     # The version in use is the one that appeared last: sub-agents and resumed sessions keep older ones alive.
     harnesses = [HarnessInfo(harness=h, version=max(first_seen[h], key=lambda v: first_seen[h][v]) if h in first_seen else None,
                              latest_at=r.at, n=counts[h]) for h, r in sorted(latest.items())]
-    return Matrix(days=days, generated_at=now, coverage_from=coverage_from or min((r.at for r in rows), default=None), jump_pct=policy.jump_pct,
+    return Matrix(days=days, generated_at=now, coverage_from=coverage_from or min((r.at for r in rows), default=None),
+                  launched_from=launched_from, jump_pct=policy.jump_pct,
                   harnesses=harnesses, cells=cells)
 
 
@@ -153,7 +163,7 @@ async def matrix(db: AsyncSession, *, days: int, now: datetime | None = None) ->
     policy = await load_policy(db)
     rows = await load_first_turns(db, since=now - timedelta(days=2 * days), until=now)
     return build_matrix(rows, policy, await cell_states(db, now=now, policy=policy), days=days, now=now,
-                        coverage_from=await _earliest(db))
+                        coverage_from=await _earliest(db), launched_from=await _earliest_launched(db))
 
 
 # --- trend ---------------------------------------------------------------------------------------------------------
@@ -219,6 +229,11 @@ class TrendHeadline(BaseModel):
     delta_pct: float | None
 
 
+class ModelCount(BaseModel):
+    model: str
+    n: int
+
+
 class TrendDip(BaseModel):
     """A day that moved by the step threshold or more against the week before but is not a step, and the plain reason."""
 
@@ -246,6 +261,7 @@ class Trend(BaseModel):
     daily: list[TrendDay]
     versions: list[VersionSighting]
     steps: list[TrendStep]
+    models: list[ModelCount]  # starts per model in the window, most first: a role that mixes models says so
     dips: list[TrendDip]  # days the chart shows moving by the step threshold that the step finder did not flag, with the reason
 
 
@@ -326,7 +342,8 @@ async def trend(db: AsyncSession, harness: str, role: str, *, days: int, now: da
         headline=headline(window, previous),
         points=[TrendPoint(at=r.at, total=r.total, harness_tokens=r.harness_tokens, ours=r.ours_tokens, brief=r.brief_tokens,
                            version=r.version, model=r.model) for r in points],
-        points_total=len(window), daily=daily_series(window), versions=version_sightings(window), steps=steps, dips=dips)
+        points_total=len(window), daily=daily_series(window), versions=version_sightings(window), steps=steps, dips=dips,
+        models=[ModelCount(model=m, n=n) for m, n in Counter(r.model for r in window if r.model).most_common()])
 
 
 # --- cell ----------------------------------------------------------------------------------------------------------
@@ -383,12 +400,24 @@ class CellLatestMove(BaseModel):
     summary: str
 
 
+class CellMedian(BaseModel):
+    """The median first turn of every start of the cell in the lookback: the number the Cost grid shows."""
+
+    days: int
+    n: int
+    total: int | None
+    harness_tokens: int | None
+    ours: int | None
+    brief: int | None
+
+
 class CellView(BaseModel):
     harness: str
     role: str
     generated_at: datetime
     lookback_days: int
-    latest: CellStart | None
+    latest: CellStart | None  # the newest start alone; the parts below are that one start's, not the median
+    median: CellMedian | None  # all starts of the lookback
     config_fp: str | None
     delivery_id: str | None
     parts: dict[str, PartValue]
@@ -460,7 +489,7 @@ async def cell(db: AsyncSession, harness: str, role: str, *, now: datetime | Non
     rows = cell_rows(await load_first_turns(db, since=since, until=now, harness=harness), harness, role)
     budget = policy.budget_for(harness, role)
     state = next((s for s in await cell_states(db, now=now, policy=policy) if s.harness == harness and s.cell == role), None)
-    empty = CellView(harness=harness, role=role, generated_at=now, lookback_days=CELL_LOOKBACK_DAYS, latest=None, config_fp=None,
+    empty = CellView(harness=harness, role=role, generated_at=now, lookback_days=CELL_LOOKBACK_DAYS, latest=None, median=None, config_fp=None,
                      delivery_id=None, parts={}, blocks=[], blocks_total=None, budget_warn=budget.warn_tokens if budget else None,
                      budget_jump_pct=policy.jump_pct, state=state, growth=_growth([], []), latest_move=None, recent=[])
     if not rows:
@@ -485,6 +514,8 @@ async def cell(db: AsyncSession, harness: str, role: str, *, now: datetime | Non
                                 found=found[-1])
             move = CellLatestMove(at=step.at, kind=step.kind, cause=why.cause, delta=why.delta, pct=why.pct, summary=why.summary)
     return empty.model_copy(update={
-        "latest": _start(latest), "config_fp": latest.config_fp, "delivery_id": latest.delivery_id, "parts": parts, "blocks": blocks,
+        "latest": _start(latest), "median": CellMedian(days=CELL_LOOKBACK_DAYS, n=len(rows), total=med(r.total for r in rows),
+                                                       harness_tokens=med(r.harness_tokens for r in rows), ours=med(r.ours_tokens for r in rows),
+                                                       brief=med(r.brief_tokens for r in rows)), "config_fp": latest.config_fp, "delivery_id": latest.delivery_id, "parts": parts, "blocks": blocks,
         "blocks_total": sum(b.tokens for b in blocks) if blocks else None, "growth": _growth(rows, list(sessions)), "latest_move": move,
         "recent": [_start(r) for r in reversed(rows[-RECENT_STARTS:])]})

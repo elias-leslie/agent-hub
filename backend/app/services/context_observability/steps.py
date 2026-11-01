@@ -225,15 +225,17 @@ def find_dips(rows: list[FirstTurn], min_pct: float, found: list[Found]) -> list
         move = _pct(before.total, after.total)
         if move is None or abs(move[1]) < min_pct or day in stepped:
             continue
-        if any(f.step.at.date() in (day, day - timedelta(days=1)) for f in found):
-            continue  # a step of its own explains this day
+        if any(f.step.at.date() in (day, day - timedelta(days=1)) for f in found) or (dips and dips[-1].day == day - timedelta(days=1)):
+            continue  # a step of its own explains this day, or it is the return from the dip before
         if len(day_rows) < MIN_DAY:
             reason = f"only {len(day_rows)} start{'s' if len(day_rows) != 1 else ''} that day; a step needs {MIN_DAY}"
         elif len(base_rows) < MIN_BASELINE:
             reason = f"only {len(base_rows)} start{'s' if len(base_rows) != 1 else ''} in the week before; a step needs {MIN_BASELINE}"
         else:
-            reason = (f"starts are compared per model and role, and none had {MIN_DAY} that day and {MIN_BASELINE} in the week "
-                      "before, or the brief alone moved")
+            reason = f"starts are compared per model and role, and none had {MIN_DAY} that day and {MIN_BASELINE} in the week before"
+        mix = Counter(r.model.removeprefix("claude-") for r in day_rows if r.model).most_common()
+        if len(mix) > 1:
+            reason += "; that day mixes models (" + ", ".join(f"{m} {n}" for m, n in mix[:3]) + ") and steps compare one model at a time"
         dips.append(Dip(day=day, total=after.total, before_total=before.total, pct=move[1], n_day=len(day_rows), n_before=len(base_rows),
                         reason=reason))
     return dips

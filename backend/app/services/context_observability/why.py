@@ -271,9 +271,9 @@ async def explain(db: AsyncSession, rows: list[FirstTurn], harness: str, role: s
 
     # One side's version, fingerprint and model are what its starts mostly had, so these lines and the part changes
     # above describe the same two sets of starts.
-    if found is not None and before.start and before.end and after.start and after.end:
+    if found is not None and after.start and after.end:
         # every model in the same cell over each side's span: the step's own sides hold one model, a model change shows here
-        model_from = _dominant_model([r for r in rows if before.start <= r.at <= before.end])
+        model_from = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at])
         model_to = _dominant_model([r for r in rows if after.start <= r.at <= after.end])
     else:
         model_from = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at])
