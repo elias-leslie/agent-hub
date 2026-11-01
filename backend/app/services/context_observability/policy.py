@@ -13,6 +13,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import ContextBudget, ContextKnob
 
 ANY = "*"
+LANE = "lane"  # the owner's word for any launched project session that is not the coordinator (steps.ROLE_GROUPS)
+_NOT_LANE = ("blank", "coordinator", "exec:coordinator", "unknown")
+
+
+def is_lane_cell(cell: str) -> bool:
+    """Whether a Cost-matrix cell label is a lane (a launched role): not the coordinator, a blank or sub-agent session,
+    or one with no role. The same set as steps.ROLE_GROUPS["lane"], which works from the launch mode and role."""
+    return cell == LANE or not (cell in _NOT_LANE or cell.startswith(("subagent:", "agent:")))
+
+
+def _roles(role: str) -> list[str]:
+    """A cell's own label first, then the group it belongs to."""
+    return [role, LANE] if role != LANE and is_lane_cell(role) else [role]
 
 
 @dataclass(frozen=True)
@@ -39,15 +52,20 @@ class Policy:
     knobs: tuple[Knob, ...]
 
     def budget_for(self, harness: str, role: str) -> Budget | None:
-        """The most specific row: (harness, role), then (harness, *), then (*, role), then (*, *)."""
+        """The most specific row: (harness, role), then (*, role), then (harness, *), then (*, *). A role row beats a
+        harness row, so a (*, coordinator) row the owner adds applies to every harness that has no coordinator row of
+        its own. A "lane" row covers every lane cell; the cell's own row comes first."""
         by_key = {(b.harness, b.role): b for b in self.budgets}
-        for key in ((harness, role), (harness, ANY), (ANY, role), (ANY, ANY)):
+        roles = _roles(role)
+        for key in (*((harness, r) for r in roles), *((ANY, r) for r in roles), (harness, ANY), (ANY, ANY)):
             if key in by_key:
                 return by_key[key]
         return None
 
     def knobs_for(self, harness: str, role: str) -> list[Knob]:
-        return [k for k in self.knobs if k.harness in (ANY, harness) and k.role in (ANY, role)]
+        """Knobs registered for this harness and cell (or the "lane" group, which a lane cell belongs to)."""
+        roles = {ANY, *_roles(role)}
+        return [k for k in self.knobs if k.harness in (ANY, harness) and k.role in roles]
 
 
 async def load_policy(db: AsyncSession) -> Policy:

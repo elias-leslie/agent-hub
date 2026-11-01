@@ -7,6 +7,7 @@ migration). Nightshift is never called: send and resolve are replaced by recorde
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import uuid
@@ -150,7 +151,7 @@ async def _replay_1101(db: AsyncSession, repo: Path) -> None:
                 _delivery("d-new", STEP_AT, [_block("m1", 2000)])])
     for i in range(40):
         db.add(_session(i, STEP_AT - timedelta(hours=14) + timedelta(minutes=15 * i), 48400, delivery="d-old"))
-    for i in range(4):
+    for i in range(6):
         db.add(_session(100 + i, STEP_AT + timedelta(minutes=30 * i), 24000, delivery="d-new", fp="fp-b", harness_tokens=24000 - 5100))
     await _policy(db, knob_repo=repo)
     await db.flush()
@@ -179,7 +180,7 @@ async def test_a_change_with_no_knob_changed_and_a_new_version_is_blamed_on_the_
     repo = _git_repo(tmp_path / "aico", datetime(2026, 10, 1, 9, tzinfo=UTC))  # long before the step
     for i in range(20):
         db.add(_session(i, STEP_AT - timedelta(days=2) + timedelta(hours=i), 42000))
-    for i in range(4):
+    for i in range(6):
         db.add(_session(100 + i, STEP_AT + timedelta(hours=i), 48800, version="2.1.318", fp="fp-b"))
     await _policy(db, knob_repo=repo)
     await db.flush()
@@ -189,6 +190,33 @@ async def test_a_change_with_no_knob_changed_and_a_new_version_is_blamed_on_the_
     assert (result.cause, result.knobs) == ("harness_version", [])
     assert (result.version["from"], result.version["to"]) == ("2.1.316", "2.1.318")
     assert result.parts["harness"] == 6800 and result.parts["ours"] == 0
+
+
+async def test_a_step_where_the_model_the_fingerprint_and_the_version_all_changed_is_not_blamed_on_the_larger_part(
+        db: AsyncSession, tmp_path: Path) -> None:
+    """claude subagent:general-purpose, 2026-10-31 13:14Z: sonnet to opus, fp 6952085d to 97c3f89f, 2.1.314 to 2.1.316,
+    harness +5.4K and ours +5.9K. The old code said "ours" by size alone."""
+    repo = _git_repo(tmp_path / "aico", datetime(2026, 10, 1, 9, tzinfo=UTC))
+    cell = "subagent:general-purpose"
+    rows = [_session(i, STEP_AT - timedelta(days=2) + timedelta(hours=i), 35000, model="claude-sonnet-5-5", version="2.1.314", fp="fp-a")
+            for i in range(12)]
+    rows += [_session(100 + i, STEP_AT - timedelta(days=1) + timedelta(hours=i), 30000, ours=4000, harness_tokens=25900, version="2.1.314", fp="fp-a")
+             for i in range(8)]
+    rows += [_session(200 + i, STEP_AT + timedelta(hours=i), 41300, ours=9900, harness_tokens=31300, version="2.1.316", fp="fp-b")
+             for i in range(6)]
+    for row in rows:
+        row.launch_mode, row.work_role = cell, "implementation"
+    db.add_all(rows)
+    await _policy(db, knob_repo=repo)
+    await db.flush()
+
+    result = await why_service.why(db, "claude", cell, now=NOW)
+
+    assert (result.parts["harness"], result.parts["ours"]) == (5400, 5900) and result.delta == 11300
+    assert result.cause == "mixed"
+    assert result.changed == ["model", "config_fp", "version"]
+    assert "Changed together: model, config_fp, version" in result.summary
+    assert result.before is not None and result.before.model == "claude-opus-5-5"  # compared on one model only
 
 
 async def test_a_grown_block_is_named_with_the_session_that_wrote_it(db: AsyncSession, tmp_path: Path) -> None:
@@ -418,3 +446,219 @@ async def test_the_api_serves_why_and_edits_budgets_as_rows(db: AsyncSession, cl
     assert (await client.request("DELETE", "/context-observability/budgets", params={"harness": "claude", "role": "lane"})).status_code == 204
     steps = await client.get("/context-observability/steps", params={"harness": "claude", "role": "lane", "days": 3})
     assert steps.status_code == 200 and steps.json()[0]["kind"] == "config"
+
+
+# ---- review fixes (M3 review): the window that tripped, commits per send, hysteresis, lane scope, baseline ----
+
+
+async def _no_queue(_db: AsyncSession, **_: Any) -> Any:
+    return type("Q", (), {"summary": type("S", (), {"count": 0})(), "rows": []})()
+
+
+@pytest.fixture
+def no_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(alerts, "build_queue", _no_queue)
+
+
+def _spread(db: AsyncSession, first: int, n: int, at: datetime, total: int, step: timedelta = timedelta(minutes=10), **kw: Any) -> None:
+    for i in range(n):
+        db.add(_session(first + i, at + step * i, total, **kw))
+
+
+async def test_a_budget_card_explains_the_last_day_not_the_newest_step_of_any_direction(
+    db: AsyncSession, sent: dict[str, AsyncMock], no_queue: None, tmp_path: Path,
+) -> None:
+    repo = _git_repo(tmp_path / "aico", NOW - timedelta(days=22, hours=1))
+    await _policy(db, knob_repo=repo, warn=30000)
+    _spread(db, 0, 12, NOW - timedelta(days=28), 48000, step=timedelta(hours=8))  # three weeks ago: a drop with a knob commit
+    _spread(db, 100, 30, NOW - timedelta(days=21), 24000, step=timedelta(hours=14), fp="fp-b")
+    _spread(db, 200, 2, NOW - timedelta(hours=20), 31000, fp="fp-b")  # last day: three starts over the level, no step of their own
+    _spread(db, 210, 1, NOW - timedelta(hours=1), 31000, fp="fp-b")
+    await db.commit()
+
+    done = await alerts.evaluate(db, now=NOW)
+
+    key = alerts.budget_key("claude", "implementation")
+    assert done[key] == "pushed"
+    body = sent["send"].await_args_list[-1].args[0]["body"]
+    assert "over its 30.0K budget" in body and "Knob: no knob of ours changed." in body
+    assert "lane-tools.json" not in body and "-2" not in body  # the old drop (-24K, the knob) is not this card's cause
+    assert "Harness +" in body
+
+
+async def test_a_failure_after_a_send_cannot_make_the_next_pass_send_it_again(
+    db: AsyncSession, sent: dict[str, AsyncMock], monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.subscription_accounting import collector
+    from tests.unit.test_context_steps_alerts import _queue
+
+    async def queue(_db: AsyncSession, **_: Any) -> Any:
+        return _queue(3)
+
+    async def broken(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("db hiccup")
+
+    monkeypatch.setattr(alerts, "build_queue", queue)
+    await _policy(db)
+    await db.commit()
+    monkeypatch.setattr(alerts, "cell_states", broken)
+
+    await collector._evaluate_context_alerts(db)  # review is sent, then the budget half fails and the pass rolls back
+    monkeypatch.undo()
+    monkeypatch.setattr(alerts, "build_queue", queue)
+    monkeypatch.setattr("app.services.owner_notice.send_notice", sent["send"])
+    done = await alerts.evaluate(db, now=NOW + timedelta(minutes=5))
+
+    assert done[alerts.REVIEW_KEY] == "quiet" and sent["send"].await_count == 1
+
+
+async def test_a_cell_keeps_its_item_through_thin_data_and_a_band_and_clears_only_when_clearly_under(
+    db: AsyncSession, sent: dict[str, AsyncMock], no_queue: None,
+) -> None:
+    await _policy(db, warn=30000)
+    _spread(db, 0, 8, NOW - timedelta(days=4), 24000)
+    _spread(db, 100, 3, NOW - timedelta(hours=5), 31000)
+    await db.commit()
+    key = alerts.budget_key("claude", "implementation")
+
+    async def at(hours: float) -> str:
+        return (await alerts.evaluate(db, now=NOW + timedelta(hours=hours))).get(key, "untouched")
+
+    assert await at(0) == "pushed" and sent["send"].await_count == 1
+    assert await at(20) == "untouched" and sent["resolve"].await_count == 0  # no start in the last day: not "back under"
+    _spread(db, 200, 3, NOW + timedelta(hours=21), 31000)
+    await db.commit()
+    assert await at(22.1) == "quiet" and sent["send"].await_count == 1  # it comes back inside the day: no second card
+    _spread(db, 300, 3, NOW + timedelta(hours=48), 28000)  # 93% of the level: neither over nor clear
+    await db.commit()
+    assert await at(50) == "refreshed" and sent["resolve"].await_count == 0
+    assert "near its budget" in sent["send"].await_args_list[-1].args[0]["title"]
+    _spread(db, 400, 3, NOW + timedelta(hours=74), 26000)  # under 90%
+    await db.commit()
+    assert await at(75) == "resolved" and sent["resolve"].await_count == 1
+
+
+async def test_one_failed_send_ends_the_pass_instead_of_costing_a_timeout_per_cell(
+    db: AsyncSession, sent: dict[str, AsyncMock], no_queue: None,
+) -> None:
+    await _policy(db, warn=30000)
+    for n, role in enumerate(("implementation", "research")):
+        _spread(db, n * 100, 8, NOW - timedelta(days=4), 24000, role=role)
+        _spread(db, n * 100 + 50, 3, NOW - timedelta(hours=5), 31000, role=role)
+    await db.commit()
+    sent["send"].return_value = False
+
+    done = await alerts.evaluate(db, now=NOW)
+
+    assert sent["send"].await_count == 1
+    assert sorted(v for k, v in done.items() if k.startswith(alerts.BUDGET_KEY_PREFIX)) == ["deferred", "failed"]
+    sent["send"].return_value = True
+    again = await alerts.evaluate(db, now=NOW + timedelta(minutes=5))
+    assert sorted(v for k, v in again.items() if k.startswith(alerts.BUDGET_KEY_PREFIX)) == ["pushed", "pushed"]  # nothing was stored for either
+
+
+async def test_a_lane_step_is_explained_in_the_role_it_happened_in(db: AsyncSession) -> None:
+    await _policy(db)
+    _spread(db, 0, 12, NOW - timedelta(days=4), 20000, step=timedelta(hours=6))  # implementation
+    _spread(db, 100, 6, NOW - timedelta(days=1), 30000, fp="fp-b")  # ... rises 50% with a config change
+    _spread(db, 200, 14, NOW - timedelta(days=4), 20000, step=timedelta(hours=7), role="research")  # research lanes are flat
+    _spread(db, 300, 24, NOW - timedelta(days=1), 20000, step=timedelta(minutes=30), role="research")
+
+    result = await why_service.why(db, "claude", "lane", now=NOW)
+
+    assert (result.kind, result.delta, result.after.n if result.after else None) == ("config", 10000, 6)  # the step's own delta
+    assert result.before is not None and result.before.n == 12
+
+
+async def test_a_knob_commit_without_a_fingerprint_change_is_a_marker_not_a_cause(db: AsyncSession, tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path / "aico", STEP_AT - timedelta(minutes=30))
+    _spread(db, 0, 20, STEP_AT - timedelta(days=2), 40000, step=timedelta(hours=2))
+    _spread(db, 100, 6, STEP_AT, 48000)
+    await _policy(db, knob_repo=repo)
+
+    result = await why_service.why(db, "claude", "implementation", at=STEP_AT, now=NOW)
+
+    assert (result.cause, result.knobs) == ("harness", [])
+    assert [m.kind for m in result.markers if m.kind == "knob"] == ["knob"]  # still on the timeline
+    assert "Knob" not in result.summary
+
+
+async def test_a_version_and_a_knob_at_once_are_not_told_apart(db: AsyncSession, tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path / "aico", STEP_AT - timedelta(minutes=30))
+    _spread(db, 0, 20, STEP_AT - timedelta(days=2), 40000, step=timedelta(hours=2))
+    _spread(db, 100, 6, STEP_AT, 48000, version="2.1.318", fp="fp-b")
+    await _policy(db, knob_repo=repo)
+
+    result = await why_service.why(db, "claude", "implementation", at=STEP_AT, now=NOW)
+
+    assert result.cause == "unknown" and [k.label for k in result.knobs] == ["lane-tools.json"]
+
+
+async def test_a_part_we_cannot_see_is_unknown_not_blamed_on_agent_hub(db: AsyncSession) -> None:
+    await _policy(db)
+    for i in range(20):
+        row = _session(i, STEP_AT - timedelta(days=2) + timedelta(hours=2 * i), 30000, ours=1000)
+        row.parts = {"total": {"tokens": 30000}, "ours": {"tokens": 1000}}  # no harness or brief split
+        db.add(row)
+    for i in range(6):
+        row = _session(100 + i, STEP_AT + timedelta(minutes=10 * i), 38000, ours=1300)
+        row.parts = {"total": {"tokens": 38000}, "ours": {"tokens": 1300}}
+        db.add(row)
+    await db.flush()
+
+    result = await why_service.why(db, "claude", "implementation", at=STEP_AT, now=NOW)
+
+    assert (result.cause, result.parts["ours"], result.parts["harness"]) == ("unknown", 300, None)
+
+
+async def test_budget_rows_for_the_lane_group_and_the_seeded_knob_reach_lane_cells(db: AsyncSession) -> None:
+    migration = _migration()
+    assert [(k[0], k[1], k[2]) for k in migration.KNOBS] == [("lane-tools.json", "claude", "lane")]  # not every cell
+    db.add_all([ContextBudget(harness="*", role="*", warn_tokens=60000, jump_pct=25), ContextBudget(harness="claude", role="lane", warn_tokens=40000)])
+    await db.flush()
+    policy = await load_policy(db)
+
+    for cell in ("implementation", "research"):
+        budget = policy.budget_for("claude", cell)
+        assert budget is not None and budget.warn_tokens == 40000
+    budget = policy.budget_for("claude", "coordinator")
+    assert budget is not None and budget.warn_tokens == 60000
+
+
+async def test_putting_a_budget_moves_updated_at(db: AsyncSession, client: AsyncClient) -> None:
+    await _policy(db)
+    old = datetime(2026, 1, 1, tzinfo=UTC)
+    await client.put("/context-observability/budgets", json={"harness": "claude", "role": "blank", "warn_tokens": 1000})
+    await db.execute(text("UPDATE context_budgets SET updated_at = :t"), {"t": old})
+
+    put = await client.put("/context-observability/budgets", json={"harness": "claude", "role": "blank", "warn_tokens": 2000})
+
+    assert put.status_code == 200 and datetime.fromisoformat(put.json()["updated_at"]) > old
+
+
+async def test_changes_written_before_the_deploy_count_as_reviewed_and_later_agent_writes_queue(
+    db: AsyncSession, sent: dict[str, AsyncMock],
+) -> None:
+    from app.core.request_actor import RequestWriter, bind_request_writer
+    from app.services.memory.repository import MemoryRepository
+
+    await _policy(db)
+    bind_request_writer(RequestWriter(kind="agent", delivery="h" * 64, session="aico-widget-lane"))
+    ids = []
+    for name in ("before deploy", "after deploy"):
+        memory = await MemoryRepository().create(content=f"note {name}", memory_type="reference", scope="global", tier=3, embedding=[0.25] * 768,
+                                                 name=name, summary=name, context_kind="policy", db=db)
+        ids.append(str(memory.id))
+    deploy = NOW - timedelta(hours=1)
+    for memory_id, at in zip(ids, (deploy - timedelta(days=2), deploy + timedelta(minutes=10)), strict=True):
+        await db.execute(text("UPDATE memory_revisions SET created_at = :t WHERE memory_uuid = :m"), {"t": at, "m": memory_id})
+    await db.execute(text("INSERT INTO subscription_usage_cursors (path, \"offset\", state) VALUES (:p, 0, CAST(:s AS json))"),
+                     {"p": alerts.BASELINE_STATE, "s": json.dumps({"deploy_at": deploy.isoformat(), "done": False})})
+    await db.commit()
+
+    done = await alerts.evaluate(db, now=NOW)
+
+    assert done["review-baseline"] == "baselined 1" and done[alerts.REVIEW_KEY] == "pushed"
+    notice = sent["send"].await_args_list[-1].args[0]
+    assert notice["title"] == "1 context change to review" and "after deploy" in notice["detail"] and "before deploy" not in notice["detail"]
+    assert (await alerts.evaluate(db, now=NOW + timedelta(minutes=5)))["review-baseline"] == "quiet"

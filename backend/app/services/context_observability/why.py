@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .baseline import FirstTurn, load_first_turns
 from .markers import Marker, knob_markers, view_markers
 from .policy import Policy, load_policy
-from .steps import BASELINE_DAYS, Step, Window, cell_rows, find_steps, in_cell, window
+from .steps import BASELINE_DAYS, ROLE_GROUPS, Step, Window, cell_rows, find_steps, in_cell, window
 
 LOOKBACK_DAYS = 30
 RECENT_HOURS = 24
@@ -47,7 +47,7 @@ class Why:
     role: str
     at: datetime | None
     kind: str  # the step kind (config | version | day), "at" for a chosen time, "recent" when no step was found
-    cause: str  # ours | config | harness_version | harness | model | brief | none
+    cause: str  # ours | config | harness_version | harness | model | brief | mixed (two parts moved alike) | unknown (cannot be pinned down) | none (nothing moved)
     before: Window | None
     after: Window | None
     delta: int | None
@@ -60,6 +60,7 @@ class Why:
     markers: list[Marker] = field(default_factory=list)
     blocks: list[BlockChange] = field(default_factory=list)
     summary: str = ""
+    changed: list[str] = field(default_factory=list)  # what changed at the step: model | config_fp | version
 
 
 def _k(tokens: int | None) -> str:
@@ -157,20 +158,35 @@ def _dominant_model(rows: list[FirstTurn]) -> str | None:
     return Counter(known).most_common(1)[0][0] if known else None
 
 
-def _cause(*, ours: int | None, harness: int | None, version_changed: bool, fp_changed: bool, knob_changed: bool,
-           model_changed: bool, brief: int | None) -> str:
-    moves = {"ours": abs(ours or 0), "harness": abs(harness or 0), "brief": abs(brief or 0)}
-    top = max(moves, key=lambda k: moves[k])
-    if moves[top] == 0:
+def _cause(*, delta: int | None, ours: int | None, harness: int | None, brief: int | None, version_changed: bool,
+           fp_changed: bool, knob_changed: bool, model_changed: bool) -> str:
+    """The part that moved most, or "unknown" when the known parts cannot account for the move.
+
+    A part that is not known (a harness with no split, a remote host) is not zero: when the parts we do know cover less
+    than half of the move, or the unexplained rest is the largest, the cause is "unknown" unless a model change explains
+    the rest. Two parts within a factor of two of each other (ties included) are "mixed". A harness move with a version
+    and a knob, or another model and a version or fingerprint, changed at once is "unknown". "none": nothing moved."""
+    if delta is None:
+        return "unknown"
+    if delta == 0:
         return "none"
-    if top == "ours":
-        return "ours"
-    if top == "brief":
-        return "brief"
-    if knob_changed or (fp_changed and not version_changed):
-        return "config"
+    known = {k: v for k, v in (("ours", ours), ("harness", harness), ("brief", brief)) if v is not None}
+    if len(known) == 3:
+        rest = abs(delta - sum(known.values()))
+        if rest > max(abs(v) for v in known.values()):
+            return "model" if model_changed else "unknown"
+    if sum(abs(v) for v in known.values()) * 2 < abs(delta):
+        return "unknown"
+    ranked = sorted(known, key=lambda k: -abs(known[k]))
+    top = ranked[0]
+    if len(ranked) > 1 and abs(known[ranked[1]]) * 2 > abs(known[top]):
+        return "mixed"  # two parts moved about alike: size alone does not pick one
+    if top in ("ours", "brief"):
+        return top
+    if model_changed and (version_changed or fp_changed):
+        return "unknown"  # another model and a new version or fingerprint at once: the windows are not alike
     if version_changed:
-        return "harness_version"
+        return "unknown" if knob_changed else "harness_version"  # a knob and a version at once: not told apart
     if fp_changed:
         return "config"
     return "model" if model_changed else "harness"
@@ -193,15 +209,32 @@ def _summary(w: Why, names: list[str]) -> str:
         bits.append(f"model {w.model.get('from')} -> {w.model.get('to')}")
     split = f"harness {_signed(w.parts.get('harness'))}, ours {_signed(w.parts.get('ours'))}, brief {_signed(w.parts.get('brief'))}"
     knob = f" Knob: {', '.join(names)}." if names else ""
-    return f"{lead}{at}: cause {w.cause}. {'; '.join(bits)}. {split}.{knob}"
+    together = f" Changed together: {', '.join(w.changed)}." if len(w.changed) > 1 and w.cause in ("mixed", "unknown") else ""
+    return f"{lead}{at}: cause {w.cause}. {'; '.join(bits)}. {split}.{together}{knob}"
+
+
+def _step_cell(rows: list[FirstTurn], at: datetime) -> str | None:
+    """The cell a step belongs to: a start exactly at `at` (a boundary step is its first start), else the cell with the
+    most starts within a day of it."""
+    exact = [r.cell for r in rows if r.at == at]
+    near = [r.cell for r in rows if abs(r.at - at) <= timedelta(days=1)]
+    pick = exact or near
+    return Counter(pick).most_common(1)[0][0] if pick else None
 
 
 async def explain(db: AsyncSession, rows: list[FirstTurn], harness: str, role: str, at: datetime | None, *,
-                  policy: Policy, now: datetime, kind: str, model: str | None) -> Why:
-    """Compare the 7 days before `at` with `at` onward, for rows of one cell (restricted to one model if given)."""
+                  policy: Policy, now: datetime, kind: str, model: str | None, cell: str | None = None) -> Why:
+    """Compare the 7 days before `at` with `at` onward, for rows of one cell (restricted to one model if given).
+
+    A group role ("lane") spans several roles, so the move is read in one role of it: `cell`, else the role of the
+    step at `at`. Before and after then hold the same role and the delta matches the step's."""
     if at is None:
         return Why(harness=harness, role=role, at=None, kind=kind, cause="none", before=None, after=None, delta=None, pct=None,
                    summary=f"{harness} {role}: no measured starts in the window.")
+    if role in ROLE_GROUPS:
+        cell = cell or _step_cell([r for r in rows if model is None or r.model == model], at)
+        if cell is not None:
+            rows = [r for r in rows if r.cell == cell]
     same_model = [r for r in rows if model is None or r.model == model]
     before_rows = [r for r in same_model if at - timedelta(days=BASELINE_DAYS) <= r.at < at]
     after_rows = [r for r in same_model if r.at >= at]
@@ -216,50 +249,55 @@ async def explain(db: AsyncSession, rows: list[FirstTurn], harness: str, role: s
     hi = after.start if after.start is not None else min(now, at + timedelta(hours=1))
     lo, hi = min(lo, at), max(hi, at)
     found = [m for m in await view_markers(db, lo, hi, harness=harness)
-             if m.kind != "config" or (in_cell(role, m.launch_mode, m.role) and (model is None or m.detail.get("model") == model))]
-    knobs = await knob_markers(policy.knobs_for(harness, role), lo, hi)
+             if m.kind != "config" or (in_cell(cell or role, m.launch_mode, m.role) and (model is None or m.detail.get("model") == model))]
+    changed_knobs = await knob_markers(policy.knobs_for(harness, cell or role), lo, hi)
     revisions = [m for m in found if m.kind in ("memory", "prompt")]
 
     # The state at the step is read from one role (a "lane" query spans several roles with their own fingerprints).
     near = [r for r in same_model if abs(r.at - at) <= timedelta(days=1)]
-    own = Counter(r.cell for r in near).most_common(1)[0][0] if near else None
+    own = cell or (Counter(r.cell for r in near).most_common(1)[0][0] if near else None)
     last_before = next((r for r in reversed(before_rows) if r.cell == own), None)
     first_after = next((r for r in after_rows if r.cell == own), None)
     model_from = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at])
     model_to = _dominant_model([r for r in rows if r.at >= at])
+    version = {"from": last_before.version if last_before else before.version, "to": first_after.version if first_after else after.version}
+    config_fp = {"from": last_before.config_fp if last_before else before.config_fp,
+                 "to": first_after.config_fp if first_after else after.config_fp}
+    fp_changed = config_fp["from"] != config_fp["to"]
+    # A knob file's commit is only a cause when what the harness loads changed with it (the fingerprint); otherwise it
+    # stays on the timeline as a marker.
+    knobs = changed_knobs if fp_changed else []
     result = Why(
         harness=harness, role=role, at=at, kind=kind, cause="none", before=before, after=after, delta=delta, pct=pct, parts=parts,
-        version={"from": last_before.version if last_before else before.version, "to": first_after.version if first_after else after.version},
-        config_fp={"from": last_before.config_fp if last_before else before.config_fp,
-                   "to": first_after.config_fp if first_after else after.config_fp},
-        model={"from": model_from, "to": model_to}, knobs=knobs,
-        markers=[*found, *knobs],
+        version=version, config_fp=config_fp, model={"from": model_from, "to": model_to}, knobs=knobs,
+        markers=[*found, *changed_knobs],
         blocks=await block_changes(db, before_rows, after_rows, revisions),
     )
     result.markers.sort(key=lambda m: m.at)
     result.cause = _cause(
-        ours=parts["ours"], harness=parts["harness"], brief=parts["brief"],
-        version_changed=result.version["from"] != result.version["to"],
-        fp_changed=result.config_fp["from"] != result.config_fp["to"], knob_changed=bool(knobs), model_changed=model_from != model_to,
+        delta=delta, ours=parts["ours"], harness=parts["harness"], brief=parts["brief"],
+        version_changed=version["from"] != version["to"], fp_changed=fp_changed, knob_changed=bool(knobs),
+        model_changed=model_from != model_to,
     )
-    names = sorted({k.label for k in knobs}) if result.cause == "config" else []
-    result.summary = _summary(result, names)
+    result.changed = [name for name, on in (("model", model_from != model_to), ("config_fp", fp_changed), ("version", version["from"] != version["to"])) if on]
+    result.summary = _summary(result, sorted({k.label for k in knobs}))
     return result
 
 
 async def why(db: AsyncSession, harness: str, role: str, *, at: datetime | None = None, now: datetime | None = None,
-              policy: Policy | None = None) -> Why:
-    """Explain a cell. With `at`, the move at that time; without it, the newest step, else the last 24 h against the week before."""
+              policy: Policy | None = None, recent: bool = False) -> Why:
+    """Explain a cell. With `at`, the move at that time; with `recent`, the last 24 h against the week before (the
+    window a budget card is about); otherwise the newest step, else the last 24 h against the week before."""
     now = now or datetime.now(UTC)
     policy = policy or await load_policy(db)
     rows = cell_rows(await load_first_turns(db, since=now - timedelta(days=LOOKBACK_DAYS), harness=harness), harness, role)
     if at is not None:
         model = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at]) or _dominant_model(rows)
         return await explain(db, rows, harness, role, at, policy=policy, now=now, kind="at", model=model)
-    steps = find_steps(rows, policy.jump_pct) if policy.jump_pct is not None else []
+    steps = [] if recent or policy.jump_pct is None else find_steps(rows, policy.jump_pct)
     if steps:
         step = steps[-1]
-        return await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model)
+        return await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role)
     return await explain(db, rows, harness, role, now - timedelta(hours=RECENT_HOURS) if rows else None, policy=policy, now=now,
                          kind="recent", model=_dominant_model([r for r in rows if r.at >= now - timedelta(hours=RECENT_HOURS)]))
 
@@ -278,6 +316,6 @@ async def steps_with_markers(db: AsyncSession, harness: str, role: str, *, days:
         hi = step.after.start or step.at
         lo, hi = min(lo, step.at), max(hi, step.at)
         found = [m for m in await view_markers(db, lo, hi, harness=harness)
-                 if m.kind != "config" or (in_cell(role, m.launch_mode, m.role) and m.detail.get("model") == step.model)]
-        step.markers = sorted([*found, *await knob_markers(policy.knobs_for(harness, role), lo, hi)], key=lambda m: m.at)
+                 if m.kind != "config" or (in_cell(step.role, m.launch_mode, m.role) and m.detail.get("model") == step.model)]
+        step.markers = sorted([*found, *await knob_markers(policy.knobs_for(harness, step.role), lo, hi)], key=lambda m: m.at)
     return steps

@@ -1,11 +1,13 @@
 """Step finder: where a cell's first-turn size moved by at least jump_pct, and what changed there.
 
 A cell is one (harness, role) of the Cost matrix. Rows are split by model first, so a day of Haiku lanes is never read
-as a drop in Opus lanes. Two detectors:
+as a drop in Opus lanes. Two detectors, each needing at least 5 starts on both sides (MIN_AFTER, MIN_DAY, MIN_BASELINE):
   - a boundary step: the config fingerprint or the harness version changed and stayed (at least MIN_AFTER starts), so
     the size before it (the 7 days up to it) is compared with the size after;
   - a day step: a day's median (at least MIN_DAY starts) against the 7 days before it, for growth no marker explains.
-`markers` on a step are filled by the caller (they need the database and git).
+The move is judged on the first turn without the brief (a pasted brief is not a context change); a step's `delta` and
+`pct` are still the totals, and `pct_body` is what was judged. `markers` on a step are filled by the caller (they need
+the database and git).
 """
 
 from __future__ import annotations
@@ -19,9 +21,9 @@ from .baseline import FirstTurn, cell_label, med
 from .markers import Marker
 
 BASELINE_DAYS = 7
-MIN_AFTER = 2  # starts a new fingerprint or version needs to count as a change that stayed
-MIN_DAY = 3  # starts a day needs to have a median of its own
-MIN_BASELINE = 5
+MIN_AFTER = 5  # starts a new fingerprint or version needs to count as a change that stayed
+MIN_DAY = 5  # starts a day needs to have a median of its own
+MIN_BASELINE = 5  # starts the side before a step needs
 
 # "lane" is the owner's word for any launched project session that is not the coordinator.
 ROLE_GROUPS = {"lane": lambda mode, role: mode in ("project", "exec") and role not in (None, "coordinator")}
@@ -39,6 +41,7 @@ class Window:
     model: str | None
     start: datetime | None
     end: datetime | None
+    body: int | None = None  # total without the brief (None: no start with a known brief)
 
 
 @dataclass
@@ -52,6 +55,7 @@ class Step:
     delta: int
     pct: float
     markers: list[Marker] = field(default_factory=list)
+    pct_body: float | None = None  # the move without the brief: what decided that this is a step
 
 
 def cell_rows(rows: list[FirstTurn], harness: str, role: str) -> list[FirstTurn]:
@@ -72,6 +76,7 @@ def window(rows: list[FirstTurn]) -> Window:
         version=_dominant([r.version for r in rows]), config_fp=_dominant([r.config_fp for r in rows]),
         model=_dominant([r.model for r in rows]),
         start=min((r.at for r in rows), default=None), end=max((r.at for r in rows), default=None),
+        body=med(None if r.brief_tokens is None else r.total - r.brief_tokens for r in rows),
     )
 
 
@@ -103,18 +108,30 @@ def _pct(before: int | None, after: int | None) -> tuple[int, float] | None:
     return after - before, (after - before) / before * 100
 
 
+def _judge(before: Window, after: Window, min_pct: float) -> tuple[tuple[int, float], float] | None:
+    """(total delta and pct, pct without the brief) when the move without the brief is at least min_pct, else None."""
+    body, total = _pct(before.body, after.body), _pct(before.total, after.total)
+    if body is None or total is None or abs(body[1]) < min_pct:
+        return None
+    return total, body[1]
+
+
 def _boundary_steps(rows: list[FirstTurn], min_pct: float) -> list[Step]:
     steps = []
     runs = _runs(rows)
     for prev, run in pairwise(runs):
         at = run[0].at
         before_rows = [r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at]
-        before, after = window(before_rows), window(run)
-        change = _pct(before.total, after.total)
-        if change is None or abs(change[1]) < min_pct:
+        if len(before_rows) < MIN_BASELINE:
             continue
+        before, after = window(before_rows), window(run)
+        judged = _judge(before, after, min_pct)
+        if judged is None:
+            continue
+        change, pct_body = judged
         kind = "config" if _state(prev[0])[0] != _state(run[0])[0] else "version"
-        steps.append(Step(at=at, kind=kind, model=after.model, role=run[0].cell, before=before, after=after, delta=change[0], pct=change[1]))
+        steps.append(Step(at=at, kind=kind, model=after.model, role=run[0].cell, before=before, after=after, delta=change[0],
+                          pct=change[1], pct_body=pct_body))
     return steps
 
 
@@ -132,12 +149,12 @@ def _day_steps(rows: list[FirstTurn], min_pct: float, boundaries: list[Step]) ->
             flagged_prev = False
             continue
         before, after = window(base_rows), window(day_rows)
-        change = _pct(before.total, after.total)
-        hit = change is not None and abs(change[1]) >= min_pct
-        if hit and not flagged_prev and change is not None:
+        judged = _judge(before, after, min_pct)
+        if judged is not None and not flagged_prev:
+            change, pct_body = judged
             steps.append(Step(at=start, kind="day", model=after.model, role=day_rows[0].cell, before=before, after=after,
-                              delta=change[0], pct=change[1]))
-        flagged_prev = hit
+                              delta=change[0], pct=change[1], pct_body=pct_body))
+        flagged_prev = judged is not None
     return steps
 
 

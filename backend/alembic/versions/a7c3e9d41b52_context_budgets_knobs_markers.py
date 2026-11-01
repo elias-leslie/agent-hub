@@ -6,9 +6,19 @@ Revises: e8b3d6f1a2c4
 context_budgets: one warn level per (harness or '*', role or '*') plus one global jump_pct, defaults above the
 2026-11-01 medians. context_knobs: our config files that change what a harness loads (named in `why`).
 context_markers: the things that can move a cell's context in time order (a view, no data of its own).
+
+The view pins columns of usage_sessions, memory_revisions, prompt_revisions, context_records and context_deliveries:
+a later migration that alters the type of or drops one of them (M6 included) must drop and recreate context_markers
+(MARKERS_VIEW_SQL) around it.
+
+A @context_review_baseline row in subscription_usage_cursors records the deploy time. The first alert pass after it
+marks the context changes written before it as reviewed (alerts.seed_review_baseline), so the review item starts with
+later agent writes only.
 """
 
+import json
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 import sqlalchemy as sa
 
@@ -27,9 +37,11 @@ BUDGETS = [
     ("pi", "*", 12000, None, None),
 ]
 KNOBS = [
-    ("lane-tools.json", "claude", "*", "/srv/workspaces/projects/aico", "tether/src/lifecycle/tui/lane-tools.json",
+    ("lane-tools.json", "claude", "lane", "/srv/workspaces/projects/aico", "tether/src/lifecycle/tui/lane-tools.json",
      "Tether starts launched Claude Code sessions without the tools and listings their role did not use."),
 ]
+
+BASELINE_PATH = "@context_review_baseline"  # alerts.BASELINE_STATE
 
 MARKERS_VIEW_SQL = """
 CREATE VIEW context_markers AS
@@ -103,9 +115,14 @@ def upgrade() -> None:
         {"name": n, "harness": h, "role": r, "repo_path": rp, "file_path": fp, "note": note} for n, h, r, rp, fp, note in KNOBS
     ])
     op.execute(MARKERS_VIEW_SQL)
+    op.execute(sa.text(
+        "INSERT INTO subscription_usage_cursors (path, \"offset\", state) VALUES (:path, 0, CAST(:state AS json))"
+        " ON CONFLICT (path) DO NOTHING"
+    ).bindparams(path=BASELINE_PATH, state=json.dumps({"deploy_at": datetime.now(UTC).isoformat(), "done": False})))
 
 
 def downgrade() -> None:
+    op.execute(sa.text("DELETE FROM subscription_usage_cursors WHERE path = :path").bindparams(path=BASELINE_PATH))
     op.execute("DROP VIEW IF EXISTS context_markers")
     op.drop_table("context_knobs")
     op.drop_table("context_budgets")
