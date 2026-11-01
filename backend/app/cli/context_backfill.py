@@ -21,6 +21,7 @@ from app.db import async_session
 from app.services.context_observability import baseline, capture
 
 TOLERANCE = 0.03
+MIN_SESSIONS = 3  # a row built from fewer sessions is marked THIN: its median is one or two sessions, which proves nothing
 LANE_TRIM_AT = datetime(2026, 11, 1, 14, 53, tzinfo=UTC)
 # The same Claude Code request-shape change trimmed blank-slate sessions; a fixed time keeps the before/after check honest.
 BLANK_TRIM_AT = LANE_TRIM_AT
@@ -108,6 +109,14 @@ def check_row(value: int | None, expected: int | tuple[int, int]) -> tuple[bool,
     return abs(value - expected) <= expected * TOLERANCE, str(expected)
 
 
+def row_status(value: int | None, expected: int | tuple[int, int], n: int) -> tuple[str, str]:
+    """PASS, FAIL or THIN (fewer than MIN_SESSIONS sessions: shown with its would-be verdict, never counted as a failure)."""
+    ok, want = check_row(value, expected)
+    if value is not None and n < MIN_SESSIONS:
+        return "THIN", want + (" (in range)" if ok else " (out of range)")
+    return ("PASS" if ok else "FAIL"), want
+
+
 def _fmt(value: int | None) -> str:
     return "-" if value is None else f"{value / 1000:.1f}K"
 
@@ -117,9 +126,7 @@ async def report(as_of: datetime, days: int) -> int:
         since = as_of - timedelta(days=days)
         rows = await baseline.load_first_turns(db, since=since, until=as_of)
     groups = baseline_groups(rows)
-    # Pi rows: DESIGN's coordinator n=3 counted a blank-slate session bound to a coordinator delivery that cannot fit in
-    # its 1.7K first turn. The two real sessions are 8.0K and 8.4K; the usual median (their mean) is the fair read.
-    summaries = {key: baseline.summarize(items, mean_of_middle=key[0] == "pi") for key, items in groups.items()}
+    summaries = {key: baseline.summarize(items) for key, items in groups.items()}
     failures = 0
     print(f"first turns {since:%Y-%m-%d %H:%MZ} .. {as_of:%Y-%m-%d %H:%MZ}: {len(rows)} measured")
     print(f"{'harness':7} {'row':32} {'n':>4} {'total':>8} {'harness':>8} {'ours':>7} {'brief':>7}")
@@ -131,9 +138,9 @@ async def report(as_of: datetime, days: int) -> int:
         if (harness, name) == ("codex", "lane (implementation)") and part in ("harness", "ours"):
             s = baseline.summarize([r for r in groups[(harness, name)] if r.at < CODEX_LANE_AS_OF])
         value = s[part] if s else None
-        ok, want = check_row(value, expected)
-        failures += not ok
-        print(f"{'PASS' if ok else 'FAIL'} {harness:6} {name:30} {part:8} got {_fmt(value):>7} want {want:>12} n={s['n'] if s else 0}")
+        status, want = row_status(value, expected, s["n"] if s else 0)
+        failures += status == "FAIL"
+        print(f"{status:4} {harness:6} {name:30} {part:8} got {_fmt(value):>7} want {want:>12} n={s['n'] if s else 0}")
     print("\nclaude implementation lane: config steps (shapeHash) per model")
     lane = [r for r in rows if r.harness == "claude" and _is_project(r) and r.role == "implementation"]
     for model, items in baseline.group_by(lane, lambda r: r.model).items():

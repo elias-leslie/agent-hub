@@ -13,7 +13,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 from sqlalchemy import update
 from sqlalchemy.engine import CursorResult
@@ -39,6 +39,7 @@ from .deliveries import (
 logger = logging.getLogger(__name__)
 
 BACKFILL_DAYS = 30
+MAX_FAILED_SHARE = 0.2  # a backfill where more than this share of sessions raised is not done: it is retried later
 CLAUDE_DELIVERY_MARKER = "context-deliveries"
 PROVIDER_SURFACE = {"claude": "claude_code", "codex": "codex"}
 
@@ -75,25 +76,30 @@ async def bind_delivery(db: AsyncSession, head: HeadResult, bindings: Bindings) 
     """The delivery a session started with, and (Codex) how many characters of its developer text it occupies.
 
     The client's binding file names the exact delivery for the native session or sub-agent id; the payload hash (Claude)
-    or the embedded text (Codex) is the fallback only for a session that has no binding file.
+    or the embedded text (Codex) is the fallback for a session without a binding file, and for one whose bound delivery
+    cannot be found. A Claude binding counts only when the transcript carries that delivery's instructions attachment:
+    Explore and Plan sub-agents inherit the parent's binding but never receive our instructions, so they get no delivery.
     """
     raw = head.raw
     surface = PROVIDER_SURFACE[head.provider]
     bound = pick_binding(bindings, (surface, head.session_id, head.agent_id), raw["first_at"])
-    if bound is not None:
-        delivery = await find_delivery_by_id(db, *bound)
-        ah_chars = None
-        if delivery is not None and head.provider == "codex":
+    delivery = await find_delivery_by_id(db, *bound) if bound is not None else None
+    if delivery is not None:
+        if head.provider == "claude":
+            if any(CLAUDE_DELIVERY_MARKER in str(i.get("path")) and i.get("sha") == delivery["payload_hash"] for i in raw.get("inst_files") or []):
+                return delivery, None
+        else:
+            ah_chars = None
             n = int(delivery.get("rendered_chars") or 0)
             if n > 0 and any(len(t) >= n and sha256_text(t[:n]) == delivery["payload_hash"] for t in raw.get("dev_texts") or []):
                 ah_chars = n
-        return delivery, ah_chars
+            return delivery, ah_chars
     if head.provider == "claude":
         for item in raw.get("inst_files") or []:
             if CLAUDE_DELIVERY_MARKER in str(item.get("path")):
-                delivery = await find_delivery_by_hash(db, item["sha"], raw["first_at"])
-                if delivery:
-                    return delivery, None
+                found_by_hash = await find_delivery_by_hash(db, item["sha"], raw["first_at"])
+                if found_by_hash:
+                    return found_by_hash, None
         return None, None
     found = await find_delivery_in_text(db, surface, raw.get("dev_texts") or [], raw["first_at"])
     return found if found else (None, None)
@@ -121,14 +127,19 @@ async def load_head_bindings(heads: list[HeadResult]) -> Bindings:
     return await asyncio.to_thread(load_bindings, delivery_roots(), since=since)
 
 
-async def apply_first_turns(db: AsyncSession, heads: Iterable[HeadResult]) -> int:
-    """Store first-turn columns on existing usage_sessions rows. Returns rows updated.
+class Applied(NamedTuple):
+    updated: int  # rows stored
+    failed: int  # sessions whose binding or computation raised (not "no ledger row yet": that is just not updated)
 
-    A session whose binding or computation fails is logged and skipped; the others are stored.
+
+async def apply_first_turns(db: AsyncSession, heads: Iterable[HeadResult]) -> Applied:
+    """Store first-turn columns on existing usage_sessions rows.
+
+    A session whose binding or computation fails is logged, counted in `failed` and skipped; the others are stored.
     """
     heads = list(heads)
     bindings = await load_head_bindings(heads)
-    updated = 0
+    updated = failed = 0
     for head in heads:
         try:
             async with db.begin_nested():
@@ -141,9 +152,10 @@ async def apply_first_turns(db: AsyncSession, heads: Iterable[HeadResult]) -> in
                 )
         except Exception as exc:
             logger.warning("first turn not stored for %s/%s: %s: %s", head.provider, head.session_id, type(exc).__name__, (str(exc).splitlines() or [""])[0][:200])
+            failed += 1
             continue
         updated += cast(CursorResult[Any], result).rowcount or 0
-    return updated
+    return Applied(updated, failed)
 
 
 def _heads_since(since: float, until: datetime | None) -> list[HeadResult]:
@@ -193,9 +205,19 @@ async def backfill(
     await db.flush()
     heads = await asyncio.to_thread(_heads_since, since.timestamp(), until)
     heads = [h for h in heads if h.raw["first_at"] >= since]
-    updated = await apply_first_turns(db, heads)
+    applied = await apply_first_turns(db, heads)
     extra = await extra_capture.backfill_extra(db, since=since, until=until, now=now)
     return {
-        "deliveries_imported": imported, "sessions_read": len(heads), "sessions_updated": updated,
-        "sessions_skipped": len(heads) - updated, **extra, "seconds": int(time.monotonic() - started),
+        "deliveries_imported": imported, "sessions_read": len(heads), "sessions_updated": applied.updated,
+        "sessions_failed": applied.failed, "sessions_skipped": len(heads) - applied.updated - applied.failed,
+        **extra, "seconds": int(time.monotonic() - started),
     }
+
+
+def backfill_failed(summary: dict[str, int]) -> bool:
+    """True when too much of a backfill raised for it to count as done: any failed stage, or more than MAX_FAILED_SHARE of sessions."""
+    read = summary.get("sessions_read", 0) + summary.get("pi_read", 0) + summary.get("agent_hub_read", 0)
+    # sessions skipped for lack of a ledger row are not failures; Pi and Agent Hub reads that were not stored are
+    failed = summary.get("sessions_failed", 0) + summary.get("pi_read", 0) - summary.get("pi_updated", 0)
+    failed += summary.get("agent_hub_read", 0) - summary.get("agent_hub_updated", 0)
+    return bool(summary.get("stages_failed")) or failed > read * MAX_FAILED_SHARE

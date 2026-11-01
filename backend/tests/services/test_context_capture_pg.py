@@ -69,7 +69,7 @@ async def test_claude_head_binds_by_the_hash_of_its_delivered_instructions(db: A
     updated = await capture.apply_first_turns(db, [capture.HeadResult("claude", "s1", "", raw, "project")])
 
     row = (await db.execute(select(UsageSession))).scalar_one()
-    assert updated == 1 and row.parts is not None
+    assert updated == (1, 0) and row.parts is not None
     assert (row.delivery_id, row.work_role, row.coordinator, row.harness, row.config_fp) == ("d1", "implementation", False, "claude", "shape-a")
     assert (row.first_turn_tokens, row.launch_mode, row.harness_version) == (9000, "project", "2.1.316")
     assert row.parts["ours"] == {"tokens": len(RENDERED) // 4, "method": "estimate"}
@@ -145,4 +145,40 @@ async def test_a_session_whose_binding_cannot_be_applied_does_not_stop_the_other
                                                    capture.HeadResult("claude", "ok", "", _claude_raw(sha), "project")])
 
     rows = {r.session_id: r for r in (await db.execute(select(UsageSession))).scalars()}
-    assert updated == 1 and rows["ok"].first_turn_tokens == 9000 and rows["bad"].first_turn_tokens is None
+    assert updated == (1, 1) and rows["ok"].first_turn_tokens == 9000 and rows["bad"].first_turn_tokens is None
+
+
+async def test_a_subagent_that_never_received_our_instructions_gets_no_delivery_from_the_parents_binding(db: AsyncSession) -> None:
+    await _store(db, _contract("parent", RENDERED, minutes=5, tags=["work-role:implementation"]))
+    db.add_all([UsageSession(provider="claude", session_id="s1", agent_id=aid, first_at=AT, last_at=AT) for aid in ("explore", "general")])
+    await db.flush()
+    sha = deliveries.sha256_text(RENDERED)
+    explore = {**_claude_raw(sha), "inst_files": []}  # Explore and Plan get no context-deliveries attachment
+    bindings = {("claude_code", "s1", aid): [(AT - timedelta(minutes=5), "parent", None)] for aid in ("explore", "general")}
+
+    for aid, raw in (("explore", explore), ("general", _claude_raw(sha))):
+        values = await capture.bind_and_compute(db, capture.HeadResult("claude", "s1", aid, raw, "subagent:" + aid), bindings)
+        await db.execute(update(UsageSession).where(UsageSession.agent_id == aid).values(**values))
+
+    rows = {r.agent_id: r for r in (await db.execute(select(UsageSession))).scalars()}
+    assert rows["explore"].parts is not None and rows["general"].parts is not None
+    assert (rows["explore"].delivery_id, rows["explore"].work_role, rows["explore"].parts["ours"]["tokens"]) == (None, None, 0)
+    assert rows["general"].delivery_id == "parent"  # the attachment is there: the binding counts
+
+
+async def test_a_binding_whose_delivery_cannot_be_found_falls_back_to_the_hash_or_the_text(db: AsyncSession) -> None:
+    await _store(db, _contract("by-hash", RENDERED, minutes=5, tags=["work-role:review"]),
+                 _contract("by-text", RENDERED, minutes=5, tags=["work-role:hunting"], surface="codex"))
+    db.add_all([UsageSession(provider="claude", session_id="c", agent_id="", first_at=AT, last_at=AT),
+                UsageSession(provider="codex", session_id="x", agent_id="", first_at=AT, last_at=AT)])
+    await db.flush()
+    gone = [(AT - timedelta(minutes=5), "pruned", "/does/not/exist.json")]
+    bindings = {("claude_code", "c", ""): gone, ("codex", "x", ""): gone}
+    codex_raw = {"harness": "codex", "total": 14_000, "first_at": AT, "model": "m", "version": "1", "fp": "f" * 16, "tools_chars": 4000,
+                 "base_chars": 4000, "skills_chars": 1000, "env_chars": 0, "brief_chars": 40, "dev_texts": [RENDERED + "\ntail"]}
+
+    claude = await capture.bind_delivery(db, capture.HeadResult("claude", "c", "", _claude_raw(deliveries.sha256_text(RENDERED)), "project"), bindings)
+    codex = await capture.bind_delivery(db, capture.HeadResult("codex", "x", "", codex_raw, "project"), bindings)
+
+    assert claude[0] is not None and claude[0]["delivery_id"] == "by-hash"
+    assert codex[0] is not None and (codex[0]["delivery_id"], codex[1]) == ("by-text", len(RENDERED))

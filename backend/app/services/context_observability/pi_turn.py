@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 PI_CORE_SECTIONS = ("preamble", "rules", "docs", "cwd", "project_context")
 PI_LISTING_SECTION = "skills"
 PI_DELIVERY_SECTION = "addendum"
-PI_BIND_WINDOW = timedelta(seconds=20)  # a delivery is built seconds before the session's first call
+# Pi writes its session record, and the delivery lands 2-6 s later (measured over a week: p1 -2.9 s, p99 +6.1 s), as
+# delivery time minus session start. neri-hunters fleets launch about 7 s apart, so a wider window crosses roles.
+PI_BIND_BEFORE = timedelta(seconds=3)
+PI_BIND_AFTER = timedelta(seconds=8)
 UNEXPLAINED_MAX_TOKENS = 1500  # residual above this with no bound delivery means a delivery we could not find
 VERSION_TIMEOUT_S = 15
 VERSION_BASIS_LIVE = "first_sighting"  # `pi --version` run when the session was first captured

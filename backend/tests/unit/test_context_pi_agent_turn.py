@@ -148,11 +148,16 @@ async def test_extra_capture_passes_each_touched_root_session_once() -> None:
     db.commit.assert_awaited_once()
 
 
-def test_even_counts_take_the_upper_median_unless_the_mean_of_the_middle_is_asked_for() -> None:
+def test_medians_are_upper_medians_and_a_row_of_fewer_than_three_sessions_is_marked_thin() -> None:
+    from app.cli import context_backfill
     from app.services.context_observability import baseline
 
-    assert baseline.med([8015, 8435]) == 8435 and baseline.med([8015, 8435], mean_of_middle=True) == 8225
-    assert baseline.med([3, 1, 2], mean_of_middle=True) == 2 and baseline.med([None], mean_of_middle=True) is None
+    assert baseline.med([8015, 8435]) == 8435 and baseline.med([3, 1, 2]) == 2 and baseline.med([None]) is None
+    # the Pi coordinator row: two sessions, upper median 8,435 against 8,000: out of range, but only thin evidence
+    assert context_backfill.row_status(8435, 8000, 2) == ("THIN", "8000 (out of range)")
+    assert context_backfill.row_status(8435, 8000, 3) == ("FAIL", "8000")
+    assert context_backfill.row_status(8100, 8000, 3) == ("PASS", "8000")
+    assert context_backfill.row_status(None, 8000, 0) == ("FAIL", "unknown")
 
 
 def test_agent_hub_rows_form_their_own_cost_cell() -> None:

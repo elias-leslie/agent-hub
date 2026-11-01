@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -12,7 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.schema import CreateTable
 
-from app.models import ContextDelivery, CostLog, Session, SessionEvent, UsageCall, UsageSession
+from app.models import (
+    ContextDelivery,
+    CostLog,
+    Session,
+    SessionEvent,
+    SubscriptionUsageCursor,
+    UsageCall,
+    UsageSession,
+)
 from app.services.context_observability import agent_hub_turn, delivery_only, extra_capture, growth
 from tests.api.test_sessions_listing_pg import pg_db  # noqa: F401  (fixture)
 
@@ -24,7 +33,8 @@ AT = datetime(2026, 11, 1, 12, tzinfo=UTC)
 @pytest_asyncio.fixture
 async def db(pg_db: AsyncSession) -> AsyncSession:  # noqa: F811
     conn = await pg_db.connection()
-    await conn.run_sync(lambda c: c.execute(CreateTable(ContextDelivery.__table__, include_foreign_key_constraints=[])))
+    for table in (ContextDelivery.__table__, SubscriptionUsageCursor.__table__):
+        await conn.run_sync(lambda c, t=table: c.execute(CreateTable(t, include_foreign_key_constraints=[])))
     return pg_db
 
 
@@ -160,12 +170,14 @@ async def test_agent_hub_capture_binds_the_session_delivery_and_is_idempotent(db
     assert row.config_fp is not None and row.work_role is None
 
 
-async def test_remote_host_and_antigravity_deliveries_show_with_unknown_total_unless_a_session_carries_them(db: AsyncSession) -> None:
+async def test_remote_host_and_unreadable_harness_deliveries_show_with_unknown_total_unless_a_session_carries_them(db: AsyncSession) -> None:
     db.add_all([
         _delivery("remote", seconds=0, surface="claude_code", host="neri-hunters", role="hunting"),
         _delivery("remote-measured", seconds=1, surface="codex", host="agent-work"),
         _delivery("anti", seconds=2, surface="antigravity", role="other"),
         _delivery("local", seconds=3, surface="claude_code"),
+        _delivery("open", seconds=4, surface="opencode", role="hunting"),
+        _delivery("own-agent", seconds=5, surface="agent_runtime", source="agent"),  # measured from cost_logs, not delivery-only
     ])
     db.add(UsageSession(provider="codex", session_id="r", agent_id="", first_at=AT, last_at=AT, delivery_id="remote-measured"))
     await db.flush()
@@ -174,6 +186,187 @@ async def test_remote_host_and_antigravity_deliveries_show_with_unknown_total_un
 
     assert [(r.delivery_id, r.harness, r.host, r.total, r.harness_tokens, r.ours_tokens) for r in rows] == [
         ("remote", "claude", "neri-hunters", None, None, 5000), ("anti", "antigravity", None, None, None, 5000),
+        ("open", "opencode", None, None, None, 5000),
     ]
-    assert "remote host" in rows[0].reason and "no readable transcript" in rows[1].reason
+    assert "remote host" in rows[0].reason and "no readable transcript" in rows[1].reason and "opencode" in rows[2].reason
 
+
+
+# ------------------------------------------------------------------ review fixes (M1b review)
+
+
+async def test_agent_hub_first_call_leaves_out_whole_attempt_rows_and_other_services_calls(db: AsyncSession) -> None:
+    from app.models.session import NATIVE_COUNTED_NOTE
+
+    notes = {
+        "plain": None, "native": NATIVE_COUNTED_NOTE, "native-unknown": f"{NATIVE_COUNTED_NOTE}; cost unknown",
+        "via-pi": "workflow attempt via pi", "via-pi-est": "workflow attempt via pi; catalog estimate",
+        "ingested": "ingested from nightshift.planner",
+    }
+    for sid in notes:
+        db.add(Session(id=sid, project_id="summitflow", provider="claude", model="m", agent_slug="critic", request_source="summitflow",
+                       created_at=AT, updated_at=AT))
+    await db.flush()
+    db.add_all([CostLog(session_id=sid, model="m", input_tokens=900, cache_read_tokens=5000, output_tokens=5, created_at=AT, cost_note=note)
+                for sid, note in notes.items()])
+    await db.flush()
+
+    calls = await agent_hub_turn.first_calls(db, since=AT - timedelta(days=1))
+
+    assert [c["session_id"] for c in calls] == ["plain"]
+
+
+async def _snapshot(db: AsyncSession) -> dict:
+    stmt = select(UsageSession).execution_options(populate_existing=True)
+    return {r.provider: copy.deepcopy((r.harness_version, r.config_fp, r.parts, r.delivery_id)) for r in (await db.execute(stmt)).scalars()}
+
+
+async def test_a_rerun_keeps_the_version_prompt_stack_and_parts_a_row_already_holds(db: AsyncSession, tmp_path: Path) -> None:
+    path = tmp_path / "2026-11-01T12-00-00-000Z_pi-1.jsonl"
+    path.write_text("")
+    await extra_capture.apply_pi(db, [(path, _raw())], now=AT + timedelta(minutes=1), version="1.4.0")  # live sighting
+    db.add(Session(id="c1", project_id="summitflow", provider="claude", model="m", agent_slug="critic", request_source="summitflow",
+                   created_at=AT, updated_at=AT))
+    await db.flush()
+    db.add_all([CostLog(session_id="c1", model="m", input_tokens=300, cache_read_tokens=6500, output_tokens=5, created_at=AT)])
+    await db.flush()
+    stacks = iter(["a" * 400, "b" * 800])
+
+    async def stack(_db, _slug):
+        return next(stacks)
+
+    with patch.object(agent_hub_turn, "stack_text", stack):
+        await extra_capture.capture_agent_hub(db, since=AT - timedelta(hours=1), until=None, now=AT + timedelta(minutes=2), skip_done=False)
+        before = await _snapshot(db)
+        # a rerun days later: a newer Pi, another prompt stack, a later "now"
+        later = AT + timedelta(days=3)
+        await extra_capture.apply_pi(db, [(path, _raw())], now=later, version="1.9.9")
+        await extra_capture.capture_agent_hub(db, since=AT - timedelta(hours=1), until=None, now=later, skip_done=False)
+    after = await _snapshot(db)
+    assert before["pi"][0] == "1.4.0" and before["agent_hub"][1] is not None
+    assert after == before
+
+
+async def test_a_backfilled_pi_row_has_no_harness_version_only_the_installed_one_in_parts(db: AsyncSession, tmp_path: Path) -> None:
+    path = tmp_path / "2026-11-01T12-00-00-000Z_pi-1.jsonl"
+    path.write_text("")
+
+    await extra_capture.apply_pi(db, [(path, _raw())], now=AT + timedelta(days=3), version="1.9.9")
+
+    row = (await db.execute(select(UsageSession))).scalar_one()
+    assert row.parts is not None
+    assert row.harness_version is None
+    assert (row.parts["version_basis"], row.parts["installed_version"]) == ("installed_at_backfill", "1.9.9")
+
+
+def _pi(tmp_path: Path, sid: str, started_s: float, *, project: str = "neri", **over) -> tuple[Path, dict]:
+    path = tmp_path / f"2026-11-01T12-00-00-000Z_{sid}.jsonl"
+    path.write_text("")
+    started = AT + timedelta(seconds=started_s)
+    return path, _raw(sid=sid, cwd=f"/srv/workspaces/projects/{project}", started=started, first_at=started + timedelta(seconds=4), **over)
+
+
+async def test_pi_binds_only_within_three_before_and_eight_after_the_session_record(db: AsyncSession, tmp_path: Path) -> None:
+    db.add_all([_delivery("early", seconds=-4), _delivery("edge-before", seconds=-2.5, role="review"), _delivery("edge-after", seconds=7.5, role="other"),
+                _delivery("late", seconds=9)])
+    await db.flush()
+    heads = [_pi(tmp_path, "s-lo", 0), _pi(tmp_path, "s-hi", 100)]
+    # same deliveries, session records shifted so each sees one edge delivery only
+    db.add_all([_delivery("hi-late", seconds=108.5, project="aico"), _delivery("hi-in", seconds=107.5, project="aico", role="coordinator")])
+    await db.flush()
+
+    assigned = await extra_capture.assign_pi_deliveries(db, heads)
+
+    assert assigned["s-lo"]["delivery_id"] == "edge-before"  # -2.5 s, the closest in window; -4 s and +9 s are outside
+    assert assigned["s-hi"]["delivery_id"] == "hi-in"
+
+
+async def test_a_delivery_serves_one_pi_session_and_the_project_match_wins(db: AsyncSession, tmp_path: Path) -> None:
+    db.add_all([_delivery("only", seconds=3, project="neri", role="hunting"), _delivery("other", seconds=6, project="aico", role="review")])
+    await db.flush()
+    heads = [_pi(tmp_path, "a", 0, project="aico"), _pi(tmp_path, "b", 1, project="neri")]
+
+    assigned = await extra_capture.assign_pi_deliveries(db, heads)
+
+    # both sessions are within reach of both deliveries; each takes its own project's, none is shared
+    assert {k: v["delivery_id"] for k, v in assigned.items()} == {"a": "other", "b": "only"}
+
+
+async def test_three_sessions_two_deliveries_leave_one_session_without(db: AsyncSession, tmp_path: Path) -> None:
+    db.add_all([_delivery("d1", seconds=2), _delivery("d2", seconds=9)])
+    await db.flush()
+
+    assigned = await extra_capture.assign_pi_deliveries(db, [_pi(tmp_path, f"s{i}", i * 2) for i in range(3)])
+
+    assert len(assigned) == 2 and len({v["delivery_id"] for v in assigned.values()}) == 2
+
+
+async def test_remote_deliveries_and_ones_too_big_for_the_first_turn_are_not_bound(db: AsyncSession, tmp_path: Path) -> None:
+    db.add_all([_delivery("remote", seconds=1, host="neri-hunters"), _delivery("huge", seconds=2, est=9000)])  # total 8000
+    await db.flush()
+
+    assert await extra_capture.assign_pi_deliveries(db, [_pi(tmp_path, "s", 0)]) == {}
+
+
+async def test_deliveries_held_by_an_earlier_pi_row_are_not_given_again(db: AsyncSession, tmp_path: Path) -> None:
+    db.add(_delivery("d1", seconds=2))
+    await db.flush()
+    first = _pi(tmp_path, "first", 0)
+    await extra_capture.apply_pi(db, [first], now=AT + timedelta(minutes=1), version="1.4.0")
+
+    assigned = await extra_capture.assign_pi_deliveries(db, [first, _pi(tmp_path, "second", 1)])
+
+    assert assigned == {}  # first keeps d1 (it is not re-matched), and d1 is taken for second
+
+
+async def test_a_collector_outage_longer_than_the_lookback_is_caught_up_from_the_watermark(db: AsyncSession) -> None:
+    now = AT + timedelta(days=1)
+    db.add(Session(id="c1", project_id="summitflow", provider="claude", model="m", agent_slug=None, request_source="summitflow",
+                   created_at=AT, updated_at=AT))
+    await db.flush()
+    db.add(CostLog(session_id="c1", model="m", input_tokens=300, cache_read_tokens=6500, output_tokens=5, created_at=now - timedelta(hours=9)))
+    await db.flush()
+
+    await extra_capture._store_watermark(db, now - timedelta(hours=10))  # last pass before the outage
+    result = await extra_capture.capture_pass(db, touched=[], now=now)  # the row is 9 h old: beyond the 2 h lookback, after the watermark
+
+    assert result["agent_hub_updated"] == 1
+    assert (await db.execute(select(UsageSession.session_id).where(UsageSession.provider == "agent_hub"))).scalar_one() == "c1"
+    marks = (await db.execute(select(SubscriptionUsageCursor.state).where(SubscriptionUsageCursor.path == "@context_extra"))).scalar_one()
+    assert marks is not None and datetime.fromisoformat(marks["until"]) == now
+
+
+async def test_one_agent_hub_row_that_fails_does_not_stop_the_others_or_the_transaction(db: AsyncSession) -> None:
+    for sid, slug in (("bad", "broken"), ("good", "fine")):
+        db.add(Session(id=sid, project_id="summitflow", provider="claude", model="m", agent_slug=slug, request_source="summitflow",
+                       created_at=AT, updated_at=AT))
+    await db.flush()
+    db.add_all([CostLog(session_id=sid, model="m", input_tokens=300, cache_read_tokens=6500, output_tokens=5, created_at=AT + timedelta(seconds=i))
+                for i, sid in enumerate(("bad", "good"))])
+    await db.flush()
+
+    async def stack(_db, slug):
+        if slug == "broken":
+            raise RuntimeError("stack will not render")
+        return "s" * 400
+
+    with patch.object(agent_hub_turn, "stack_text", stack):
+        result = await extra_capture.capture_agent_hub(db, since=AT - timedelta(hours=1), until=None, now=AT + timedelta(minutes=2), skip_done=False)
+
+    assert result == {"agent_hub_read": 2, "agent_hub_updated": 1}
+    assert (await db.execute(select(UsageSession.session_id).where(UsageSession.provider == "agent_hub"))).scalars().all() == ["good"]
+
+
+async def test_a_failing_stage_costs_only_that_stage(db: AsyncSession) -> None:
+    db.add(UsageSession(provider="claude", session_id="s1", agent_id="", first_at=AT, last_at=AT))
+    db.add(_call("a", 0, 40_000))
+    await db.flush()
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("pi unreadable")
+
+    with patch.object(extra_capture, "capture_pi", boom):
+        result = await extra_capture.capture_pass(db, touched=[("claude", "s1")], now=AT + timedelta(hours=1))
+
+    assert result["growth_updated"] == 1
+    assert (await db.execute(select(UsageSession.peak_context_tokens))).scalar_one() == 40_000

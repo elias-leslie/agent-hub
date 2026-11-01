@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.context_observability import baseline, deliveries, first_turn
+from app.services.context_observability import baseline, capture, deliveries, first_turn
 from app.services.subscription_accounting import collector
 
 DELIVERED = "## Safety Directive\nFinish the work.\n" + "x" * 800
@@ -341,3 +341,34 @@ def test_a_failed_backfill_waits_for_its_retry_time() -> None:
     assert not collector._context_backfill_waiting({state: (0, {"retry_after": earlier})}, now)
     assert not collector._context_backfill_waiting({}, now)
     assert not collector._context_backfill_done({state: (0, {"retry_after": later})})
+
+
+def test_a_backfill_where_sessions_failed_is_retried_not_marked_done() -> None:
+    assert not capture.backfill_failed({"sessions_read": 100, "sessions_updated": 90, "sessions_failed": 10, "stages_failed": 0})
+    assert capture.backfill_failed({"sessions_read": 100, "sessions_updated": 0, "sessions_failed": 100, "stages_failed": 0})
+    assert capture.backfill_failed({"sessions_read": 10, "sessions_updated": 10, "sessions_failed": 0, "pi_read": 5, "pi_updated": 0})
+    assert capture.backfill_failed({"sessions_read": 10, "sessions_updated": 10, "sessions_failed": 0, "stages_failed": 1})
+    assert not capture.backfill_failed({"sessions_read": 10, "sessions_updated": 4, "sessions_failed": 0, "sessions_skipped": 6})  # no ledger row yet
+
+
+async def test_the_collector_stores_retry_after_not_the_version_when_the_backfill_mostly_failed() -> None:
+    stored: list[dict] = []
+
+    async def store(_db, state):
+        stored.append(state)
+
+    summary = {"sessions_read": 100, "sessions_updated": 0, "sessions_failed": 100, "stages_failed": 0}
+    with patch.object(collector.context_capture, "backfill", AsyncMock(return_value=summary)), \
+            patch.object(collector, "_store_context_backfill_state", store):
+        await collector._backfill_context_once(AsyncMock(), {})
+
+    assert len(stored) == 1 and "retry_after" in stored[0] and "version" not in stored[0]
+
+
+def test_headless_codex_exec_coordinator_runs_are_their_own_cell() -> None:
+    def row(mode: str, role: str) -> baseline.FirstTurn:
+        return baseline.FirstTurn("codex", "s", "", "codex", None, role, role == "coordinator", mode, "m", datetime(2026, 11, 1, tzinfo=UTC), 1, None, None, None, None, None)
+
+    assert row("project", "coordinator").cell == "coordinator"
+    assert row("exec", "coordinator").cell == "exec:coordinator"
+    assert row("exec", "implementation").cell == "implementation"

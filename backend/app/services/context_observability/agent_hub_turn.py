@@ -1,8 +1,9 @@
 """First-turn context of Agent Hub's own agents (completions and agent runs routed through Agent Hub).
 
-The total is the provider's own count from the first cost_logs row of the session. Workflow attempts whose native
-transcript the usage collector already counts (NATIVE_COUNTED_NOTE) are Claude/Codex sessions, measured from their
-transcripts, so they are left out here. Agent Hub is the harness, so there is no harness-vs-ours split by owner: the
+The total is the provider's own count from the first cost_logs row of the session, for rows `log_token_usage` writes.
+Rows with another origin are left out (NOT_A_CALL_NOTES): `record_attempt_cost` writes one row per workflow attempt
+holding the whole attempt's usage (native ones are measured from their transcripts, `via pi` ones from Pi's session
+files), and `ingested from <source>` rows are other services' billed calls, not Agent Hub agents. Agent Hub is the harness, so there is no harness-vs-ours split by owner: the
 bound delivery and the agent's runtime prompt stack are ours, the first user message is the brief, and what is left
 (tool schemas, provider framing) is the harness remainder.
 """
@@ -16,11 +17,12 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.session import NATIVE_COUNTED_NOTE
-
 from . import first_turn
 
 PROVIDER = "agent_hub"
+# cost_note prefixes of rows that are not one agent call: workflow_runs/usage.py (whole attempts, with suffixes such as
+# "; cost unknown") and api/cost_ingest.py (other services' calls). Matched with LIKE '<prefix>%', as the other cost readers do.
+NOT_A_CALL_NOTES = ("workflow attempt", "ingested from")
 LAUNCH_PREFIX = "agent:"
 
 _FIRST_CALLS = text(
@@ -29,7 +31,11 @@ _FIRST_CALLS = text(
         SELECT DISTINCT ON (c.session_id) c.session_id, c.created_at, c.model, c.input_tokens,
                coalesce(c.cache_read_tokens, 0) AS cache_read, coalesce(c.cache_write_tokens, 0) AS cache_write
         FROM cost_logs c
-        WHERE coalesce(c.cost_note, '') <> :native
+        WHERE NOT EXISTS (  -- a session with such a row is not an agent session: its later rows are not a first call either
+            SELECT 1 FROM cost_logs x
+            WHERE x.session_id = c.session_id
+              AND (coalesce(x.cost_note, '') LIKE :workflow_note OR coalesce(x.cost_note, '') LIKE :ingested_note)
+        )
         ORDER BY c.session_id, c.created_at, c.id
     )
     SELECT f.*, s.agent_slug, s.project_id, s.request_source,
@@ -46,7 +52,7 @@ _FIRST_CALLS = text(
 
 async def first_calls(db: AsyncSession, *, since: datetime, until: datetime | None = None) -> list[dict[str, Any]]:
     """First priced call of every Agent Hub session whose first call falls in the window."""
-    rows = (await db.execute(_FIRST_CALLS, {"native": NATIVE_COUNTED_NOTE, "since": since, "until": until})).mappings().all()
+    rows = (await db.execute(_FIRST_CALLS, {"workflow_note": f"{NOT_A_CALL_NOTES[0]}%", "ingested_note": f"{NOT_A_CALL_NOTES[1]}%", "since": since, "until": until})).mappings().all()
     return [dict(r) for r in rows]
 
 

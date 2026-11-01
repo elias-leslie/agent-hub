@@ -910,6 +910,11 @@ async def _backfill_context_once(db: AsyncSession, cursors: dict[str, tuple[int,
         return
     try:
         summary = await context_capture.backfill(db)
+        if context_capture.backfill_failed(summary):  # what was measured is kept; the whole backfill runs again later
+            await _store_context_backfill_state(db, {"retry_after": (now + CONTEXT_BACKFILL_RETRY).isoformat(), "error": "sessions failed", **summary})
+            await db.commit()
+            logger.warning("context observability backfill incomplete, retrying later: %s", summary)
+            return
         await _store_context_backfill_state(db, {"version": CONTEXT_BACKFILL_VERSION, **summary})
         await db.commit()
         logger.info("context observability backfill: %s", summary)
