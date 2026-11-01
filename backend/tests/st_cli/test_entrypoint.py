@@ -41,7 +41,9 @@ def test_entrypoint_consumes_fixed_namespace_before_sdk_dispatch() -> None:
         result = entrypoint.main(["models", "list", "--json"])
 
     assert result == "ok"
-    run.assert_called_once_with(entrypoint.OWNED_APPS["models"], "models", ["list", "--json"])
+    (named_app, namespace, args), _ = run.call_args
+    assert (namespace, args) == ("models", ["list", "--json"])
+    assert named_app._app is entrypoint.OWNED_APPS["models"] and named_app._prog == "st models"  # usage errors read "st models"
 
 
 @pytest.mark.parametrize("args", [[], ["web"]])

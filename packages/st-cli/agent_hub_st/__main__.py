@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
 import typer
 from st_sdk.runtime import run_app
@@ -45,6 +45,16 @@ OWNED_APPS: dict[str, typer.Typer] = {
 }
 
 
+class _Named:
+    """Calls a Typer app under ``st <namespace>``, so a usage error names the command the user typed."""
+
+    def __init__(self, app: typer.Typer, namespace: str) -> None:
+        self._app, self._prog = app, f"st {namespace}"
+
+    def __call__(self, *, args: Sequence[str] | None = None, obj: Any = None) -> Any:
+        return self._app(args=args, obj=obj, prog_name=self._prog)
+
+
 def main(args: Sequence[str] | None = None) -> Any:
     """Dispatch the fixed leading namespace to a statically owned Typer app."""
     resolved_args = list(sys.argv[1:] if args is None else args)
@@ -56,7 +66,7 @@ def main(args: Sequence[str] | None = None) -> Any:
     if app is None:
         typer.echo(f"Unknown Agent Hub ST namespace: {namespace}", err=True)
         raise typer.Exit(2)
-    return run_app(app, namespace, command_args)
+    return run_app(cast(typer.Typer, _Named(app, namespace)), namespace, command_args)
 
 
 if __name__ == "__main__":

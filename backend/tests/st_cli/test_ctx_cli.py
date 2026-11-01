@@ -66,7 +66,8 @@ def test_cost_is_terse_on_a_busy_matrix_and_hides_agent_hub_by_default() -> None
     result = run(["cost"], MATRIX_GET)
     lines = result.output.splitlines()
     assert result.exit_code == 0 and len(lines) <= MAX_LINES
-    assert lines[1].startswith("codex/unknown") and "OVER-BUDGET" in lines[1]  # flagged first
+    assert "last 14d against the 14d before" in lines[0] and "harness = its own prompt" in lines[1]  # the abbreviations are keyed
+    assert lines[2].startswith("codex/unknown") and "OVER-BUDGET" in lines[2]  # flagged first
     assert "agent_hub" not in result.output and "+20 more cells" in lines[-1]
     assert "—" in run(["cost", "-r", "lane"], MATRIX_GET).output  # unknown is a dash, never 0
 
@@ -91,22 +92,26 @@ def test_why_shows_cause_blocks_and_knob() -> None:
            "parts": {"harness": -23300, "ours": -400}, "knobs": [{"label": "lane-tools.json", "at": "2026-11-01T14:53:24Z", "ref": "4bb4c49c1"}],
            "blocks": [{"change": "grown", "delta": 235, "label": f"b{i}", "block": f"b{i}", "scope": "global", "writer": {"writer_session": "cc:1"}} for i in range(9)]}
     out = run(["why", "claude", "lane"], {("GET", "/api/context-observability/why"): why}).output
-    assert "cause=config" in out and "knob lane-tools.json" in out and "harness -23.3K" in out and "cfg 6c6aaea6" in out
+    assert "cause=config" in out and "config file lane-tools.json changed" in out and "harness -23.3K" in out and "request shape 6c6aaea6" in out
     assert len(out.splitlines()) <= MAX_LINES
 
 
 def test_markers_show_the_newest_few() -> None:
     found = [{"at": f"2026-11-01T1{i % 10}:00:00Z", "kind": "memory", "label": f"m{i}", "ref": str(i), "detail": {"action": "update", "tokens": 90}} for i in range(40)]
     result = run(["markers"], {("GET", "/api/context-observability/markers"): found})
-    assert len(result.output.splitlines()) <= MAX_LINES and "40 found, newest 12" in result.output
+    assert len(result.output.splitlines()) <= MAX_LINES and "40 found, newest 13" in result.output
     assert len(json.loads(run(["markers", "--json"], {("GET", "/api/context-observability/markers"): found}).output)) == 40
 
 
 def test_budget_shows_levels_and_cells_over_and_sets() -> None:
     levels = [{"harness": "*", "role": "*", "warn_tokens": 60000, "jump_pct": 25, "note": None}, {"harness": "pi", "role": "*", "warn_tokens": 12000, "jump_pct": None}]
-    states = [{"harness": "pi", "cell": "hunting", "n_recent": 4, "recent": 13000, "warn_tokens": 12000, "baseline": 8000, "pct": 62.0, "reason": "warn"}]
+    states = [{"harness": "pi", "cell": "hunting", "n_recent": 4, "recent": 13000, "warn_tokens": 12000, "baseline": 8000, "pct": 62.0, "reason": "warn"},
+              {"harness": "claude", "cell": "unknown", "n_recent": 9, "recent": 29600, "warn_tokens": 60000, "baseline": 46500, "body_recent": 31000,
+               "body_baseline": 22000, "body_pct": 40.9, "reason": "jump"}]
     out = run(["budget"], {("GET", "/api/context-observability/budgets"): levels, ("GET", "/api/context-observability/budget-state"): states}).output
-    assert "pi/hunting OVER-BUDGET 13.0K vs warn 12.0K" in out and "step alert at +25%" in out
+    assert "pi/hunting OVER-BUDGET: 24h median 13.0K is over warn 12.0K" in out
+    assert "claude/unknown JUMP: 24h starts 31.0K vs 22.0K the 7 days before (+41%)" in out  # a percent, not the old ratio field
+    assert "step alert = the last 24h of starts" in out
     seen: list = []
     done = run(["budget", "set", "pi", "*", "14000", "--note", "n"], {("PUT", "/api/context-observability/budgets"): {"harness": "pi", "role": "*", "warn_tokens": 14000}}, seen)
     assert "pi/* warn 14.0K" in done.output and seen[0][2]["json"] == {"harness": "pi", "role": "*", "warn_tokens": 14000, "note": "n"}
@@ -207,3 +212,83 @@ def test_a_409_detail_object_prints_its_message() -> None:
 
     payload = {"detail": {"message": "Changed since you looked", "key": "memory:1", "latest_revision": "r2"}}
     assert _format_error_payload(payload, "raw") == "Changed since you looked"
+
+
+def _help(*args: str) -> str:
+    """The command's help as one line of words (the table border and wrapping removed)."""
+    return " ".join(runner.invoke(app, [*args, "--help"], env={"COLUMNS": "200"}).output.replace("│", " ").split())
+
+
+def test_cost_json_returns_every_cell_whatever_the_limit_and_the_help_says_so() -> None:
+    assert len(json.loads(run(["cost", "--limit", "3", "--json"], MATRIX_GET).output)["cells"]) == 32
+    assert "--json always returns every cell" in _help("cost")
+    assert len(run(["cost", "--limit", "40"], MATRIX_GET).output.splitlines()) <= MAX_LINES  # a big limit still fits the line cap
+
+
+def test_cost_says_why_a_big_change_is_not_flagged() -> None:
+    held = cell("claude", "subagent:tiny", 4, delta_pct=60.0, flag_held="+60% but only 3 starts in the range before; a flag needs 5 on each side")
+    out = run(["cost"], {("GET", "/api/context-observability/matrix"): {**MATRIX, "cells": [held, cell("claude", "subagent:t0", 90)]}}).output
+    assert "not flagged: claude/subagent:tiny +60% but only 3 starts" in out and len(out.splitlines()) <= MAX_LINES
+
+
+def test_a_typo_in_the_harness_or_role_is_an_error_not_an_empty_answer() -> None:
+    for command in ("why", "trend", "cell"):
+        bad = run([command, "bogus", "lane"], MATRIX_GET)
+        assert bad.exit_code == 2 and "bogus" in bad.output, command
+    assert run(["cost", "-H", "bogus"], MATRIX_GET).exit_code == 2
+    assert run(["markers", "-H", "bogus"], {}).exit_code == 2
+    missing = run(["why", "claude", "nosuchrole"], MATRIX_GET)
+    assert missing.exit_code == 1 and "No claude cell named 'nosuchrole'" in missing.output
+    known = {**MATRIX_GET, ("GET", "/api/context-observability/why"): {"cause": "none"}}
+    assert run(["why", "claude", "subagent:t1"], known).exit_code == 0 and run(["why", "claude", "lane"], known).exit_code == 0
+
+
+def test_a_mistyped_command_names_st_ctx_in_its_usage(capsys: pytest.CaptureFixture[str]) -> None:
+    from agent_hub_st.__main__ import main
+
+    with pytest.raises(SystemExit):
+        main(["ctx", "cells"])
+    err = capsys.readouterr()
+    assert "Usage: st ctx" in err.out + err.err and "agent-hub-st" not in err.out + err.err
+
+
+def test_a_config_marker_says_what_changed() -> None:
+    marker = {"at": "2026-11-01T14:53:00Z", "kind": "config", "harness": "claude", "work_role": "implementation", "launch_mode": "project",
+              "ref": "08535d69aa", "label": "08535d69aa", "detail": {"from_fp": "6c6aaea6ff", "model": "claude-opus-5-5", "version": "2.1.316"}}
+    out = run(["markers"], {("GET", "/api/context-observability/markers"): [marker]}).output
+    assert "claude implementation sessions on claude-opus-5-5 v2.1.316 sent a new request shape, 6c6aaea6 -> 08535d69" in out
+    assert "config config" not in out
+
+
+DECIDED = [
+    {"id": "11111111-aaaa-bbbb-cccc-000000000001", "target_kind": "memory", "target_id": "3fa2c1d0-aaaa-bbbb-cccc-dddddddddddd", "decision": "keep",
+     "through_revision": "rev-9-long", "result_revision": None, "note": "fine", "by": "aico-widget-1", "by_kind": "agent", "created_at": "2026-11-01T18:00:00Z"},
+    {"id": "11111111-aaaa-bbbb-cccc-000000000002", "target_kind": "prompt", "target_id": "old-prompt", "decision": "refuse",
+     "through_revision": "rev-3", "result_revision": "rev-2", "note": None, "by": "owner", "by_kind": "owner", "created_at": "2026-11-01T17:00:00Z"},
+]
+DECIDED_GET = {("GET", "/api/context-observability/changes/decisions"): DECIDED}
+
+
+def test_a_decided_row_prints_an_id_that_show_accepts() -> None:
+    listing = run(["changes", "--decided"], DECIDED_GET).output
+    printed = next(line.split()[3] for line in listing.splitlines() if "memory:" in line)
+    assert printed == "memory:3fa2c1d0-aaaa-bbbb-cccc-dddddddddddd"  # the whole id, not a cut one
+    shown = run(["show", printed], {**QUEUE_GET, **DECIDED_GET})
+    assert shown.exit_code == 0 and "already decided" in shown.output and "KEEP by aico-widget-1" in shown.output and "note: fine" in shown.output
+    assert run(["show", "memory:3fa2c1d0"], {**QUEUE_GET, **DECIDED_GET}).exit_code == 0  # a prefix of it works too
+    refused = run(["show", "prompt:old-prompt"], {**QUEUE_GET, **DECIDED_GET}).output
+    assert "REFUSE by owner" in refused and "left at revision rev-2" in refused
+    assert run(["show", "memory:nothing-at-all"], {**QUEUE_GET, **DECIDED_GET}).exit_code == 1
+
+
+def test_the_changes_header_is_plain_words() -> None:
+    assert "3 waiting for review; 3 of them reach every agent" in run(["changes"], QUEUE_GET).output
+    empty = {"rows": [], "summary": {"count": 0, "global_count": 0, "tokens_per_day": 0}, "automatic": []}
+    out = run(["changes"], {("GET", "/api/context-observability/changes"): empty}).output
+    assert "none waiting for review" in out and "(0 global)" not in out and "tok/day" not in out
+
+
+def test_the_help_says_what_refuse_undoes_and_that_bare_budget_only_reads() -> None:
+    refuse = _help("refuse")
+    assert "archived" in refuse and "put back" in refuse
+    assert "only reads" in _help("budget")

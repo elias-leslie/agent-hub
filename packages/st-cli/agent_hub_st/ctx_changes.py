@@ -25,6 +25,7 @@ Ids = Annotated[list[str] | None, typer.Argument(help="Row id from st ctx change
 Session = Annotated[str | None, typer.Option("--session", help="Every unreviewed row this writer session touched.")]
 Note = Annotated[str | None, typer.Option("--note", help="Why, kept with the decision.")]
 OWNER_ASK = "Only when the owner asked for it in this session."
+DECIDED_SEARCH = 200  # past decisions searched when show is given an id the queue no longer holds
 
 
 def _queue(session: str | None = None, kind: str | None = None) -> dict[str, Any]:
@@ -51,8 +52,8 @@ def _reach(row: dict[str, Any]) -> str:
     return f"{tok(row.get('delta_tokens'), sign=True)}t x{obj(row.get('reach')).get('starts_per_day', 0):g}/d"
 
 
-def _find(queue: dict[str, Any], wanted: str) -> dict[str, Any]:
-    """One row by full key, ``kind:id`` prefix, or a bare target-id prefix (at least 4 characters)."""
+def _hits(queue: dict[str, Any], wanted: str) -> list[dict[str, Any]]:
+    """Queue rows by full key, ``kind:id`` prefix, or a bare target-id prefix (at least 4 characters)."""
     needle = wanted.lower()
     hits = []
     for row in rows(queue.get("rows")):
@@ -60,11 +61,50 @@ def _find(queue: dict[str, Any], wanted: str) -> dict[str, Any]:
         short_id = _row_id(row).lower()
         if needle in (key, target, short_id) or (len(needle) >= 4 and (key.startswith(needle) or target.startswith(needle))):
             hits.append(row)
+    return hits
+
+
+def _find(queue: dict[str, Any], wanted: str) -> dict[str, Any]:
+    hits = _hits(queue, wanted)
     if len(hits) != 1:
         output_error(f"{len(hits)} unreviewed changes match {wanted!r}; list them with st ctx changes" if hits
                      else f"No unreviewed change matches {wanted!r}; list them with st ctx changes")
         raise typer.Exit(1)
     return hits[0]
+
+
+def _decided_id(record: dict[str, Any]) -> str:
+    """The id a decided row is shown and found by: the full ``kind:target``, which ``st ctx show`` accepts."""
+    return f"{record.get('target_kind')}:{record.get('target_id')}"
+
+
+def _decisions(kind: str | None = None, limit: int = DECIDED_SEARCH) -> list[dict[str, Any]]:
+    params = {"limit": limit, **({"target_kind": kind} if kind else {})}
+    return rows(agent_hub_request("GET", CONTEXT_DECISIONS_PATH, params=params, tool_name=TOOL))
+
+
+def _decided_hits(wanted: str) -> list[dict[str, Any]]:
+    """Past decisions by ``kind:target`` (full or prefix of the target), a target-id prefix, or the decision's own id."""
+    needle = wanted.lower()
+    return [r for r in _decisions()
+            if needle in (_decided_id(r).lower(), str(r.get("id")).lower())
+            or (len(needle) >= 4 and (_decided_id(r).lower().startswith(needle) or str(r.get("target_id")).lower().startswith(needle)
+                                      or str(r.get("id")).lower().startswith(needle)))]
+
+
+def _decided_lines(wanted: str, hits: list[dict[str, Any]]) -> list[str]:
+    """One decided target: every decision on it, newest first. Several different targets under one prefix is an error."""
+    if len({_decided_id(r) for r in hits}) > 1:
+        output_error(f"{len(hits)} decisions match {wanted!r}; use the full id from st ctx changes --decided")
+        raise typer.Exit(1)
+    first = hits[0]
+    lines = [f"{_decided_id(first)} already decided ({len(hits)} decision{'s' if len(hits) != 1 else ''}, newest first); it is no longer in the review queue"]
+    for record in hits[:6]:
+        lines.append(f"  {when(record.get('created_at'))} {str(record.get('decision')).upper()} by {short(record.get('by'), 30)} ({record.get('by_kind') or UNKNOWN})"
+                     f"; reviewed up to revision {str(record.get('through_revision'))[:8]}"
+                     + (f", left at revision {str(record.get('result_revision'))[:8]}" if record.get("result_revision") else "")
+                     + (f"; note: {short(record.get('note'), 80)}" if record.get("note") else ""))
+    return lines
 
 
 def _item(row: dict[str, Any]) -> dict[str, Any]:
@@ -129,7 +169,7 @@ def register(app: typer.Typer) -> None:
         mine: Annotated[bool, typer.Option("--mine", help="Only rows this session (AICO_SESSION_ID) wrote.")] = False,
         kind: Annotated[str | None, typer.Option("--kind", help="memory, prompt or placement")] = None,
         decided: Annotated[bool, typer.Option("--decided", help="Past decisions instead of the queue.")] = False,
-        limit: Annotated[int, typer.Option("--limit", min=1, max=11)] = 9,
+        limit: Annotated[int, typer.Option("--limit", min=1, help="Rows shown (a text answer stops at 15 lines; --json returns all).")] = 9,
         as_json: AsJson = False,
     ) -> None:
         """The review queue, newest first."""
@@ -139,22 +179,26 @@ def register(app: typer.Typer) -> None:
                 output_error("AICO_SESSION_ID is not set; pass --session")
                 raise typer.Exit(2)
         if decided:
-            params = {"limit": limit, **({"target_kind": kind} if kind else {})}
-            past = rows(agent_hub_request("GET", CONTEXT_DECISIONS_PATH, params=params, tool_name=TOOL))
+            past = _decisions(kind, limit)
             if as_json:
                 output_json(past)
                 return
-            emit([f"DECIDED newest {len(past)}", *(f"  {age(r.get('created_at')):>3} {r.get('decision')} {r.get('target_kind')}:{str(r.get('target_id'))[:8]}"
-                                                    f" by {short(r.get('by'), 18)}{' - ' + short(r.get('note'), 30) if r.get('note') else ''}" for r in past)])
+            emit([f"DECIDED newest {len(past)} (st ctx show ID opens one)",
+                  *(f"  {age(r.get('created_at')):>3} ago {r.get('decision')} {_decided_id(r)} by {short(r.get('by'), 18)}"
+                    f"{' - ' + short(r.get('note'), 30) if r.get('note') else ''}" for r in past)])
             return
         queue = _queue(session=session, kind=kind)
         if as_json:
             output_json(queue)
             return
         summary, queued = obj(queue.get("summary")), rows(queue.get("rows"))
-        unknown = f", reach unknown {summary.get('unknown_reach')}" if summary.get("unknown_reach") else ""
-        lines = [f"CHANGES {summary.get('count', len(queued))} unreviewed ({summary.get('global_count', 0)} global) "
-                 f"{tok(summary.get('tokens_per_day'), sign=True)} tok/day{unknown}"]
+        count = summary.get("count", len(queued))
+        unknown = f"; {summary.get('unknown_reach')} with unknown reach" if summary.get("unknown_reach") else ""
+        if not count:
+            lines = ["CHANGES none waiting for review (st ctx changes --decided lists past decisions)"]
+        else:
+            lines = [f"CHANGES {count} waiting for review; {summary.get('global_count', 0)} of them reach every agent; together "
+                     f"{tok(summary.get('tokens_per_day'), sign=True)} tokens a day added to first turns{unknown}"]
         for row in queued[:limit]:
             hint = obj(row.get("hint"))
             lines.append(f"  {_row_id(row)} {row.get('change')} {row.get('scope_after')} {short(row.get('title'), 30)!r} {_reach(row)} "
@@ -163,15 +207,27 @@ def register(app: typer.Typer) -> None:
             lines.append(f"  +{len(queued) - limit} more (--kind, --session narrow)")
         automatic = len(rows(queue.get("automatic")))
         if automatic:
-            lines.append(f"  {automatic} system writes this week, not queued")
+            lines.append(f"  {automatic} system writes this week, not queued for review")
         emit(lines)
 
     @app.command("show")
-    @usage(surface="st.ctx.show", cmd="st ctx show ID", when="one queued change: what changed, who wrote it, who receives it, the diff",
+    @usage(surface="st.ctx.show", cmd="st ctx show ID", when="one queued change (what changed, who wrote it, who receives it, the diff) or a decided one (who decided what)",
            task_types=TASKS, on_demand=ON_DEMAND)
-    def show(id_: Annotated[str, typer.Argument(metavar="ID", help="Row id from st ctx changes")], as_json: AsJson = False) -> None:
-        """One queue row with its diff."""
-        row = _find(_queue(), id_)
+    def show(id_: Annotated[str, typer.Argument(metavar="ID", help="Row id from st ctx changes; --decided ids work too")], as_json: AsJson = False) -> None:
+        """One queued change with its diff, or the record of a change already decided."""
+        queue = _queue()
+        hits = _hits(queue, id_)
+        if not hits:
+            past = _decided_hits(id_)
+            if not past:
+                output_error(f"No change matches {id_!r}, queued or among the last {DECIDED_SEARCH} decisions; list them with st ctx changes [--decided]")
+                raise typer.Exit(1)
+            if as_json:
+                output_json(past)
+                return
+            emit(_decided_lines(id_, past))
+            return
+        row = _find(queue, id_)
         if as_json:
             output_json(row)
             return
@@ -192,7 +248,7 @@ def register(app: typer.Typer) -> None:
     @usage(surface="st.ctx.keep", cmd="st ctx keep ID... | --session S [--note TEXT]",
            when="record a change as reviewed and fine; nothing else changes. " + OWNER_ASK, task_types=TASKS, on_demand=ON_DEMAND)
     def keep(ids: Ids = None, session: Session = None, note: Note = None, as_json: AsJson = False) -> None:
-        """Mark changes reviewed and acceptable."""
+        """Mark changes as reviewed and fine. Nothing is undone; the rows leave the queue."""
         _decide(CONTEXT_KEEP_PATH, "kept", _selected(ids, session), note, as_json)
 
     @app.command("refuse")
@@ -200,7 +256,7 @@ def register(app: typer.Typer) -> None:
            when="undo changes, all or nothing: a create is archived, an update or delete restored (409 if it changed since). " + OWNER_ASK,
            task_types=TASKS, on_demand=ON_DEMAND)
     def refuse(ids: Ids = None, session: Session = None, note: Note = None, as_json: AsJson = False) -> None:
-        """Undo changes."""
+        """Undo changes: a created memory or prompt is archived; an edited or deleted one is put back as it was. All or nothing; stops with 409 if a target changed since you looked."""
         _decide(CONTEXT_REFUSE_PATH, "refused", _selected(ids, session), note, as_json)
 
     @app.command("rework")
@@ -216,7 +272,7 @@ def register(app: typer.Typer) -> None:
         note: Note = None,
         as_json: AsJson = False,
     ) -> None:
-        """Edit or narrow one change."""
+        """Edit one change in place, or narrow who receives it."""
         edit = {key: value for key, value in (("content", file.read_text(encoding="utf-8") if file else None), ("summary", summary), ("name", name)) if value}
         if bool(edit) == bool(narrow):
             raise typer.BadParameter("give an edit (-f, --summary, --name) or --narrow, not both or neither")

@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import typer
-from st_sdk.output import output_json
+from st_sdk.output import output_error, output_json
 from st_sdk.usage import usage
 
 from . import ctx_changes
@@ -24,17 +24,41 @@ from ._api_paths import (
     CONTEXT_OBS_TREND_PATH,
     CONTEXT_OBS_WHY_PATH,
 )
-from .ctx_format import ON_DEMAND, TASKS, TOOL, UNKNOWN, day, emit, fp, obj, pct, rows, short, table, tok, when
+from .ctx_format import MAX_LINES, ON_DEMAND, TASKS, TOOL, UNKNOWN, day, emit, fp, obj, pct, rows, short, table, tok, when
+from .ctx_marker import marker_line
 from .memory_api import agent_hub_request
 
 app = typer.Typer(help="Context cost: what lands in an agent's first turn, why it moved, and the changes to review")
-Harness = Annotated[str, typer.Argument(help="claude, codex, pi or agent_hub")]
-Role = Annotated[str, typer.Argument(help="A Cost-matrix role, or lane (every launched role but the coordinator)")]
+HARNESSES = ("claude", "codex", "pi", "agent_hub")
+Harness = Annotated[str, typer.Argument(metavar="HARNESS", help="claude, codex, pi or agent_hub")]
+Role = Annotated[str, typer.Argument(metavar="ROLE", help="A role from st ctx cost, or lane (every launched role but the coordinator)")]
 AsJson = Annotated[bool, typer.Option("--json", help="Print the API response as JSON.")]
 
 
 def _get(path: str, params: dict[str, Any] | None = None) -> Any:
     return agent_hub_request("GET", path, params=params, tool_name=TOOL)
+
+
+def _harness(value: str | None) -> str | None:
+    """A harness the cost matrix knows; anything else is a typo, not an empty answer."""
+    if value is not None and value not in HARNESSES:
+        raise typer.BadParameter(f"{value!r} is not a harness; use {', '.join(HARNESSES)}", param_hint="HARNESS")
+    return value
+
+
+def _known_cell(harness: str, role: str) -> bool:
+    """Whether the cost matrix (up to 90 days) has this cell; lane is every launched role, so it is always known."""
+    if role == "lane":
+        return True
+    payload = obj(_get(CONTEXT_OBS_MATRIX_PATH, {"days": 90}))
+    return any(c.get("harness") == harness and c.get("cell") == role for c in rows(payload.get("cells")))
+
+
+def _unknown_cell(harness: str, role: str) -> None:
+    """Stop with an error when an empty answer is really a role the matrix has never seen (a typo)."""
+    if not _known_cell(harness, role):
+        output_error(f"No {harness} cell named {role!r} in the last 90 days; the roles are in st ctx cost -H {harness}")
+        raise typer.Exit(1)
 
 
 def _cell_match(cell: str, wanted: str | None) -> bool:
@@ -52,11 +76,12 @@ def _flag(value: Any) -> str:
 def cost(
     harness: Annotated[str | None, typer.Option("-H", "--harness", help="One harness; agent_hub shows Agent Hub's own agents.")] = None,
     role: Annotated[str | None, typer.Option("-r", "--role", help="One role (coordinator, implementation, subagent...).")] = None,
-    days: Annotated[int, typer.Option("--days", min=1, max=90)] = 14,
-    limit: Annotated[int, typer.Option("--limit", min=1, max=13, help="Rows shown; flagged ones first.")] = 12,
+    days: Annotated[int, typer.Option("--days", min=1, max=90, help="Compare the last N days with the N days before.")] = 14,
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Rows shown, flagged first. A text answer stops at 15 lines; --json always returns every cell.")] = 12,
     as_json: AsJson = False,
 ) -> None:
     """The Cost matrix: median first turn per harness and role, flagged cells first."""
+    _harness(harness)
     payload = obj(_get(CONTEXT_OBS_MATRIX_PATH, {"days": days}))
     cells = [c for c in rows(payload.get("cells"))
              if (harness == c.get("harness") if harness else c.get("harness") != "agent_hub")
@@ -67,16 +92,26 @@ def cost(
     cells.sort(key=lambda c: (not c.get("flag"), -int(c.get("n") or 0)))
     versions = ", ".join(f"{h.get('harness')} {h.get('version') or UNKNOWN}" for h in rows(payload.get("harnesses"))
                          if h.get("harness") != "agent_hub")
-    since = f" data from {day(payload.get('coverage_from'))}" if payload.get("coverage_from") else ""
-    lines = [f"COST {days}d jump>={payload.get('jump_pct') or UNKNOWN}%{since} | {versions or UNKNOWN}"]
+    jump = payload.get("jump_pct") or UNKNOWN
+    since = f"measured from {day(payload.get('coverage_from'))}" if payload.get("coverage_from") else ""
+    launched = f", launched roles from {day(payload.get('launched_from'))}" if payload.get("launched_from") else ""
+    lines = [f"COST last {days}d against the {days}d before | latest {versions or UNKNOWN} | {since}{launched}",
+             f"  flagged: median up {jump}% or more (5+ starts each side), or over warn. harness = its own prompt and tools, "
+             f"ours = what Agent Hub adds, brief = the task. {UNKNOWN} = not known or nothing before to compare"]
     if not cells:
         lines.append("no starts match")
+    held = [c for c in cells if c.get("flag_held")]
+    fixed = len(lines) + (1 if len(cells) > 1 else 0) + (1 if held else 0)
+    shown = max(1, min(limit, MAX_LINES - fixed))
     body = [[f"{c.get('harness')}/{c.get('cell')}", f"n={c.get('n')}", tok(c.get("total")), pct(c.get("delta_pct")),
-             f"h {tok(c.get('harness_tokens'))} o {tok(c.get('ours'))} b {tok(c.get('brief'))}",
-             f"warn {tok(c.get('warn_tokens'))}" + (f" {_flag(c.get('flag'))}" if c.get("flag") else "")] for c in cells[:limit]]
+             f"harness {tok(c.get('harness_tokens'))} ours {tok(c.get('ours'))} brief {tok(c.get('brief'))}",
+             f"warn {tok(c.get('warn_tokens'))}" + (f" {_flag(c.get('flag'))}" if c.get("flag") else "")] for c in cells[:shown]]
     lines += table(body)
-    if len(cells) > limit:
-        lines.append(f"+{len(cells) - limit} more cells (-H, -r narrow)")
+    if len(cells) > shown:
+        lines.append(f"+{len(cells) - shown} more cells (-H, -r narrow; --json lists all)")
+    if held:
+        lines.append(f"not flagged: {held[0].get('harness')}/{held[0].get('cell')} {short(held[0].get('flag_held'), 90)}"
+                     + (f" (+{len(held) - 1} like it)" if len(held) > 1 else ""))
     emit(lines)
 
 
@@ -86,29 +121,42 @@ def cost(
        task_types=TASKS, on_demand=ON_DEMAND)
 def trend(harness: Harness, role: Role, days: Annotated[int, typer.Option("--days", min=1, max=90)] = 30, as_json: AsJson = False) -> None:
     """One cell over time with the steps the step finder flagged."""
+    _harness(harness)
     payload = obj(_get(CONTEXT_OBS_TREND_PATH, {"harness": harness, "role": role, "days": days}))
+    if not payload.get("daily") and not as_json:
+        _unknown_cell(harness, role)
     if as_json:
         output_json(payload)
         return
     head = obj(payload.get("headline"))
     prev = f" (was {tok(head.get('prev_total'))}, {pct(head.get('delta_pct'))})" if head.get("prev_total") else ""
-    lines = [f"TREND {harness}/{role} {days}d n={head.get('n', 0)} median {tok(head.get('total'))}{prev} warn {tok(payload.get('warn_tokens'))}"
-             f" from {day(payload.get('coverage_from'))}",
+    lines = [f"TREND {harness}/{role} last {days}d, {head.get('n', 0)} starts, median {tok(head.get('total'))}{prev}, warn {tok(payload.get('warn_tokens'))}"
+             f", measured from {day(payload.get('coverage_from'))}",
              f"  harness {tok(head.get('harness_tokens'))}  ours {tok(head.get('ours'))}  brief {tok(head.get('brief'))}"]
+    models = rows(payload.get("models"))
+    if len(models) > 1:
+        lines.append("  mixes models: " + ", ".join(f"{str(m.get('model')).removeprefix('claude-')} {m.get('n')}" for m in models[:3]))
     steps = sorted(rows(payload.get("steps")), key=lambda s: str(s.get("at")), reverse=True)
-    for step in steps[:5]:
+    for step in steps[:4]:
         parts = obj(step.get("parts"))
-        lines.append(f"  {when(step.get('at'))} {tok(step.get('before_total'))}->{tok(step.get('after_total'))} {pct(step.get('pct'))} "
-                     f"cause={step.get('cause') or UNKNOWN} h {tok(parts.get('harness'), sign=True)} o {tok(parts.get('ours'), sign=True)}")
+        lines.append(f"  step {when(step.get('at'))} {tok(step.get('before_total'))}->{tok(step.get('after_total'))} {pct(step.get('pct'))} "
+                     f"cause={step.get('cause') or UNKNOWN} (harness {tok(parts.get('harness'), sign=True)}, ours {tok(parts.get('ours'), sign=True)})")
     if not steps:
-        lines.append("  no steps")
-    elif len(steps) > 5:
-        lines.append(f"  +{len(steps) - 5} older steps")
+        lines.append("  no step: a lasting move of 25% or more with 5+ starts each side")
+    elif len(steps) > 4:
+        lines.append(f"  +{len(steps) - 4} older steps")
+    for dip in rows(payload.get("dips"))[:2]:
+        lines.append(f"  not a step: {day(dip.get('day'))} {tok(dip.get('before_total'))}->{tok(dip.get('total'))} {pct(dip.get('pct'))}: "
+                     f"{short(dip.get('reason'), 150)}")
     versions = " ".join(f"{v.get('version')}({day(v.get('first_at'))})" for v in rows(payload.get("versions"))[-4:])
-    lines.append(f"  versions {versions or UNKNOWN}")
+    lines.append(f"  versions (first seen) {versions or UNKNOWN}")
     recent = rows(payload.get("daily"))[-6:]
-    lines.append("  daily " + (" ".join(f"{day(d.get('day'))}:{tok(d.get('total'))}" for d in recent) or UNKNOWN))
+    lines.append("  daily medians " + (" ".join(f"{day(d.get('day'))}:{tok(d.get('total'))}" for d in recent) or UNKNOWN))
     emit(lines)
+
+
+_PARTS = {"harness_core": "core prompt", "harness_tools": "tools", "our_listings": "our listings", "ah_global": "global",
+          "ah_role": "role", "ah_project": "project"}
 
 
 @app.command("cell")
@@ -117,42 +165,53 @@ def trend(harness: Harness, role: Role, days: Annotated[int, typer.Option("--day
        task_types=TASKS, on_demand=ON_DEMAND)
 def cell(harness: Harness, role: Role, as_json: AsJson = False) -> None:
     """The latest start of a cell: where its tokens are, block by block."""
+    _harness(harness)
     payload = obj(_get(CONTEXT_OBS_CELL_PATH, {"harness": harness, "role": role}))
     if as_json:
         output_json(payload)
         return
     latest = obj(payload.get("latest"))
     if not latest:
+        _unknown_cell(harness, role)
         emit([f"CELL {harness}/{role}: no measured start in {payload.get('lookback_days', 30)}d"])
         return
     parts = obj(payload.get("parts"))
 
     def part(name: str) -> str:
         value = obj(parts.get(name))
-        return f"{name} {tok(value.get('tokens'))}" + ("" if value.get("method") in (None, "exact", "derived") else "~")
+        if name.startswith("ah_") and value.get("tokens") == 0:
+            return f"{_PARTS[name]} none"  # a real start with nothing delivered in that scope, not an unknown
+        return f"{_PARTS.get(name, name)} {tok(value.get('tokens'))}" + ("" if value.get("method") in (None, "exact", "derived") else "~")
 
-    names = [n for n in ("harness_core", "harness_tools", "our_listings", "ah_global", "ah_role", "ah_project") if n in parts]
-    lines = [f"CELL {harness}/{role} {when(latest.get('at'))} {tok(latest.get('total'))} (h {tok(latest.get('harness_tokens'))} "
-             f"o {tok(latest.get('ours'))} b {tok(latest.get('brief'))}) {latest.get('version') or UNKNOWN} {latest.get('model') or UNKNOWN} "
-             f"cfg {fp(payload.get('config_fp'))}",
-             "  " + ("  ".join(part(n) for n in names) or "parts not split yet") + "  (~ = ratio estimate)"]
+    names = [n for n in _PARTS if n in parts]
+    median = obj(payload.get("median"))
+    lines = [f"CELL {harness}/{role} latest start {when(latest.get('at'))}: {tok(latest.get('total'))} "
+             f"(harness {tok(latest.get('harness_tokens'))}, ours {tok(latest.get('ours'))}, brief {tok(latest.get('brief'))}) "
+             f"{latest.get('version') or UNKNOWN} {latest.get('model') or UNKNOWN}",
+             f"  median of {median.get('n', 0)} starts in {median.get('days', payload.get('lookback_days', 30))}d: {tok(median.get('total'))} "
+             f"(harness {tok(median.get('harness_tokens'))}, ours {tok(median.get('ours'))}, brief {tok(median.get('brief'))})"
+             if median else "  median: not measured",
+             "  that latest start: " + ("  ".join(part(n) for n in names) or "not split into parts yet") + "  (~ = estimated from sizes)"]
     blocks = rows(payload.get("blocks"))
-    lines.append(f"  blocks {len(blocks)}, {tok(payload.get('blocks_total'))} delivered:")
-    for block in blocks[:5]:
+    lines.append(f"  {len(blocks)} blocks Agent Hub delivered, {tok(payload.get('blocks_total'))} in all; biggest:")
+    for block in blocks[:4]:
         who = block.get("writer_session") or block.get("writer_kind")
         lines.append(f"    {tok(block.get('tokens')):>6} {short(block.get('label') or block.get('block_id'), 36)} {block.get('scope') or UNKNOWN}"
                      + (f" {when(block.get('writer_at'))} {block.get('writer_action') or ''} {short(who, 16)}" if block.get("writer_at") else ""))
     growth = obj(payload.get("growth"))
     if growth.get("measured"):
-        lines.append(f"  growth peak median {tok(growth.get('median_peak'))} max {tok(growth.get('max_peak'))}; "
-                     f"{growth.get('compacted')}/{growth.get('sessions')} sessions compacted")
+        lines.append(f"  peak = the largest context a session reached: median {tok(growth.get('median_peak'))}, largest {tok(growth.get('max_peak'))}; "
+                     f"{growth.get('compacted')} of {growth.get('sessions')} sessions were compacted")
     move = obj(payload.get("latest_move"))
     if move:
         lines.append(f"  last move {when(move.get('at'))} {tok(move.get('delta'), sign=True)} {pct(move.get('pct'))} cause={move.get('cause')}")
     state = obj(payload.get("state"))
-    lines.append(f"  budget warn {tok(payload.get('budget_warn'))} jump {payload.get('budget_jump_pct') or UNKNOWN}%"
-                 + (f" -> {_flag(state.get('reason'))}" if state.get("reason") else " ok"))
+    lines.append(f"  warn {tok(payload.get('budget_warn'))} applies to the first turn; step alert +{payload.get('budget_jump_pct') or UNKNOWN}%"
+                 + (f" -> {_flag(state.get('reason'))}" if state.get("reason") else ", ok"))
     emit(lines)
+
+
+_KIND = {"recent": "the last 7 days against the 7 days before", "step": "a step", "day": "a day's move", "boundary": "a version or config change"}
 
 
 @app.command("why")
@@ -165,20 +224,23 @@ def why(
     as_json: AsJson = False,
 ) -> None:
     """What moved a cell's first turn, biggest first."""
+    _harness(harness)
+    _unknown_cell(harness, role)
     payload = obj(_get(CONTEXT_OBS_WHY_PATH, {"harness": harness, "role": role, **({"at": at} if at else {})}))
     if as_json:
         output_json(payload)
         return
     before, after, parts = obj(payload.get("before")), obj(payload.get("after")), obj(payload.get("parts"))
-    lines = [f"WHY {harness}/{role} cause={payload.get('cause') or UNKNOWN} {payload.get('kind') or ''} at {when(payload.get('at'))}"]
+    kind = _KIND.get(str(payload.get("kind")), str(payload.get("kind") or ""))
+    lines = [f"WHY {harness}/{role} cause={payload.get('cause') or UNKNOWN}, {kind}, at {when(payload.get('at'))}"]
     if payload.get("summary"):
         lines.append("  " + short(payload["summary"], 200))
     if before or after:
-        lines.append(f"  {tok(before.get('total'))} n={before.get('n', 0)} v{before.get('version') or UNKNOWN} cfg {fp(before.get('config_fp'))}"
-                     f" -> {tok(after.get('total'))} n={after.get('n', 0)} v{after.get('version') or UNKNOWN} cfg {fp(after.get('config_fp'))}")
+        lines.append(f"  before {tok(before.get('total'))} ({before.get('n', 0)} starts, v{before.get('version') or UNKNOWN}, request shape {fp(before.get('config_fp'))})"
+                     f" -> after {tok(after.get('total'))} ({after.get('n', 0)} starts, v{after.get('version') or UNKNOWN}, request shape {fp(after.get('config_fp'))})")
     lines.append("  parts " + "  ".join(f"{name} {tok(value, sign=True)}" for name, value in parts.items()))
     for knob in rows(payload.get("knobs"))[:2]:
-        lines.append(f"  knob {knob.get('label')} {when(knob.get('at'))} {fp(knob.get('ref'))}")
+        lines.append(f"  config file {knob.get('label')} changed {when(knob.get('at'))}")
     blocks = sorted(rows(payload.get("blocks")), key=lambda b: -abs(int(b.get("delta") or 0)))
     for block in blocks[:5]:
         writer = obj(block.get("writer"))
@@ -198,10 +260,11 @@ def markers(
     harness: Annotated[str | None, typer.Option("-H", "--harness")] = None,
     days: Annotated[int, typer.Option("--days", min=1, max=90)] = 3,
     kind: Annotated[str | None, typer.Option("--kind", help="memory, prompt, harness_version, config, placement or knob")] = None,
-    limit: Annotated[int, typer.Option("--limit", min=1, max=13, help="Newest N shown.")] = 12,
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Newest N shown (a text answer stops at 15 lines; --json returns all).")] = 13,
     as_json: AsJson = False,
 ) -> None:
     """Markers, oldest first, the newest N."""
+    _harness(harness)
     stop = datetime.now(UTC)
     found = rows(_get(CONTEXT_OBS_MARKERS_PATH, {"start": (stop - timedelta(days=days)).isoformat(), "end": stop.isoformat(),
                                                   **({"harness": harness} if harness else {})}))
@@ -209,16 +272,13 @@ def markers(
     if as_json:
         output_json(found)
         return
-    lines = [f"MARKERS {days}d {len(found)} found" + (f", newest {limit}" if len(found) > limit else "")]
-    for marker in found[-limit:]:
-        detail = obj(marker.get("detail"))
-        who = detail.get("writer_session") or detail.get("writer_kind")
-        extra = " ".join(str(x) for x in (detail.get("action"), tok(detail.get("tokens")) + "t" if detail.get("tokens") is not None else None) if x)
-        lines.append(f"  {when(marker.get('at'))} {marker.get('kind')} {short(marker.get('label'), 38)} {extra}" + (f" by {short(who, 16)}" if who else ""))
+    limit = min(limit, MAX_LINES - 1)
+    lines = [f"MARKERS last {days}d: {len(found)} found" + (f", newest {limit}" if len(found) > limit else "")]
+    lines += [f"  {marker_line(marker)}" for marker in found[-limit:]]
     emit(lines)
 
 
-budget_app = typer.Typer(help="Budget levels that raise the context alerts")
+budget_app = typer.Typer(help="Budget levels that raise the context alerts. Bare st ctx budget only reads; set, jump and rm change levels.")
 app.add_typer(budget_app, name="budget")
 
 
@@ -227,7 +287,7 @@ app.add_typer(budget_app, name="budget")
        when="show warn levels and cells over them; set, jump and rm edit the levels that raise the Nightshift alert",
        task_types=TASKS, on_demand=ON_DEMAND)
 def budget(ctx: typer.Context, as_json: AsJson = False) -> None:
-    """Warn levels (harness or *, role or *) and the cells over budget."""
+    """Show the warn levels and the cells over them. Only reads; set, jump and rm change levels."""
     if ctx.invoked_subcommand is not None:
         return
     levels = rows(_get(CONTEXT_OBS_BUDGETS_PATH))
@@ -236,15 +296,22 @@ def budget(ctx: typer.Context, as_json: AsJson = False) -> None:
         output_json({"budgets": levels, "state": states})
         return
     jump = next((r.get("jump_pct") for r in levels if r.get("harness") == "*" and r.get("role") == "*"), None)
-    lines = [f"BUDGETS {len(levels)} levels, step alert at +{jump or UNKNOWN}%"]
-    lines += table([[f"{r.get('harness')}/{r.get('role')}", f"warn {tok(r.get('warn_tokens'))}", short(r.get("note"), 50)] for r in levels[:8]], indent="  ")
+    lines = [f"BUDGETS {len(levels)} levels. warn = a median first turn above it raises an alert; step alert = the last 24h of starts "
+             f"(same model, brief left out) up {jump or UNKNOWN}% on the 7 days before"]
+    lines += table([[f"{r.get('harness')}/{r.get('role')}", f"warn {tok(r.get('warn_tokens'))}", _first_sentence(r.get("note"), 60)] for r in levels[:8]], indent="  ")
     over = [s for s in states if s.get("reason")]
     measured = sum(1 for s in states if s.get("n_recent"))
-    lines.append(f"  {len(over)} over, {measured} cells measured in 24h" + (":" if over else ""))
+    lines.append(f"  {len(over)} over, {measured} cells with starts in the last 24h" + (":" if over else ""))
     for state in over[:4]:
-        lines.append(f"  {state.get('harness')}/{state.get('cell')} {_flag(state.get('reason'))} {tok(state.get('recent'))} "
-                     f"vs warn {tok(state.get('warn_tokens'))}, week before {tok(state.get('baseline'))} ({pct(state.get('pct'))})")
+        what = (f"24h median {tok(state.get('recent'))} is over warn {tok(state.get('warn_tokens'))}" if state.get("reason") == "warn" else
+                f"24h starts {tok(state.get('body_recent'))} vs {tok(state.get('body_baseline'))} the 7 days before ({pct(state.get('body_pct'))})")
+        lines.append(f"  {state.get('harness')}/{state.get('cell')} {_flag(state.get('reason'))}: {what}")
     emit(lines)
+
+
+def _first_sentence(note: Any, width: int) -> str:
+    """The note up to its first full stop, so a long note is not cut mid-word."""
+    return short(str(note or "").split(". ")[0].rstrip("."), width)
 
 
 @budget_app.command("set")

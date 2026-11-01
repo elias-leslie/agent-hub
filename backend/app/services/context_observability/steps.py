@@ -232,10 +232,10 @@ def find_dips(rows: list[FirstTurn], min_pct: float, found: list[Found]) -> list
         elif len(base_rows) < MIN_BASELINE:
             reason = f"only {len(base_rows)} start{'s' if len(base_rows) != 1 else ''} in the week before; a step needs {MIN_BASELINE}"
         else:
-            reason = f"starts are compared per model and role, and none had {MIN_DAY} that day and {MIN_BASELINE} in the week before"
+            reason = f"no single model had {MIN_DAY} starts that day and {MIN_BASELINE} in the week before"
         mix = Counter(r.model.removeprefix("claude-") for r in day_rows if r.model).most_common()
         if len(mix) > 1:
-            reason += "; that day mixes models (" + ", ".join(f"{m} {n}" for m, n in mix[:3]) + ") and steps compare one model at a time"
+            reason += "; the day mixes models (" + ", ".join(f"{m} {n}" for m, n in mix[:3]) + "): a different model's starts can move a median"
         dips.append(Dip(day=day, total=after.total, before_total=before.total, pct=move[1], n_day=len(day_rows), n_before=len(base_rows),
                         reason=reason))
     return dips
