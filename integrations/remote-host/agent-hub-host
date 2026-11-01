@@ -50,6 +50,10 @@ STATES = ("signed_in", "expired", "unknown", "needs_sign_in")  # best first, for
 # read, the safety floor holds: never Claude for these work roles (model-choice plan, owner 2026-11-01).
 CLAUDE_TOOL = "claude-code"
 CLAUDE_FLOOR_ROLES = ("hunting", "recon", "verification")
+# Any other tool (Pi with an anthropic login) counts as Claude when its model id names a Claude family: the
+# name_tokens of launch.providers.claude, which counts_as applies in Agent Hub. This copy only decides
+# whether to ask and what the floor does; with the rules readable Agent Hub's answer decides.
+CLAUDE_NAME_TOKENS = ("claude", "opus", "sonnet", "haiku")
 
 
 class Refused(Exception):
@@ -183,10 +187,25 @@ def _place_file(tool: str, item: dict[str, Any]) -> None:
         raise Refused(f"cannot place the credential file for {target} ({exc.strerror or type(exc).__name__})") from None
 
 
-def _launch_rules(role: str, project: str | None) -> dict[str, Any] | None:
-    """Agent Hub's allowed/deny_reason for Claude in this work role and project, or None when it
+def _session_model(args: list[str]) -> str | None:
+    """The model this launch runs: ``--model``/``-m`` on the command line, else the model Tether set for the root."""
+    for index, arg in enumerate(args):
+        if arg in ("--model", "-m") and index + 1 < len(args):
+            return args[index + 1].strip() or None
+        if arg.startswith("--model="):
+            return arg.partition("=")[2].strip() or None
+    return os.environ.get("AICO_ROOT_MODEL", "").strip() or None
+
+
+def _is_claude(tool: str, model: str | None) -> bool:
+    return tool == CLAUDE_TOOL or bool(model and any(token in model.lower() for token in CLAUDE_NAME_TOKENS))
+
+
+def _launch_rules(role: str, project: str | None, tool: str, model: str | None) -> dict[str, Any] | None:
+    """Agent Hub's allowed/deny_reason for this tool and model in this work role and project, or None when it
     can't be read. A public model read: the host token is never sent with it."""
-    query = urllib.parse.urlencode({"role": role, "tool": CLAUDE_TOOL, **({"project": project} if project else {})})
+    query = urllib.parse.urlencode({"role": role, "tool": tool, **({"model": model} if model and tool != CLAUDE_TOOL else {}),
+                                    **({"project": project} if project else {})})
     request = urllib.request.Request(f"{_hub_url()}/api/models/launch-defaults?{query}",
                                      headers={"Accept": "application/json"})
     try:
@@ -202,13 +221,15 @@ def _launch_rules(role: str, project: str | None) -> dict[str, Any] | None:
     return {"allowed": allowed, "deny_reason": row.get("deny_reason", data.get("deny_reason"))}
 
 
-def _claude_refusal(tool: str) -> str | None:
+def _claude_refusal(tool: str, args: list[str]) -> str | None:
     """Why this session may not have Claude credentials, else None. The work role is the one Tether
-    set for the session (ST_WORK_ROLE, also passed into hunt containers); without one, no check."""
+    set for the session (ST_WORK_ROLE, also passed into hunt containers); without one, no check.
+    Claude is the claude-code tool, or any tool (Pi) whose session model names a Claude family."""
     role = os.environ.get("ST_WORK_ROLE", "").strip()
-    if tool != CLAUDE_TOOL or not role:
+    model = _session_model(args)
+    if not role or not _is_claude(tool, model):
         return None
-    rules = _launch_rules(role, os.environ.get("AICO_PROJECT_ID", "").strip() or None)
+    rules = _launch_rules(role, os.environ.get("AICO_PROJECT_ID", "").strip() or None, tool, model)
     if rules is None:
         if role in CLAUDE_FLOOR_ROLES:
             return (f"Agent Hub's launch rules could not be read, and Claude is never used for {role} "
@@ -223,7 +244,7 @@ def _claude_refusal(tool: str) -> str | None:
 def launch(tool: str, command: str, args: list[str]) -> NoReturn:
     env = dict(os.environ)
     if not (args and args[0] in PASSTHROUGH):
-        if (refusal := _claude_refusal(tool)) is not None:
+        if (refusal := _claude_refusal(tool, args)) is not None:
             raise Refused(refusal)
         answer = _request("GET", f"/api/host-credentials/{urllib.parse.quote(tool, safe='')}")
         items = answer.get("credentials") if isinstance(answer, dict) else None

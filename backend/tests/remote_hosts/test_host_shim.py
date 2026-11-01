@@ -101,7 +101,7 @@ def host(tmp_path: Path, hub: FakeHub) -> dict[str, Any]:
     report = tmp_path / "report.json"
     for path in (home, runtime, native):
         path.mkdir(mode=0o700)
-    for command in ("dummy-tool", "filed-tool", "codex", "claude"):
+    for command in ("dummy-tool", "filed-tool", "codex", "claude", "pi"):
         tool = native / command
         tool.write_text(
             f"#!{sys.executable}\nimport json, os, sys\n"
@@ -390,3 +390,52 @@ def test_other_tools_and_sessions_without_a_work_role_are_not_checked(host: dict
     assert _run(host, "dummy-tool", env={"ST_WORK_ROLE": "hunting"}).returncode == 0
     assert _run(host, "claude").returncode == 0  # the owner's own use on the host
     assert not any(path.startswith("/api/models/") for _, path, _, _ in hub.requests)
+
+
+PI_ROW = {"tool_slug": "pi", "name": "anthropic-key", "command": "pi", "config_dir": "~/.pi",
+          "env_var": "ANTHROPIC_API_KEY", "auth_file": None, "rotates": False, "stored": True,
+          "expired": False, "expires_at": None, "undecodable": False}
+
+
+def _pi_host(host: dict[str, Any], hub: FakeHub) -> None:
+    hub.rows.append(PI_ROW)
+    hub.granted.append("pi")
+    _install(host)
+
+
+@pytest.mark.parametrize(("argv", "env"), [
+    (["pi", "--model", "anthropic/claude-opus-5-5"], {}),
+    (["pi", "--model=claude-sonnet-5-5"], {}),
+    (["pi"], {"AICO_ROOT_MODEL": "anthropic/claude-haiku-5-5"}),
+])
+def test_a_pi_session_running_a_claude_model_is_refused_like_claude_code(
+    host: dict[str, Any], hub: FakeHub, argv: list[str], env: dict[str, str],
+) -> None:
+    _pi_host(host, hub)
+    hub.launch = (200, {"rows": [{"job": "hunting", "allowed": False, "deny_reason": DENY}]})
+    result = _run(host, *argv, env={"ST_WORK_ROLE": "hunting", "AICO_PROJECT_ID": "neri-hunters", **env})
+    assert result.returncode == 1
+    assert result.stderr.strip() == f"agent-hub-cred-exec: pi: Claude is not allowed for hunting work: {DENY}"
+    assert not host["report"].exists() and not _fetched(hub, "pi")
+    asked = [path for _, path, _, _ in hub.requests if path.startswith("/api/models/")]
+    assert len(asked) == 1 and "tool=pi" in asked[0] and "model=" in asked[0] and "role=hunting" in asked[0]
+
+
+def test_a_pi_session_on_another_model_or_an_allowed_role_is_not_refused(host: dict[str, Any], hub: FakeHub) -> None:
+    _pi_host(host, hub)
+    assert _run(host, "pi", "--model", "codex/gpt-6-sol", env={"ST_WORK_ROLE": "hunting"}).returncode == 0
+    assert _run(host, "pi", env={"ST_WORK_ROLE": "hunting"}).returncode == 0  # no model known: not Claude
+    assert not any(path.startswith("/api/models/") for _, path, _, _ in hub.requests)
+    assert _run(host, "pi", "--model", "anthropic/claude-opus-5-5", env={"ST_WORK_ROLE": "coordinator"}).returncode == 0
+
+
+@pytest.mark.parametrize("role", ["hunting", "recon", "verification"])
+def test_without_the_rules_a_pi_session_on_a_claude_model_is_refused_for_case_work(
+    host: dict[str, Any], hub: FakeHub, role: str,
+) -> None:
+    _pi_host(host, hub)
+    hub.launch = (500, {"error": "internal"})
+    result = _run(host, "pi", "--model", "anthropic/claude-opus-5-5", env={"ST_WORK_ROLE": role})
+    assert result.returncode == 1 and "launch rules could not be read" in result.stderr
+    assert not _fetched(hub, "pi")
+    assert _run(host, "pi", "--model", "codex/gpt-6-sol", env={"ST_WORK_ROLE": role}).returncode == 0
