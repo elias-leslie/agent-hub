@@ -190,6 +190,11 @@ def _effort(row: dict[str, Any]) -> str:
     return text + (" daybreak" if row.get("daybreak") else "")
 
 
+def _daybreak(row: dict) -> str:
+    """on, off (a Codex row that sets it off) or - (the tool has no Daybreak)."""
+    return {True: "on", False: "off"}.get(row.get("daybreak"), "-")
+
+
 def _print_launch(payload: dict[str, Any]) -> None:
     raw = payload.get("rows")
     rows = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
@@ -200,7 +205,7 @@ def _print_launch(payload: dict[str, Any]) -> None:
               f"policy=v{payload.get('version', '-')}")
         state = "" if row.get("use") and row.get("launchable") else " (not used: no default applies)"
         print(f"  model={row.get('model') or '-'} effort={row.get('effort') or '-'} "
-              f"daybreak={'on' if row.get('daybreak') else 'off' if row.get('daybreak') is False else '-'} "
+              f"daybreak={_daybreak(row)} "
               f"context={row.get('context')}{state}")
         print(f"  tool order={' > '.join(row.get('prefer') or []) or '-'} (this tool: {rank})")
         for alt in row.get("alternates") or []:
@@ -216,7 +221,7 @@ def _print_launch(payload: dict[str, Any]) -> None:
         [
             str(row.get("job")), str(row.get("tool")),
             str(row.get("model") or ("-" if row.get("use") else "not used")),
-            str(row.get("effort") or "-"), "on" if row.get("daybreak") else "-", str(row.get("context")),
+            str(row.get("effort") or "-"), _daybreak(row), str(row.get("context")),
             str(row.get("rank") or "-"), str(row.get("subagent") or "-"),
         ]
         for row in rows

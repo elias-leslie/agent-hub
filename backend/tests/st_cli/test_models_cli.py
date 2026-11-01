@@ -119,6 +119,11 @@ def test_route_without_task_lists_task_types_and_the_launch_table() -> None:
 
     assert listed.output.splitlines()[:2] == ["TASK_TYPES[2] policy=v2", "  coding  writing"]
     assert "LAUNCH[55 rows]" in listed.output and "claude-haiku-5-5" in listed.output
+    # Daybreak reads on, off (a Codex row that turns it off) or - (no Daybreak for that tool).
+    daybreak = {tuple(line.split()[:2]): line.split()[4] for line in listed.output.splitlines()
+                if line.split()[:2] in (["hunting", "codex"], ["coordinator", "codex"], ["coordinator", "claude-code"])}
+    assert daybreak == {("hunting", "codex"): "on", ("coordinator", "codex"): "off",
+                        ("coordinator", "claude-code"): "-"}
     assert json.loads(as_json.output)["task_types"] == policy
     assert json.loads(advice_json.output)["candidates_checked"][0]["available"] is False
 
