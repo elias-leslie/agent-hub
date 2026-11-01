@@ -89,7 +89,7 @@ async def deliver_runtime_context(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> CanonicalContextDeliveryResponse:
     """Return additive, versioned context for Agent Hub and external TUIs."""
-    return await build_canonical_context_delivery(db, request)
+    return await build_canonical_context_delivery(db, request, record="api")
 
 
 @router.get("/profiles", response_model=RuntimeContextProfilesResponse)

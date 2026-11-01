@@ -231,7 +231,7 @@ async def _build_delivery(
         await context_freeze.load_frozen_delivery(freeze_key) if freeze_key else None
     )
     if delivery is None:
-        delivery = await build_canonical_context_delivery(db, request)
+        delivery = await build_canonical_context_delivery(db, request, record="agent")
         if freeze_key:
             await context_freeze.store_frozen_delivery(freeze_key, delivery)
     return require_canonical_context(delivery), variant_value

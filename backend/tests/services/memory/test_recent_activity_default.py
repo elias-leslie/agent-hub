@@ -27,7 +27,7 @@ def test_defaults_are_off_everywhere() -> None:
 async def _requested(memory_config: dict[str, Any] | None) -> CanonicalContextDeliveryRequest:
     seen: list[CanonicalContextDeliveryRequest] = []
 
-    async def _build(db: Any, request: CanonicalContextDeliveryRequest) -> object:
+    async def _build(db: Any, request: CanonicalContextDeliveryRequest, **_: Any) -> object:
         seen.append(request)
         return object()
 

@@ -677,6 +677,8 @@ async def _select_runtime_context(
 async def build_canonical_context_delivery(
     db: AsyncSession,
     request: CanonicalContextDeliveryRequest,
+    *,
+    record: str | None = None,
 ) -> CanonicalContextDeliveryResponse:
     """Build the single versioned context contract used by every consumer.
 
@@ -684,7 +686,22 @@ async def build_canonical_context_delivery(
     system/safety messages and place ``rendered`` in the strongest additive
     instruction channel their client supports. Token counts are diagnostic;
     this path does not trim or reject context based on size.
+
+    ``record`` names the delivery site (api, host, cli, agent, workflow) and stores the delivery in
+    context_deliveries. Only the real delivery sites pass it; previews and dry runs leave it None.
     """
+    response = await _build_canonical_context_delivery(db, request)
+    if record and response.status == "ok":
+        from app.services.context_observability.deliveries import record_delivery
+
+        await record_delivery(response, source=record)
+    return response
+
+
+async def _build_canonical_context_delivery(
+    db: AsyncSession,
+    request: CanonicalContextDeliveryRequest,
+) -> CanonicalContextDeliveryResponse:
     delivery_id = str(uuid.uuid4())
     effective_request = _normalize_canonical_request(request)
     query = _resolve_canonical_query(effective_request)

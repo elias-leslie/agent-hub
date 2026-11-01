@@ -84,7 +84,7 @@ def harness():
     built: list[str] = []
     workflows: list[str] = []
 
-    async def fake_build(_db, request):
+    async def fake_build(_db, request, **_):
         built.append(request.query)
         return _delivery(request.query, f"ref-{request.query}")
 

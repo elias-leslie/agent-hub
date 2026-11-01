@@ -40,6 +40,7 @@ from app.models import (
     UsageCall,
     UsageSession,
 )
+from app.services.context_observability import capture as context_capture
 from app.utils.native_homes import claude_project_roots, codex_session_roots, native_homes
 
 from . import opencode_go, rates
@@ -188,6 +189,7 @@ class PassResult:
     replay_pending: int = 0
     call_indexes: dict[str, int] = field(default_factory=dict)
     reconcile: bool = False
+    heads: list[context_capture.HeadResult] = field(default_factory=list)
 
 
 def _iter_new_lines(path: Path, offset: int) -> Iterator[tuple[int, bytes]]:
@@ -249,6 +251,19 @@ def _add_call(result: PassResult, call: UsageCallRow, state: dict[str, Any], pro
     else:
         result.calls[index] = call
     _put_session(result, provider, state, call.occurred_at)
+
+
+def _note_first_turn(result: PassResult, path: Path, state: dict[str, Any], provider: str) -> None:
+    """Once per session (per cursor lifetime): read the transcript head's first turn for context observability."""
+    if state.get("ft_done"):
+        return
+    state["ft_done"] = True
+    try:
+        head = context_capture.head_for_claude(path) if provider == "claude" else context_capture.head_for_codex(path)
+    except OSError:
+        return
+    if head is not None:
+        result.heads.append(head)
 
 
 # ------------------------------------------------------------------ Codex
@@ -384,6 +399,7 @@ def _codex_file(path: Path, offset: int, state: dict[str, Any], result: PassResu
             call = _codex_call(path, state, ts, model, speed, last, total)
             call.count_new = live
             _add_call(result, call, state, "codex")
+            _note_first_turn(result, path, state, "codex")
             if live:
                 _add_codex_rollup(result, call, project, speed)
         if live:
@@ -408,6 +424,7 @@ def _codex_native_call(path: Path, state: dict[str, Any], result: PassResult, pe
     # counterpart in historical daily totals, so explicit replay may add that missing call.
     call.count_new = pending["live"] or (result.reconcile and identity == response)
     _add_call(result, call, state, "codex")
+    _note_first_turn(result, path, state, "codex")
     if pending["live"]:
         _add_codex_rollup(result, call, call.project, speed)
 
@@ -550,6 +567,7 @@ def _claude_file(path: Path, offset: int, state: dict[str, Any], result: PassRes
         seen[ident] = values
         call.count_new = end > live_from
         _add_call(result, call, state, "claude")
+        _note_first_turn(result, path, state, "claude")
         if end > live_from:
             _add_claude_rollup(result, call, project, speed)
             if previous is not None:
@@ -837,6 +855,7 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
             return {"skipped": True}
         rows = (await db.execute(select(SubscriptionUsageCursor))).scalars().all()
         cursors = {r.path: (int(r.offset), dict(r.state or {})) for r in rows}
+        await _import_deliveries_once(db, cursors)
         result = await asyncio.to_thread(scan, cursors, replay=replay)
         lots = (await db.execute(select(CreditLot).where(CreditLot.provider == "codex"))).scalars().all()
         credit_state = dict(cursors.get(CODEX_CREDIT_STATE, (0, {}))[1])
@@ -851,8 +870,52 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         result.cursors[SNAPSHOT_STATE] = (0, snap_state)
         await _persist(db, result, snapshots, new_lots, prune=replay is None)
         await db.commit()
+        await _backfill_context_once(db, cursors)
         return {"files_read": result.files_read, "bytes_read": result.bytes_read, "snapshots": len(snapshots),
                 "new_lots": len(new_lots), "calls": len(result.calls), "replay_pending": result.replay_pending}
+
+
+CONTEXT_BACKFILL_STATE = "@context_backfill"
+CONTEXT_BACKFILL_VERSION = 1
+
+
+def _context_backfill_done(cursors: dict[str, tuple[int, dict[str, Any]]]) -> bool:
+    return cursors.get(CONTEXT_BACKFILL_STATE, (0, {}))[1].get("version") == CONTEXT_BACKFILL_VERSION
+
+
+async def _import_deliveries_once(db: AsyncSession, cursors: dict[str, tuple[int, dict[str, Any]]]) -> None:
+    """Before the first pass that measures first turns: the delivery history sessions will bind to."""
+    if _context_backfill_done(cursors):
+        return
+    try:
+        added = await context_capture.import_delivery_files(db, since=datetime.now(UTC) - timedelta(days=context_capture.BACKFILL_DAYS + 1))
+        await db.commit()
+        logger.info("context observability: %d deliveries imported", added)
+    except Exception:
+        await db.rollback()
+        logger.warning("context delivery import failed", exc_info=True)
+
+
+async def _backfill_context_once(db: AsyncSession, cursors: dict[str, tuple[int, dict[str, Any]]]) -> None:
+    """After the first pass that has the first-turn columns: import delivery files and measure the last 30 days once.
+
+    Never fails the pass: the usage ledger is the collector's job, this is a separate commit.
+    """
+    if _context_backfill_done(cursors):
+        return
+    try:
+        summary = await context_capture.backfill(db)
+        stmt = pg_insert(SubscriptionUsageCursor).values(
+            path=CONTEXT_BACKFILL_STATE, offset=0, state={"version": CONTEXT_BACKFILL_VERSION, **summary},
+        )
+        await db.execute(stmt.on_conflict_do_update(
+            index_elements=["path"], set_={"state": stmt.excluded.state, "updated_at": func.now()},
+        ))
+        await db.commit()
+        logger.info("context observability backfill: %s", summary)
+    except Exception:
+        await db.rollback()
+        logger.warning("context observability backfill failed", exc_info=True)
 
 
 async def _persist(
@@ -967,3 +1030,10 @@ async def _persist_ledger(db: AsyncSession, result: PassResult) -> None:
                 "job": func.coalesce(ex.job, table.c.job),
             },
         ))
+    if result.heads:
+        # First-turn capture is observability: a failure (e.g. the migration not applied yet) must not lose the ledger.
+        try:
+            async with db.begin_nested():
+                await context_capture.apply_first_turns(db, result.heads)
+        except Exception:
+            logger.warning("first-turn capture skipped", exc_info=True)

@@ -209,6 +209,7 @@ async def canonical_context(
                     provider=provider,
                     model=model,
                 ),
+                record="workflow",
             )
         return delivery.rendered, str(delivery.status)
     except Exception:

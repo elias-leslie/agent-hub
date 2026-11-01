@@ -35,4 +35,4 @@ async def deliver_host_context(
     request = request.model_copy(
         update={"client_metadata": {**request.client_metadata, "remote_host": host.name}}
     )
-    return await build_canonical_context_delivery(db, request)
+    return await build_canonical_context_delivery(db, request, record="host")

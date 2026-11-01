@@ -204,7 +204,7 @@ def delivery_request(args: argparse.Namespace) -> CanonicalContextDeliveryReques
 async def _deliver(args: argparse.Namespace):
     request = delivery_request(args)
     async with async_session() as db:
-        return await build_canonical_context_delivery(db, request)
+        return await build_canonical_context_delivery(db, request, record="cli")
 
 
 async def _feedback(args: argparse.Namespace) -> dict:

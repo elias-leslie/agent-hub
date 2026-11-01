@@ -24,6 +24,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -167,3 +168,23 @@ class UsageSession(Base):
     title: Mapped[str | None] = mapped_column(String(300), nullable=True)
     first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # First-turn context (services/context_observability): filled once per session from the transcript head.
+    # NULL means not measured, never zero. launch_mode: project | blank | subagent:<type>.
+    harness: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    harness_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    work_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    coordinator: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    launch_mode: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    first_turn_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    first_turn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    parts: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    delivery_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    config_fp: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_usage_sessions_harness_first_turn", "harness", "first_turn_at",
+            postgresql_where=text("first_turn_tokens IS NOT NULL"),
+        ),
+    )

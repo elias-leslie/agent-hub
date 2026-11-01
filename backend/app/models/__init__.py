@@ -29,6 +29,7 @@ from .context_governance import (
     ContextMaintenanceItem,
     ContextRecord,
 )
+from .context_observability import ContextDelivery
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory, MemoryReviewRun, MemoryRevision
 from .model_catalog import ModelAlias, ModelCatalogEntry
@@ -87,6 +88,7 @@ __all__ = [
     "Base",
     "Client",
     "CompactnessPolicy",
+    "ContextDelivery",
     "ContextJudgment",
     "ContextMaintenanceAttention",
     "ContextMaintenanceItem",

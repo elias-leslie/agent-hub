@@ -112,7 +112,7 @@ def test_remote_cli_fails_clearly_without_a_token_or_a_reachable_hub(
 async def test_host_route_records_which_host_asked(monkeypatch: pytest.MonkeyPatch) -> None:
     built: list[CanonicalContextDeliveryRequest] = []
 
-    async def fake_build(_db: object, request: CanonicalContextDeliveryRequest) -> str:
+    async def fake_build(_db: object, request: CanonicalContextDeliveryRequest, **_: object) -> str:
         built.append(request)
         return "delivered"
 
@@ -148,7 +148,7 @@ async def test_host_route_is_served_through_the_app_only_with_a_host_token(monke
     from app.main import app
     from app.middleware.access_control_paths import is_path_exempt
 
-    async def fake_build(_db: object, request: CanonicalContextDeliveryRequest) -> Any:
+    async def fake_build(_db: object, request: CanonicalContextDeliveryRequest, **_: object) -> Any:
         # A distinct status proves the request reached delivery, for this host.
         raise HTTPException(status_code=418, detail=request.client_metadata["remote_host"])
 
