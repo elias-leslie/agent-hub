@@ -39,10 +39,15 @@ class CellState:
     baseline: int | None
     warn_tokens: int | None
     jump_pct: int | None
-    pct: float | None  # recent against baseline, same model, without the brief
+    # The jump check compares starts of one model with a known brief, without the brief, so a day of another model or a
+    # pasted brief is not read as growth. These are that comparison; `recent` and `baseline` above are the plain
+    # medians of every start (what the warn level is checked against), so they need not move by body_pct.
+    body_pct: float | None  # body_recent against body_baseline, in percent (None: fewer than MIN_JUMP starts on a side)
     reason: str | None  # warn | jump | None
     warn_clear: bool | None = None  # an open warn may clear: under WARN_CLEAR of its level (None: too little data)
     jump_clear: bool | None = None  # an open jump may clear: under JUMP_CLEAR of jump_pct (None: too little data)
+    body_recent: int | None = None  # last 24 h median without the brief, dominant model (what body_pct is about)
+    body_baseline: int | None = None  # median of the 7 days before, without the brief, same model
 
 
 def _body(row: FirstTurn) -> int | None:
@@ -59,7 +64,7 @@ def _state(harness: str, cell: str, rows: list[FirstTurn], policy: Policy, now: 
     budget = policy.budget_for(harness, cell)
     recent_med = med(r.total for r in recent)
     base_med = med(r.total for r in base_same)
-    pct = None
+    pct = base_body = recent_body = None
     if len(recent_same) >= MIN_JUMP and len(base_same) >= MIN_JUMP:
         base_body, recent_body = med(_body(r) for r in base_same), med(_body(r) for r in recent_same)
         if base_body and recent_body is not None:
@@ -76,7 +81,8 @@ def _state(harness: str, cell: str, rows: list[FirstTurn], policy: Policy, now: 
     jump_clear = True if policy.jump_pct is None else (None if pct is None else pct < policy.jump_pct * JUMP_CLEAR)
     return CellState(harness=harness, cell=cell, n_recent=len(recent), recent=recent_med, n_baseline=len(base_same),
                      baseline=base_med, warn_tokens=budget.warn_tokens if budget else None, jump_pct=policy.jump_pct,
-                     pct=pct, reason=reason, warn_clear=warn_clear, jump_clear=jump_clear)
+                     body_pct=pct, reason=reason, warn_clear=warn_clear, jump_clear=jump_clear, body_recent=recent_body,
+                     body_baseline=base_body)
 
 
 async def cell_states(db: AsyncSession, *, now: datetime | None = None, policy: Policy | None = None) -> list[CellState]:

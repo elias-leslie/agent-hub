@@ -271,8 +271,8 @@ function CellBody({ cell }: { cell: CellView }) {
               <Flag className="h-3 w-3" aria-hidden="true" />
               {state.reason === 'warn' ? 'Over budget' : 'Jumped'}: last 24 h
               median {tok(state.recent)}
-              {state.pct != null &&
-                ` (${signedPct(state.pct)} on the week before)`}
+              {state.body_pct != null &&
+                ` (${signedPct(state.body_pct)} on the week before, without the brief)`}
             </span>
           ) : state ? (
             <span>

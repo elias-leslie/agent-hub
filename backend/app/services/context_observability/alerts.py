@@ -119,7 +119,8 @@ def _cause_line(w: Why) -> str:
         unknown += f" ({w.harness} {w.version.get('from')} -> {w.version.get('to')} and {names} both changed)"
     cause = {
         "config": (f"config changed ({names}), " if names else "the request shape changed with no change of ours, ")
-                  + f"{w.harness} {w.version.get('to') or ''} unchanged",
+                  + (f"{w.harness} {w.version.get('to')} unchanged" if w.version.get("to") and w.version.get("from") == w.version.get("to")
+                     else f"{w.harness} {w.version.get('from')} -> {w.version.get('to')}"),
         "harness_version": f"{w.harness} {w.version.get('from')} -> {w.version.get('to')}",
         "ours": "what Agent Hub delivers",
         "brief": "the starting prompt",
@@ -153,10 +154,10 @@ def budget_notice(state: CellState, w: Why | None, policy: Policy, *, reason: st
     elif reason == "warn":
         lead = f"{cell} first turn is {_k(state.recent)}, still within 10% of its {_k(state.warn_tokens)} budget."
     elif not held:
-        lead = (f"{cell} first turn rose {state.pct:.0f}% (without the brief) to {_k(state.recent)} "
-                f"(week before: {_k(state.baseline)}).")
+        lead = (f"{cell} first turn rose {state.body_pct:.0f}% (without the brief) to {_k(state.body_recent)} "
+                f"(week before: {_k(state.body_baseline)}).")
     else:
-        lead = f"{cell} first turn is {_k(state.recent)}, still {state.pct or 0:.0f}% above the week before ({_k(state.baseline)})."
+        lead = f"{cell} first turn is {_k(state.recent)}, still {state.body_pct or 0:.0f}% above the week before ({_k(state.body_baseline)})."
     if w is None:
         cause = "Cause: not worked out."
     elif reason == "warn" and _no_rise(w, policy):

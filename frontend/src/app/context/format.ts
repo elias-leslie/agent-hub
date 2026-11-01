@@ -92,7 +92,7 @@ export function flagText(cell: MatrixCell): string | null {
     return `Over budget: the last 24 h median is ${tok(cell.recent)}, the warn level is ${tok(cell.warn_tokens)}`
   }
   if (cell.flag === 'jump') {
-    return `Jumped: the last 24 h median is ${tok(cell.recent)}, at least ${cell.jump_pct ?? '—'}% above the week before`
+    return `Up ${signedPct(cell.delta_pct)} on the previous range (${tok(cell.prev_total)} before, ${tok(cell.total)} now); flagged from ${cell.jump_pct ?? '—'}%`
   }
   return null
 }

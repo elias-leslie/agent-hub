@@ -45,7 +45,7 @@ from app.services.context_observability.policy import load_policy
 
 pytestmark = pytest.mark.integration
 
-MIGRATION = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "a7c3e9d41b52_context_budgets_knobs_markers.py"
+MIGRATION = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "d3b8f1a6c294_context_markers_config_first_sighting.py"
 NOW = datetime(2026, 11, 1, 18, tzinfo=UTC)
 STEP_AT = datetime(2026, 11, 1, 14, 53, 44, tzinfo=UTC)
 

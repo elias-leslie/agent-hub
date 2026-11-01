@@ -62,6 +62,39 @@ def test_one_odd_session_and_another_models_rows_are_not_steps():
     assert steps.find_steps(rows, 25) == []
 
 
+def test_two_kinds_of_session_that_swap_places_make_one_step_not_one_per_swap():
+    start = NOW - timedelta(days=3)
+    rows = _series(start, 40, 30000)  # the usual sessions
+    for i in range(4):  # a second kind (another version still open, another tool set) swaps in and out in runs
+        rows += _series(start + timedelta(hours=8 + 2 * i), 6, 45000, fp="fp-b", version="2.1.314")
+        rows += _series(start + timedelta(hours=8 + 2 * i, minutes=70), 6, 30000)
+
+    found = steps.find_step_rows(rows, 25)
+
+    assert len(found) == 1 and found[0].step.kind == "config"  # only the first sighting of the second kind
+
+
+def test_a_step_carries_the_starts_on_each_side_and_they_are_the_windows_it_reports():
+    start = NOW - timedelta(days=3)
+    rows = _series(start, 30, 48400) + _series(start + timedelta(hours=8), 5, 24000, fp="fp-b")
+
+    (found,) = steps.find_step_rows(rows, 25)
+
+    assert (len(found.before_rows), len(found.after_rows)) == (found.step.before.n, found.step.after.n) == (30, 5)
+    assert all(r.config_fp == "fp-b" for r in found.after_rows)
+
+
+def test_a_dip_that_is_not_a_step_says_why():
+    first = NOW - timedelta(days=4)
+    rows = _series(first, 1, 48000) + _series(first + timedelta(days=1), 16, 29000) + _series(first + timedelta(days=2), 40, 48000)
+    steps_found = steps.find_step_rows(rows, 25)
+
+    (dip,) = [d for d in steps.find_dips(rows, 25, steps_found) if d.day == (first + timedelta(days=1)).date()]
+
+    assert round(dip.pct) == -40 and (dip.n_day, dip.n_before) == (16, 1)
+    assert "only 1 start in the week before" in dip.reason and "needs 5" in dip.reason
+
+
 def test_a_move_under_jump_pct_is_not_flagged_and_a_version_step_is_named_a_version_step():
     start = NOW - timedelta(days=3)
     small = _series(start, 20, 48000) + _series(start + timedelta(hours=8), 5, 50000, version="2.1.317")
@@ -115,7 +148,7 @@ def test_a_cell_is_over_above_its_warn_level_and_a_rise_over_the_jump_but_never_
     under = _state("claude", "implementation", base + _series(NOW - timedelta(hours=5), 3, 21000), policy, NOW)
 
     assert (over.reason, jumped.reason, dropped.reason, thin.reason, under.reason) == ("warn", "jump", None, None, None)
-    assert round(jumped.pct) == 30 and over.warn_tokens == 30000
+    assert round(jumped.body_pct) == 30 and over.warn_tokens == 30000
 
 
 def test_a_jump_is_judged_within_one_model():
@@ -315,7 +348,7 @@ def test_a_jump_needs_five_starts_each_side_and_ignores_the_brief():
     long_brief = _state("claude", "implementation", base + pasted, policy, NOW)
 
     assert (four.reason, five.reason) == (None, "jump")
-    assert long_brief.reason is None and round(long_brief.pct or 0) == 0  # 20.1K without the brief against 19.9K
+    assert long_brief.reason is None and round(long_brief.body_pct or 0) == 0  # 20.1K without the brief against 19.9K
 
 
 def test_a_step_needs_five_starts_each_side_and_does_not_see_a_pasted_brief():

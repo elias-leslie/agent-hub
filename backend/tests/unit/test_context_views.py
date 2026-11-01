@@ -39,8 +39,20 @@ def test_a_cell_has_its_medians_the_change_against_the_window_before_and_its_bud
     (cell,) = _matrix(rows).cells
 
     assert (cell.harness, cell.cell, cell.n, cell.total, cell.prev_n, cell.prev_total) == ("claude", "implementation", 5, 50000, 5, 40000)
-    assert (cell.delta, cell.delta_pct, cell.warn_tokens, cell.flag) == (10000, 25.0, 60000, None)
+    assert (cell.delta, cell.delta_pct, cell.warn_tokens, cell.flag) == (10000, 25.0, 60000, "jump")  # the shown +25% is the jump rule
     assert (cell.harness_tokens, cell.ours, cell.brief) == (30000, 5000, 100)
+
+
+def test_one_rule_flags_the_shown_change_and_a_held_back_change_says_why():
+    big = _series(NOW - timedelta(days=12), 6, 30000, role="implementation") + _series(NOW - timedelta(days=3), 6, 42000, role="implementation")
+    thin = _series(NOW - timedelta(days=12), 3, 30000, role="research") + _series(NOW - timedelta(days=3), 6, 42000, role="research")
+    small = _series(NOW - timedelta(days=12), 6, 30000, role="review") + _series(NOW - timedelta(days=3), 6, 33000, role="review")
+
+    cells = {c.cell: c for c in _matrix(big + thin + small).cells}
+
+    assert (cells["implementation"].flag, cells["implementation"].flag_held) == ("jump", None)  # +40% with 6 starts each side
+    assert cells["research"].flag is None and "only 6 and 3 starts" in (cells["research"].flag_held or "")
+    assert (cells["review"].flag, cells["review"].flag_held) == (None, None)  # +10%
 
 
 def test_too_few_starts_on_either_side_show_the_median_but_no_change():

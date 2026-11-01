@@ -20,11 +20,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .baseline import FirstTurn, load_first_turns
 from .markers import Marker, knob_markers, view_markers
 from .policy import Policy, load_policy
-from .steps import BASELINE_DAYS, ROLE_GROUPS, Step, Window, cell_rows, find_steps, in_cell, window
+from .steps import (
+    BASELINE_DAYS,
+    ROLE_GROUPS,
+    Found,
+    Step,
+    Window,
+    cell_rows,
+    find_step_rows,
+    find_steps,
+    in_cell,
+    window,
+)
 
 LOOKBACK_DAYS = 30
 RECENT_HOURS = 24
 BLOCK_LIMIT = 15
+STEP_MATCH_S = 60  # `why --at` within this of a step's time is that step
 PRESENT_SHARE = 0.5  # a block belongs to a window when at least this share of its deliveries carry it
 
 
@@ -223,21 +235,25 @@ def _step_cell(rows: list[FirstTurn], at: datetime) -> str | None:
 
 
 async def explain(db: AsyncSession, rows: list[FirstTurn], harness: str, role: str, at: datetime | None, *,
-                  policy: Policy, now: datetime, kind: str, model: str | None, cell: str | None = None) -> Why:
+                  policy: Policy, now: datetime, kind: str, model: str | None, cell: str | None = None,
+                  found: Found | None = None) -> Why:
     """Compare the 7 days before `at` with `at` onward, for rows of one cell (restricted to one model if given).
 
-    A group role ("lane") spans several roles, so the move is read in one role of it: `cell`, else the role of the
-    step at `at`. Before and after then hold the same role and the delta matches the step's."""
+    With `found` (a step from the step finder) the two sides are the step's own starts, so a step reads the same here, in
+    the Trend and in the Cell view. A group role ("lane") spans several roles, so the move is read in one role of it:
+    `cell`, else the role of the step at `at`. Before and after then hold the same role and the delta matches the step's."""
     if at is None:
         return Why(harness=harness, role=role, at=None, kind=kind, cause="none", before=None, after=None, delta=None, pct=None,
                    summary=f"{harness} {role}: no measured starts in the window.")
+    if found is not None:
+        cell, model = found.step.role, found.step.model
     if role in ROLE_GROUPS:
         cell = cell or _step_cell([r for r in rows if model is None or r.model == model], at)
         if cell is not None:
             rows = [r for r in rows if r.cell == cell]
     same_model = [r for r in rows if model is None or r.model == model]
-    before_rows = [r for r in same_model if at - timedelta(days=BASELINE_DAYS) <= r.at < at]
-    after_rows = [r for r in same_model if r.at >= at]
+    before_rows = found.before_rows if found is not None else [r for r in same_model if at - timedelta(days=BASELINE_DAYS) <= r.at < at]
+    after_rows = found.after_rows if found is not None else [r for r in same_model if r.at >= at]
     before, after = window(before_rows), window(after_rows)
     delta = _diff(before.total, after.total)
     pct = None if delta is None or not before.total else delta / before.total * 100
@@ -248,21 +264,22 @@ async def explain(db: AsyncSession, rows: list[FirstTurn], harness: str, role: s
     lo = before.end if before.end is not None else at - timedelta(days=1)
     hi = after.start if after.start is not None else min(now, at + timedelta(hours=1))
     lo, hi = min(lo, at), max(hi, at)
-    found = [m for m in await view_markers(db, lo, hi, harness=harness)
+    seen = [m for m in await view_markers(db, lo, hi, harness=harness)
              if m.kind != "config" or (in_cell(cell or role, m.launch_mode, m.role) and (model is None or m.detail.get("model") == model))]
     changed_knobs = await knob_markers(policy.knobs_for(harness, cell or role), lo, hi)
-    revisions = [m for m in found if m.kind in ("memory", "prompt")]
+    revisions = [m for m in seen if m.kind in ("memory", "prompt")]
 
-    # The state at the step is read from one role (a "lane" query spans several roles with their own fingerprints).
-    near = [r for r in same_model if abs(r.at - at) <= timedelta(days=1)]
-    own = cell or (Counter(r.cell for r in near).most_common(1)[0][0] if near else None)
-    last_before = next((r for r in reversed(before_rows) if r.cell == own), None)
-    first_after = next((r for r in after_rows if r.cell == own), None)
-    model_from = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at])
-    model_to = _dominant_model([r for r in rows if r.at >= at])
-    version = {"from": last_before.version if last_before else before.version, "to": first_after.version if first_after else after.version}
-    config_fp = {"from": last_before.config_fp if last_before else before.config_fp,
-                 "to": first_after.config_fp if first_after else after.config_fp}
+    # One side's version, fingerprint and model are what its starts mostly had, so these lines and the part changes
+    # above describe the same two sets of starts.
+    if found is not None and before.start and before.end and after.start and after.end:
+        # every model in the same cell over each side's span: the step's own sides hold one model, a model change shows here
+        model_from = _dominant_model([r for r in rows if before.start <= r.at <= before.end])
+        model_to = _dominant_model([r for r in rows if after.start <= r.at <= after.end])
+    else:
+        model_from = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at])
+        model_to = _dominant_model([r for r in rows if r.at >= at])
+    version = {"from": before.version, "to": after.version}
+    config_fp = {"from": before.config_fp, "to": after.config_fp}
     fp_changed = config_fp["from"] != config_fp["to"]
     # A knob file's commit is only a cause when what the harness loads changed with it (the fingerprint); otherwise it
     # stays on the timeline as a marker.
@@ -270,7 +287,7 @@ async def explain(db: AsyncSession, rows: list[FirstTurn], harness: str, role: s
     result = Why(
         harness=harness, role=role, at=at, kind=kind, cause="none", before=before, after=after, delta=delta, pct=pct, parts=parts,
         version=version, config_fp=config_fp, model={"from": model_from, "to": model_to}, knobs=knobs,
-        markers=[*found, *changed_knobs],
+        markers=[*seen, *changed_knobs],
         blocks=await block_changes(db, before_rows, after_rows, revisions),
     )
     result.markers.sort(key=lambda m: m.at)
@@ -292,12 +309,20 @@ async def why(db: AsyncSession, harness: str, role: str, *, at: datetime | None 
     policy = policy or await load_policy(db)
     rows = cell_rows(await load_first_turns(db, since=now - timedelta(days=LOOKBACK_DAYS), harness=harness), harness, role)
     if at is not None:
+        # A time that names a step (to the minute, as the Trend prints it) is that step, with the same two sides.
+        if policy.jump_pct is not None:
+            named = [f for f in find_step_rows(rows, policy.jump_pct) if abs((f.step.at - at).total_seconds()) < STEP_MATCH_S]
+            if named:
+                found = min(named, key=lambda f: abs((f.step.at - at).total_seconds()))
+                return await explain(db, rows, harness, role, found.step.at, policy=policy, now=now, kind=found.step.kind,
+                                     model=found.step.model, cell=found.step.role, found=found)
         model = _dominant_model([r for r in rows if at - timedelta(days=BASELINE_DAYS) <= r.at < at]) or _dominant_model(rows)
         return await explain(db, rows, harness, role, at, policy=policy, now=now, kind="at", model=model)
-    steps = [] if recent or policy.jump_pct is None else find_steps(rows, policy.jump_pct)
+    steps = [] if recent or policy.jump_pct is None else find_step_rows(rows, policy.jump_pct)
     if steps:
-        step = steps[-1]
-        return await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role)
+        found = steps[-1]
+        return await explain(db, rows, harness, role, found.step.at, policy=policy, now=now, kind=found.step.kind, model=found.step.model,
+                             cell=found.step.role, found=found)
     return await explain(db, rows, harness, role, now - timedelta(hours=RECENT_HOURS) if rows else None, policy=policy, now=now,
                          kind="recent", model=_dominant_model([r for r in rows if r.at >= now - timedelta(hours=RECENT_HOURS)]))
 

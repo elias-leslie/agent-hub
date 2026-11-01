@@ -27,8 +27,13 @@ export interface MatrixCell {
   model: string | null
   warn_tokens: number | null
   jump_pct: number | null
-  /** The budget state of the last 24 h: over the warn level, or up by jump_pct against the week before. */
+  /**
+   * warn: the last 24 h median is over the warn level. jump: the shown change (this range against the one before) is
+   * jump_pct or more, with 5 starts in each. One rule for the flag, the sort and the header.
+   */
   flag: 'warn' | 'jump' | null
+  /** Why a change of jump_pct or more is not flagged (too few starts), else null. */
+  flag_held: string | null
   recent: number | null
   n_recent: number
 }
@@ -133,6 +138,18 @@ export interface Trend {
   daily: TrendDay[]
   versions: VersionSighting[]
   steps: TrendStep[]
+  /** Days the chart shows moving by the step threshold that are not steps, with the reason. */
+  dips: TrendDip[]
+}
+
+export interface TrendDip {
+  day: string
+  total: number | null
+  before_total: number | null
+  pct: number
+  n_day: number
+  n_before: number
+  reason: string
 }
 
 export interface PartValue {
@@ -186,7 +203,10 @@ export interface CellState {
   baseline: number | null
   warn_tokens: number | null
   jump_pct: number | null
-  pct: number | null
+  /** Last 24 h against the week before, same model, without the brief (body_recent against body_baseline). */
+  body_pct: number | null
+  body_recent: number | null
+  body_baseline: number | null
   reason: 'warn' | 'jump' | null
 }
 

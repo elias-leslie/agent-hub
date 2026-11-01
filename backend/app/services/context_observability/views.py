@@ -21,10 +21,11 @@ from .baseline import FirstTurn, load_first_turns, med
 from .budgets import CellState, cell_states
 from .markers import view_markers
 from .policy import Policy, load_policy
-from .steps import cell_rows, find_steps
+from .steps import cell_rows, find_dips, find_step_rows
 from .why import explain
 
 MIN_N = 3  # starts needed on each side of a comparison; fewer shows the median but no change
+FLAG_MIN_N = 5  # starts each side a shown change needs before it is flagged as a jump (the step finder's minimum)
 MAX_POINTS = 2000  # per-start dots the trend returns; more are thinned evenly
 MAX_STEPS = 12  # steps explained per trend (newest)
 MAX_STEP_MARKERS = 6
@@ -67,8 +68,12 @@ class MatrixCell(BaseModel):
     model: str | None
     warn_tokens: int | None
     jump_pct: int | None
-    flag: str | None  # warn | jump: the budget state of the last 24 h (the Nightshift alert's own rule)
-    recent: int | None  # last-24 h median that the flag is about
+    # warn: the last 24 h median is over the warn level (the Nightshift alert's rule). jump: the shown change (delta_pct,
+    # this window against the one before) is jump_pct or more, with at least FLAG_MIN_N starts in each. One rule for the
+    # flag, the sort and the header; the 24 h alert's own jump check (against the week before) is on the Cell view.
+    flag: str | None
+    flag_held: str | None  # why a change of jump_pct or more is not flagged (too few starts), else None
+    recent: int | None  # last-24 h median that the warn flag is about
     n_recent: int
 
 
@@ -111,12 +116,18 @@ def build_matrix(rows: list[FirstTurn], policy: Policy, states: list[CellState],
         budget = policy.budget_for(harness, cell)
         state = state_by.get((harness, cell))
         newest = max(window, key=lambda r: r.at)
+        flag, held = state.reason if state and state.reason == "warn" else None, None
+        if flag is None and pct is not None and policy.jump_pct is not None and pct >= policy.jump_pct:
+            if min(len(win_same), len(prev_same)) >= FLAG_MIN_N:
+                flag = "jump"
+            else:
+                held = f"up {pct:.0f}% but only {len(win_same)} and {len(prev_same)} starts; a flag needs {FLAG_MIN_N} in each range"
         cells.append(MatrixCell(
             harness=harness, cell=cell, n=len(window), total=med(r.total for r in window),
             harness_tokens=med(r.harness_tokens for r in window), ours=med(r.ours_tokens for r in window),
             brief=med(r.brief_tokens for r in window), prev_n=len(prev_same), prev_total=prev_total, delta=delta, delta_pct=pct,
             latest_at=newest.at, version=newest.version, model=model, warn_tokens=budget.warn_tokens if budget else None,
-            jump_pct=policy.jump_pct, flag=state.reason if state else None, recent=state.recent if state else None,
+            jump_pct=policy.jump_pct, flag=flag, flag_held=held, recent=state.recent if state else None,
             n_recent=state.n_recent if state else 0))
     latest: dict[str, FirstTurn] = {}
     first_seen: dict[str, dict[str, datetime]] = {}
@@ -208,6 +219,18 @@ class TrendHeadline(BaseModel):
     delta_pct: float | None
 
 
+class TrendDip(BaseModel):
+    """A day that moved by the step threshold or more against the week before but is not a step, and the plain reason."""
+
+    day: str
+    total: int | None
+    before_total: int | None
+    pct: float
+    n_day: int
+    n_before: int
+    reason: str
+
+
 class Trend(BaseModel):
     harness: str
     role: str
@@ -223,6 +246,7 @@ class Trend(BaseModel):
     daily: list[TrendDay]
     versions: list[VersionSighting]
     steps: list[TrendStep]
+    dips: list[TrendDip]  # days the chart shows moving by the step threshold that the step finder did not flag, with the reason
 
 
 def _thin(items: list[Any], limit: int) -> list[Any]:
@@ -280,9 +304,15 @@ async def trend(db: AsyncSession, harness: str, role: str, *, days: int, now: da
     previous = [r for r in rows if old <= r.at < edge]
     points = _thin(window, MAX_POINTS)
     steps: list[TrendStep] = []
+    dips: list[TrendDip] = []
     if policy.jump_pct is not None and window:
-        for step in find_steps(window, policy.jump_pct)[-MAX_STEPS:]:
-            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role)
+        every = find_step_rows(window, policy.jump_pct)
+        dips = [TrendDip(day=d.day.isoformat(), total=d.total, before_total=d.before_total, pct=d.pct, n_day=d.n_day, n_before=d.n_before,
+                         reason=d.reason) for d in find_dips(window, policy.jump_pct, every)]
+        for item in every[-MAX_STEPS:]:
+            step = item.step
+            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role,
+                                found=item)
             marks = sorted(why.markers, key=lambda m: (m.kind in ("memory", "prompt"), m.at))[:MAX_STEP_MARKERS]
             steps.append(TrendStep(
                 at=step.at, kind=step.kind, cause=why.cause, model=step.model, delta=step.delta, pct=step.pct,
@@ -296,7 +326,7 @@ async def trend(db: AsyncSession, harness: str, role: str, *, days: int, now: da
         headline=headline(window, previous),
         points=[TrendPoint(at=r.at, total=r.total, harness_tokens=r.harness_tokens, ours=r.ours_tokens, brief=r.brief_tokens,
                            version=r.version, model=r.model) for r in points],
-        points_total=len(window), daily=daily_series(window), versions=version_sightings(window), steps=steps)
+        points_total=len(window), daily=daily_series(window), versions=version_sightings(window), steps=steps, dips=dips)
 
 
 # --- cell ----------------------------------------------------------------------------------------------------------
@@ -448,10 +478,11 @@ async def cell(db: AsyncSession, harness: str, role: str, *, now: datetime | Non
     blocks = await _delivery_blocks(db, latest.delivery_id, now)
     move = None
     if policy.jump_pct is not None:
-        found = find_steps(rows, policy.jump_pct)
+        found = find_step_rows(rows, policy.jump_pct)
         if found:
-            step = found[-1]
-            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role)
+            step = found[-1].step
+            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role,
+                                found=found[-1])
             move = CellLatestMove(at=step.at, kind=step.kind, cause=why.cause, delta=why.delta, pct=why.pct, summary=why.summary)
     return empty.model_copy(update={
         "latest": _start(latest), "config_fp": latest.config_fp, "delivery_id": latest.delivery_id, "parts": parts, "blocks": blocks,
