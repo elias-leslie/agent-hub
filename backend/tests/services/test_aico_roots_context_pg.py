@@ -105,10 +105,10 @@ async def test_the_newest_session_of_a_root_wins_and_children_never_match(db: As
 async def test_same_source_processes_a_root_started_never_stand_in_for_the_root(db: AsyncSession) -> None:
     # The root's own session is at 218K; the `claude -p` / `codex exec` children it started share its source, are
     # top-level too and are newer.
-    # Its own last activity is the stale one (Agent Hub still holds it active); the children's are newer.
+    # The children started while the root's session was active; their last activity is newer than its own.
     db.add_all([_session("own", _bound("aico-root-a"), minutes=20, created=0),
-                _session("kid1", _bound("aico-root-a"), minutes=31, created=30, status="completed"),
-                _session("kid2", _bound("aico-root-a"), minutes=36, created=35, status="completed")])
+                _session("kid1", _bound("aico-root-a"), minutes=31, created=10, status="completed"),
+                _session("kid2", _bound("aico-root-a"), minutes=36, created=15, status="completed")])
     await db.flush()
     db.add_all([_call("o", "own", 19, 1, 218_000, 0), _call("k1", "kid1", 31, 1, 29_000, 0), _call("k2", "kid2", 36, 1, 29_500, 0)])
     await db.flush()
@@ -116,6 +116,20 @@ async def test_same_source_processes_a_root_started_never_stand_in_for_the_root(
     result = await aico_roots.latest_context(db, ["aico-root-a"])
 
     assert (result["aico-root-a"].session_id, result["aico-root-a"].context_tokens) == ("own", 218_001)
+
+
+async def test_a_stale_active_status_never_hides_a_relaunched_root(db: AsyncSession) -> None:
+    # The old session is still marked active (status is unreliable) but went quiet at minute 20; the root was
+    # relaunched at minute 60 and is the one `st aico roots` must measure.
+    db.add_all([_session("old", _bound("aico-root-a"), minutes=20, created=0, status="active"),
+                _session("relaunched", _bound("aico-root-a"), minutes=70, created=60, status="active")])
+    await db.flush()
+    db.add_all([_call("o", "old", 19, 1, 218_000, 0), _call("r", "relaunched", 70, 1, 12_000, 0)])
+    await db.flush()
+
+    result = await aico_roots.latest_context(db, ["aico-root-a"])
+
+    assert (result["aico-root-a"].session_id, result["aico-root-a"].context_tokens) == ("relaunched", 12_001)
 
 
 async def test_a_session_started_while_an_earlier_one_was_still_running_is_left_out(db: AsyncSession) -> None:

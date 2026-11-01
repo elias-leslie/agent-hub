@@ -8,6 +8,7 @@ through ``streaming._emit_events``. They do not hit any real service.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import cast
 from unittest.mock import AsyncMock, patch
@@ -145,6 +146,28 @@ class TestStreamCompletionGenerator:
         for chunk in chunks:
             assert chunk.startswith("data: "), f"Not SSE format: {chunk}"
         assert chunks[-1] == "data: [DONE]\n\n"
+
+    @pytest.mark.asyncio
+    async def test_a_swapped_stream_names_the_requested_model_and_why_it_was_not_run(self) -> None:
+        async def mock_stream(*_args: object, **_kwargs: object):
+            yield TextDeltaEvent(content_index=0, delta="Hello", partial=_partial_message())
+            yield _done_event()
+
+        with (
+            patched_done_persistence(),
+            patch("app.api.complete.streaming.run_completion_stream", new=mock_stream),
+        ):
+            chunks = [
+                chunk async for chunk in stream_completion(
+                    messages=[Message(role="user", content="Hi")], model=GEMINI_2_5_FLASH, provider="gemini",
+                    temperature=0.7, session_id="swap-session", agent_used="a", model_used=GEMINI_2_5_FLASH,
+                    fallback_used=True, requested_model=CLAUDE_SONNET, denied_reason="Claude never for active hunting",
+                )
+            ]
+
+        content = json.loads(next(c for c in chunks if '"type": "content"' in c).removeprefix("data: "))
+        assert content["requested_model"] == CLAUDE_SONNET
+        assert content["fallback_reason"] == "ProviderError: Claude never for active hunting"
 
     @pytest.mark.asyncio
     async def test_content_events(self) -> None:

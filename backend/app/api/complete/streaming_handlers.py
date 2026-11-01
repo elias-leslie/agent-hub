@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
@@ -58,8 +58,11 @@ async def _setup_streaming_session(
     db: AsyncSession | None,
     client_id: str | None,
     request_source: str | None,
+    denied: DeniedPrimary | None = None,
 ) -> tuple[str, list[Message], bool]:
     """Set up or retrieve session and context messages for streaming.
+
+    ``denied`` is the requested model a launch rule swapped out: the session records it as the requested model.
 
     Returns:
         Tuple of (session_id, context_messages, is_new_session)
@@ -83,8 +86,14 @@ async def _setup_streaming_session(
             current_branch=request.current_branch,
             working_dir=request.working_dir,
             parent_session_id=request.parent_session_id,
+            requested_provider=denied.provider if denied else None,
+            requested_model=denied.model if denied else None,
             trace_id=request.trace_id,
         )
+        if denied is not None:
+            stream_session.provider_metadata = {
+                **(stream_session.provider_metadata or {}), "fallback_reason": f"ProviderError: {denied.reason}",
+            }
         session_id = stream_session.id
         apply_read_only_metadata(stream_session, request.read_only)
         await bind_request_context(
@@ -223,6 +232,14 @@ def _fallback_chain(request: CompletionRequest, resolved_agent: ResolvedAgent | 
     return chain
 
 
+class DeniedPrimary(NamedTuple):
+    """The model the request asked for and the launch rule's reason it was swapped out."""
+
+    model: str
+    provider: str
+    reason: str
+
+
 async def _drop_denied_candidates(
     request: CompletionRequest,
     resolved_model: str,
@@ -231,22 +248,24 @@ async def _drop_denied_candidates(
     db: AsyncSession | None,
     model_used: str | None,
     fallback_used: bool,
-) -> tuple[str, str, str | None, bool, list[str]]:
+) -> tuple[str, str, str | None, bool, list[str], DeniedPrimary | None]:
     """The model, provider and fallbacks a streaming turn may run, skipping every provider the session's
     work role is denied (primary, fallbacks and escalation). The first allowed candidate becomes the primary
-    when the requested one is denied; with none left the request is refused with the deny reason (403)."""
+    when the requested one is denied (the sixth value names the requested model and the reason); with none
+    left the request is refused with the deny reason (403)."""
     chain = _fallback_chain(request, resolved_agent)
     denial = await session_launch_denial(db, request.session_id)
     if denial is None:
-        return resolved_model, provider, model_used, fallback_used, chain
+        return resolved_model, provider, model_used, fallback_used, chain, None
     reasons = {m: denial.blocks(m) for m in [resolved_model, *chain]}
     allowed = [m for m in [resolved_model, *chain] if not reasons[m]]
     if not allowed:
         raise HTTPException(status_code=403, detail=reasons[resolved_model])
     if allowed[0] != resolved_model:
         logger.info("Skipping streaming model %s: %s", resolved_model, reasons[resolved_model])
-        return allowed[0], get_provider_for_model(allowed[0]), allowed[0], True, allowed[1:]
-    return resolved_model, provider, model_used, fallback_used, allowed[1:]
+        denied = DeniedPrimary(resolved_model, provider, reasons[resolved_model])
+        return allowed[0], get_provider_for_model(allowed[0]), allowed[0], True, allowed[1:], denied
+    return resolved_model, provider, model_used, fallback_used, allowed[1:], None
 
 
 def _turn_running_error(run: TurnRun) -> HTTPException:
@@ -289,6 +308,7 @@ def _build_sse_response(
     is_new_session: bool,
     tools: list[dict[str, object]] | None,
     fallback_models: list[str] | None = None,
+    denied: DeniedPrimary | None = None,
 ) -> StreamingResponse:
     """Construct the SSE StreamingResponse from a stream_completion generator."""
     source_metadata = (
@@ -318,6 +338,8 @@ def _build_sse_response(
         source_metadata=source_metadata,
         fallback_models=fallback_models,
         turn_id=turn_id,
+        requested_model=denied.model if denied else None,
+        denied_reason=denied.reason if denied else None,
     )
     # The turn belongs to the server; this response is its first subscriber.
     try:
@@ -359,11 +381,11 @@ async def handle_streaming_request(
         )
 
     await _claim_session_turn(request.session_id)
-    resolved_model, provider, model_used, fallback_used, fallback_models = await _drop_denied_candidates(
+    resolved_model, provider, model_used, fallback_used, fallback_models, denied = await _drop_denied_candidates(
         request, resolved_model, provider, resolved_agent, db, model_used, fallback_used
     )
     session_id, context_messages, is_new_session = await _setup_streaming_session(
-        request, provider, resolved_model, resolved_agent, db, client_id, request_source
+        request, provider, resolved_model, resolved_agent, db, client_id, request_source, denied
     )
     if http_request is not None:
         http_request.state.session_id = session_id  # request_logs attribution
@@ -401,5 +423,5 @@ async def handle_streaming_request(
     return _build_sse_response(
         messages, resolved_model, provider, request, session_id, thinking_level,
         agent_used, model_used, fallback_used,
-        db, is_new_session, tools, fallback_models,
+        db, is_new_session, tools, fallback_models, denied=denied,
     )

@@ -398,6 +398,41 @@ async def test_a_hunting_chat_stream_on_a_claude_primary_starts_on_the_first_all
 
 
 @pytest.mark.asyncio
+async def test_a_swapped_claude_primary_is_kept_as_the_requested_model_with_the_deny_reason() -> None:
+    build = await _stream_in_hunting_session("claude-opus-5-5", "claude", _agent_with(["codex/gpt-6-sol"], None))
+    denied = build.call_args.kwargs["denied"]
+    assert (denied.model, denied.provider) == ("claude-opus-5-5", "claude")
+    assert "Claude never for active hunting" in denied.reason
+
+    unswapped = await _stream_in_hunting_session("codex/gpt-6-sol", "codex", _agent_with([], None))
+    assert unswapped.call_args.kwargs["denied"] is None
+
+
+@pytest.mark.asyncio
+async def test_the_session_of_a_swapped_stream_records_the_requested_model_and_reason() -> None:
+    from app.api.complete.streaming_handlers import DeniedPrimary
+
+    request = CompletionRequest(messages=[MessageInput(role="user", content="hi")], project_id="neri", prompt_mode="none")
+    stream_session = SimpleNamespace(id="sess-hunt", provider_metadata={})
+    get_or_create = AsyncMock(return_value=(stream_session, [], False))
+    with (
+        patch("app.api.complete.streaming_handlers.get_or_create_session", new=get_or_create),
+        patch("app.api.complete.streaming_handlers.apply_read_only_metadata"),
+        patch("app.api.complete.streaming_handlers.bind_request_context", new=AsyncMock()),
+        patch("app.api.complete.streaming_handlers.mark_session_execution_start"),
+    ):
+        await _setup_streaming_session(
+            request, "codex", "codex/gpt-6-sol", None, AsyncMock(), None, "pytest",
+            DeniedPrimary("claude-opus-5-5", "claude", "Claude never for active hunting"),
+        )
+
+    assert get_or_create.await_args is not None
+    assert get_or_create.await_args.kwargs["requested_model"] == "claude-opus-5-5"
+    assert get_or_create.await_args.kwargs["requested_provider"] == "claude"
+    assert stream_session.provider_metadata["fallback_reason"] == "ProviderError: Claude never for active hunting"
+
+
+@pytest.mark.asyncio
 async def test_a_hunting_chat_stream_with_only_claude_is_refused_with_the_deny_reason() -> None:
     from fastapi import HTTPException
 

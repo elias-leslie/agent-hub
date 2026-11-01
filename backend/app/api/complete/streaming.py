@@ -515,6 +515,8 @@ async def stream_completion(
     source_metadata: dict[str, object] | None = None,
     fallback_models: list[str] | None = None,
     turn_id: str | None = None,
+    requested_model: str | None = None,
+    denied_reason: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format via the unified pi-mono pipeline.
 
@@ -522,6 +524,9 @@ async def stream_completion(
     15-second heartbeat to keep connections alive through reverse
     proxies. When tools are provided, the universal tool loop drives the
     multi-turn exchange.
+
+    ``requested_model`` and ``denied_reason`` are set when a launch rule swapped the requested model for ``model``:
+    the session keeps the requested model and the turn carries the reason, as a non-streaming completion does.
 
     The caller owns the iteration: the HTTP route drives it from a server-side turn task
     (``app.services.turn_runs``), so a client going away does not reach this generator.
@@ -542,6 +547,9 @@ async def stream_completion(
     )
     writer = SseWriter(session_id=session_id)
     _attach_routing(writer, ctx)
+    primary_failure: str | None = f"ProviderError: {denied_reason}" if denied_reason else None
+    if denied_reason:
+        writer.attach_routing(requested_model=requested_model, fallback_reason=primary_failure)
     content_buf: list[str] = [""]
 
     if db is not None and ctx.user_messages:
@@ -575,7 +583,6 @@ async def stream_completion(
             for candidate in fallback_models or []
             if candidate not in candidate_models
         )
-        primary_failure: str | None = None
         for attempt_index, candidate_model in enumerate(candidate_models):
             candidate_provider = get_provider_for_model(candidate_model)
             attempt_output_started = [False]
@@ -606,8 +613,8 @@ async def stream_completion(
                             candidate_provider,
                             candidate_model,
                             agent_slug=agent_used,
-                            requested_provider=provider,
-                            requested_model=model,
+                            requested_provider=get_provider_for_model(requested_model) if requested_model else provider,
+                            requested_model=requested_model or model,
                         )
                         await turn_db.commit()
             try:

@@ -70,7 +70,7 @@ class FakeHub:
                     return self._answer(200, {"stored": True, "expires_at": (body or {}).get("expires_at")})
                 rows = [row for row in hub.rows if row["tool_slug"] == tool]
                 return self._answer(200, {"tool": tool, "credentials": [
-                    {key: row[key] for key in ("name", "config_dir", "env_var", "auth_file")} | {"value": SECRET}
+                    {key: row[key] for key in ("name", "config_dir", "env_var", "auth_file")} | {"value": row.get("value", SECRET)}
                     for row in rows
                 ]})
 
@@ -374,14 +374,27 @@ def test_without_the_rules_claude_is_refused_for_case_work_only(
     _claude_host(host, hub)
     if answer != "down":
         hub.launch = answer
-    for role in ("hunting", "recon", "verification"):
-        env = {"ST_WORK_ROLE": role, **({"AGENT_HUB_URL": "http://127.0.0.1:9"} if answer == "down" else {})}
+    for role, project in (("hunting", None), ("recon", "any-project"), ("verification", "neri-hunters")):
+        env = {"ST_WORK_ROLE": role, **({"AICO_PROJECT_ID": project} if project else {}),
+               **({"AGENT_HUB_URL": "http://127.0.0.1:9"} if answer == "down" else {})}
         result = _run(host, "claude", env=env)
         assert result.returncode == 1 and "launch rules could not be read" in result.stderr
         assert len(result.stderr.strip().splitlines()) == 1 and not host["report"].exists()
     assert not _fetched(hub, "claude-code")
     if answer != "down":  # the credential fetch itself needs Agent Hub
         assert _run(host, "claude", env={"ST_WORK_ROLE": "coordinator"}).returncode == 0
+
+
+@pytest.mark.parametrize("project", [None, "neri", "agent-hub"])
+def test_without_the_rules_verification_work_outside_neri_hunters_keeps_claude(
+    host: dict[str, Any], hub: FakeHub, project: str | None,
+) -> None:
+    _claude_host(host, hub)
+    hub.launch = (500, {"error": "internal"})
+    env = {"ST_WORK_ROLE": "verification", **({"AICO_PROJECT_ID": project} if project else {})}
+    result = _run(host, "claude", env=env)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(host["report"].read_text())["claude"] == SECRET
 
 
 def test_other_tools_and_sessions_without_a_work_role_are_not_checked(host: dict[str, Any], hub: FakeHub) -> None:
@@ -406,7 +419,6 @@ def _pi_host(host: dict[str, Any], hub: FakeHub) -> None:
 @pytest.mark.parametrize(("argv", "env"), [
     (["pi", "--model", "anthropic/claude-opus-5-5"], {}),
     (["pi", "--model=claude-sonnet-5-5"], {}),
-    (["pi"], {"AICO_ROOT_MODEL": "anthropic/claude-haiku-5-5"}),
 ])
 def test_a_pi_session_running_a_claude_model_is_refused_like_claude_code(
     host: dict[str, Any], hub: FakeHub, argv: list[str], env: dict[str, str],
@@ -421,11 +433,47 @@ def test_a_pi_session_running_a_claude_model_is_refused_like_claude_code(
     assert len(asked) == 1 and "tool=pi" in asked[0] and "model=" in asked[0] and "role=hunting" in asked[0]
 
 
+@pytest.mark.parametrize(("argv", "env"), [
+    (["pi", "--provider", "anthropic", "--model", "some-future-model"], {}),
+    (["pi", "--provider=anthropic", "--model=some-future-model"], {}),
+    (["pi"], {"AICO_ROOT_MODEL": "anthropic/some-future-model"}),
+    (["pi", "--model", "claude-haiku-5-5"], {"AICO_ROOT_MODEL": "anthropic/claude-haiku-5-5"}),
+])
+def test_a_pi_session_on_the_anthropic_provider_is_claude_whatever_the_model_id(
+    host: dict[str, Any], hub: FakeHub, argv: list[str], env: dict[str, str],
+) -> None:
+    _pi_host(host, hub)
+    hub.launch = (200, {"rows": [{"job": "hunting", "allowed": False, "deny_reason": DENY}]})
+    result = _run(host, *argv, env={"ST_WORK_ROLE": "hunting", "AICO_PROJECT_ID": "neri-hunters", **env})
+    assert result.returncode == 1 and f"Claude is not allowed for hunting work: {DENY}" in result.stderr
+    assert not host["report"].exists() and not _fetched(hub, "pi")
+    assert [path for _, path, _, _ in hub.requests if path.startswith("/api/models/")] == [
+        "/api/models/launch-defaults?role=hunting&tool=claude-code&project=neri-hunters"]
+
+
+def test_a_pi_launch_names_provider_and_model_together_when_it_asks_agent_hub(host: dict[str, Any], hub: FakeHub) -> None:
+    _pi_host(host, hub)
+    hub.launch = (200, {"rows": [{"allowed": False, "deny_reason": DENY}]})
+    _run(host, "pi", "--provider", "openai", "--model", "claude-lookalike", env={"ST_WORK_ROLE": "hunting"})
+    asked = [path for _, path, _, _ in hub.requests if path.startswith("/api/models/")]
+    assert asked == ["/api/models/launch-defaults?role=hunting&tool=pi&model=openai%2Fclaude-lookalike"]
+
+
+@pytest.mark.parametrize("project", [None, "neri", "agent-hub"])
+def test_without_the_rules_a_pi_verification_session_outside_neri_hunters_keeps_claude(
+    host: dict[str, Any], hub: FakeHub, project: str | None,
+) -> None:
+    _pi_host(host, hub)
+    hub.launch = (500, {"error": "internal"})
+    env = {"ST_WORK_ROLE": "verification", **({"AICO_PROJECT_ID": project} if project else {})}
+    assert _run(host, "pi", "--model", "anthropic/claude-opus-5-5", env=env).returncode == 0
+
+
 def test_a_pi_session_on_another_model_or_an_allowed_role_is_not_refused(host: dict[str, Any], hub: FakeHub) -> None:
     _pi_host(host, hub)
     assert _run(host, "pi", "--model", "codex/gpt-6-sol", env={"ST_WORK_ROLE": "hunting"}).returncode == 0
     assert _run(host, "pi", env={"ST_WORK_ROLE": "hunting"}).returncode == 0  # no model known: not Claude
-    assert not any(path.startswith("/api/models/") for _, path, _, _ in hub.requests)
+    assert not any("model=" in path for _, path, _, _ in hub.requests if path.startswith("/api/models/"))
     assert _run(host, "pi", "--model", "anthropic/claude-opus-5-5", env={"ST_WORK_ROLE": "coordinator"}).returncode == 0
 
 
@@ -435,7 +483,66 @@ def test_without_the_rules_a_pi_session_on_a_claude_model_is_refused_for_case_wo
 ) -> None:
     _pi_host(host, hub)
     hub.launch = (500, {"error": "internal"})
-    result = _run(host, "pi", "--model", "anthropic/claude-opus-5-5", env={"ST_WORK_ROLE": role})
+    result = _run(host, "pi", "--model", "anthropic/claude-opus-5-5", env={"ST_WORK_ROLE": role, "AICO_PROJECT_ID": "neri-hunters"})
     assert result.returncode == 1 and "launch rules could not be read" in result.stderr
     assert not _fetched(hub, "pi")
     assert _run(host, "pi", "--model", "codex/gpt-6-sol", env={"ST_WORK_ROLE": role}).returncode == 0
+
+
+PI_LOGINS = {"anthropic": {"type": "oauth", "access": "anthropic-secret"}, "openai-codex": {"type": "oauth", "access": "codex-secret"},
+             "opencode-go": {"type": "api_key", "key": "go-secret"}}
+PI_FILE_ROW = {"tool_slug": "pi", "name": "logins", "command": "pi", "config_dir": "~/.pi", "env_var": None,
+               "auth_file": "agent/auth.json", "rotates": False, "stored": True, "expired": False, "expires_at": None,
+               "undecodable": False, "value": json.dumps(PI_LOGINS)}
+
+
+def _pi_logins(host: dict[str, Any]) -> dict[str, Any]:
+    return json.loads((host["home"] / ".pi/agent/auth.json").read_text())
+
+
+def _pi_file_host(host: dict[str, Any], hub: FakeHub) -> None:
+    hub.rows.append(PI_FILE_ROW)
+    hub.granted.append("pi")
+    _install(host)
+
+
+@pytest.mark.parametrize("argv", [["pi"], ["pi", "--model", "codex/gpt-6-sol"], ["pi", "--provider", "openai", "--model", "gpt-6"]])
+def test_a_denied_pi_session_on_another_model_gets_its_logins_without_anthropic(
+    host: dict[str, Any], hub: FakeHub, argv: list[str],
+) -> None:
+    _pi_file_host(host, hub)
+    hub.launch = (200, {"rows": [{"job": "hunting", "allowed": False, "deny_reason": DENY}]})
+    result = _run(host, *argv, env={"ST_WORK_ROLE": "hunting", "AICO_PROJECT_ID": "neri-hunters"})
+    assert result.returncode == 0, result.stderr
+    assert set(_pi_logins(host)) == {"openai-codex", "opencode-go"}
+    assert "anthropic-secret" not in (host["home"] / ".pi/agent/auth.json").read_text()
+    assert "anthropic-secret" not in result.stdout + result.stderr
+
+
+def test_a_denied_pi_session_gets_the_anthropic_env_var_withheld(host: dict[str, Any], hub: FakeHub) -> None:
+    _pi_host(host, hub)  # the served login is ANTHROPIC_API_KEY
+    hub.launch = (200, {"rows": [{"allowed": False, "deny_reason": DENY}]})
+    assert _run(host, "pi", env={"ST_WORK_ROLE": "recon"}).returncode == 0
+    assert json.loads(host["report"].read_text())["key"] is None
+
+
+def test_pi_keeps_every_login_when_claude_is_allowed_or_there_is_no_work_role(host: dict[str, Any], hub: FakeHub) -> None:
+    _pi_file_host(host, hub)
+    assert _run(host, "pi", env={"ST_WORK_ROLE": "coordinator"}).returncode == 0
+    assert set(_pi_logins(host)) == set(PI_LOGINS)
+    hub.launch = (200, {"rows": [{"allowed": False, "deny_reason": DENY}]})
+    assert _run(host, "pi").returncode == 0
+    assert set(_pi_logins(host)) == set(PI_LOGINS)
+
+
+def test_without_the_rules_a_pi_session_gets_no_anthropic_login_only_where_the_floor_applies(
+    host: dict[str, Any], hub: FakeHub,
+) -> None:
+    _pi_file_host(host, hub)
+    hub.launch = (500, {"error": "internal"})
+    assert _run(host, "pi", env={"ST_WORK_ROLE": "hunting"}).returncode == 0
+    assert "anthropic" not in _pi_logins(host)
+    assert _run(host, "pi", env={"ST_WORK_ROLE": "verification", "AICO_PROJECT_ID": "neri-hunters"}).returncode == 0
+    assert "anthropic" not in _pi_logins(host)
+    assert _run(host, "pi", env={"ST_WORK_ROLE": "verification", "AICO_PROJECT_ID": "agent-hub"}).returncode == 0
+    assert "anthropic" in _pi_logins(host)

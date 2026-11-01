@@ -39,20 +39,19 @@ async def latest_context(db: AsyncSession, keys: list[str]) -> dict[str, RootCon
     source = Session.provider_metadata["work_role"]["source"].as_string()
     aico = Session.provider_metadata["aico_session_id"].as_string()
     rows = (await db.execute(
-        select(Session.id, source, aico, Session.created_at, func.coalesce(Session.last_activity_at, Session.created_at),
-               Session.status)
+        select(Session.id, source, aico, Session.created_at, func.coalesce(Session.last_activity_at, Session.created_at))
         .where(Session.parent_session_id.is_(None),
                source.in_([ROOT_SOURCE_PREFIX + k for k in wanted]) | aico.in_(wanted) | Session.id.in_(wanted))
         .order_by(Session.created_at, Session.id)
     )).all()
     newest: dict[str, tuple[datetime, str]] = {}
-    chains: dict[str, list[tuple[str, datetime, datetime, bool]]] = {}
-    for session_id, src, aico_id, created, active, status in rows:
+    chains: dict[str, list[tuple[str, datetime, datetime]]] = {}
+    for session_id, src, aico_id, created, active in rows:
         if session_id in wanted:  # the root's own native session: exact, whatever else shares its source
             newest[session_id] = (active, session_id)
         for key in (src[len(ROOT_SOURCE_PREFIX):] if src else None, aico_id):
             if key in wanted:
-                chains.setdefault(key, []).append((session_id, created, active, status == "active"))
+                chains.setdefault(key, []).append((session_id, created, active))
     for key, sessions in chains.items():
         chosen = _own_sessions(sessions)
         newest[key] = max(((active, sid) for sid, _, active in chosen), key=lambda item: item[0])
@@ -61,19 +60,17 @@ async def latest_context(db: AsyncSession, keys: list[str]) -> dict[str, RootCon
     return {key: measured[sid] for key, (_, sid) in newest.items() if sid in measured}
 
 
-def _own_sessions(sessions: list[tuple[str, datetime, datetime, bool]]) -> list[tuple[str, datetime, datetime]]:
+def _own_sessions(sessions: list[tuple[str, datetime, datetime]]) -> list[tuple[str, datetime, datetime]]:
     """The sessions of one source in creation order without the ones started while an earlier kept one was still active:
-    those are the `claude -p` / `codex exec` processes the root launched, which inherit its source. A session is still
-    active until its last activity, or for as long as Agent Hub holds it active."""
+    those are the `claude -p` / `codex exec` processes the root launched, which inherit its source. A session is active
+    until its last activity."""
     kept: list[tuple[str, datetime, datetime]] = []
     busy_until: datetime | None = None
-    holding = False
-    for session_id, created, active, is_active in sessions:
-        if kept and (holding or (busy_until is not None and created <= busy_until)):
+    for session_id, created, active in sessions:
+        if busy_until is not None and created <= busy_until:
             continue
         kept.append((session_id, created, active))
         busy_until = active if busy_until is None else max(busy_until, active)
-        holding = holding or is_active
     return kept
 
 

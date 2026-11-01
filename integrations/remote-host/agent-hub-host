@@ -47,9 +47,14 @@ OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 STATES = ("signed_in", "expired", "unknown", "needs_sign_in")  # best first, for a tool's overall state
 # Claude credentials go only to a session whose work role Agent Hub's launch rules allow
 # (GET /api/models/launch-defaults, the same answer `st aico create` obeys). When the rules can't be
-# read, the safety floor holds: never Claude for these work roles (model-choice plan, owner 2026-11-01).
+# read, the safety floor holds and is no wider than the rules (model-choice plan, owner 2026-11-01): never
+# Claude for hunting or recon work in any project, nor for verification work in project neri-hunters.
 CLAUDE_TOOL = "claude-code"
-CLAUDE_FLOOR_ROLES = ("hunting", "recon", "verification")
+CLAUDE_FLOOR_ROLES = ("hunting", "recon")
+CLAUDE_FLOOR_PROJECT_ROLES = {"verification": "neri-hunters"}
+# Login entries that are Claude's: a served env var or a JSON login file key (Pi's auth.json) with one of
+# these prefixes is withheld from a session whose work role is denied Claude, whatever model it starts on.
+CLAUDE_CREDENTIAL_PREFIXES = ("anthropic", "claude_code")
 # Any other tool (Pi with an anthropic login) counts as Claude when its model id names a Claude family: the
 # name_tokens of launch.providers.claude, which counts_as applies in Agent Hub. This copy only decides
 # whether to ask and what the floor does; with the rules readable Agent Hub's answer decides.
@@ -187,18 +192,43 @@ def _place_file(tool: str, item: dict[str, Any]) -> None:
         raise Refused(f"cannot place the credential file for {target} ({exc.strerror or type(exc).__name__})") from None
 
 
+def _option_value(args: list[str], *names: str) -> str | None:
+    """The value of the first ``--name value`` or ``--name=value`` option among ``names`` on the command line."""
+    for index, arg in enumerate(args):
+        if arg in names and index + 1 < len(args):
+            return args[index + 1].strip() or None
+        for name in names:
+            if name.startswith("--") and arg.startswith(name + "="):
+                return arg.partition("=")[2].strip() or None
+    return None
+
+
 def _session_model(args: list[str]) -> str | None:
     """The model this launch runs: ``--model``/``-m`` on the command line, else the model Tether set for the root."""
-    for index, arg in enumerate(args):
-        if arg in ("--model", "-m") and index + 1 < len(args):
-            return args[index + 1].strip() or None
-        if arg.startswith("--model="):
-            return arg.partition("=")[2].strip() or None
-    return os.environ.get("AICO_ROOT_MODEL", "").strip() or None
+    return _option_value(args, "--model", "-m") or os.environ.get("AICO_ROOT_MODEL", "").strip() or None
 
 
-def _is_claude(tool: str, model: str | None) -> bool:
-    return tool == CLAUDE_TOOL or bool(model and any(token in model.lower() for token in CLAUDE_NAME_TOKENS))
+def _session_provider(args: list[str]) -> str | None:
+    """The provider this launch runs on: ``--provider`` on the command line (Tether launches Pi with
+    ``--provider ${AICO_ROOT_MODEL%%/*} --model ${AICO_ROOT_MODEL#*/}``), else the one the root's model names."""
+    provider = _option_value(args, "--provider")
+    if provider:
+        return provider
+    root_model = os.environ.get("AICO_ROOT_MODEL", "").strip()
+    return root_model.partition("/")[0] or None if "/" in root_model else None
+
+
+def _launch_identity(tool: str, args: list[str]) -> tuple[bool, str | None]:
+    """Whether this launch is Claude, and the model to ask Agent Hub about. Claude is the claude-code tool, a
+    session on the anthropic provider (Anthropic serves only Claude), or a model id naming a Claude family. The
+    model sent is ``provider/model`` when the command line gives the two apart."""
+    model, provider = _session_model(args), _session_provider(args)
+    if provider and model and "/" not in model:
+        model = f"{provider}/{model}"
+    named = " ".join(part.lower() for part in (provider, model) if part)
+    claude = tool == CLAUDE_TOOL or bool(provider and provider.lower() == "anthropic") \
+        or any(token in named for token in CLAUDE_NAME_TOKENS)
+    return claude, model
 
 
 def _launch_rules(role: str, project: str | None, tool: str, model: str | None) -> dict[str, Any] | None:
@@ -221,17 +251,18 @@ def _launch_rules(role: str, project: str | None, tool: str, model: str | None) 
     return {"allowed": allowed, "deny_reason": row.get("deny_reason", data.get("deny_reason"))}
 
 
-def _claude_refusal(tool: str, args: list[str]) -> str | None:
-    """Why this session may not have Claude credentials, else None. The work role is the one Tether
-    set for the session (ST_WORK_ROLE, also passed into hunt containers); without one, no check.
-    Claude is the claude-code tool, or any tool (Pi) whose session model names a Claude family."""
-    role = os.environ.get("ST_WORK_ROLE", "").strip()
-    model = _session_model(args)
-    if not role or not _is_claude(tool, model):
-        return None
-    rules = _launch_rules(role, os.environ.get("AICO_PROJECT_ID", "").strip() or None, tool, model)
+def _session_scope() -> tuple[str, str | None]:
+    """The work role Tether set for the session (ST_WORK_ROLE, also passed into hunt containers; empty means
+    none) and its project."""
+    return os.environ.get("ST_WORK_ROLE", "").strip(), os.environ.get("AICO_PROJECT_ID", "").strip() or None
+
+
+def _claude_denial(role: str, project: str | None, tool: str, model: str | None) -> str | None:
+    """Why Claude is denied to this work role in this project, else None. Agent Hub's rules decide; when they
+    can't be read the floor decides, and it denies no more than the rules do."""
+    rules = _launch_rules(role, project, tool, model)
     if rules is None:
-        if role in CLAUDE_FLOOR_ROLES:
+        if role in CLAUDE_FLOOR_ROLES or (role in CLAUDE_FLOOR_PROJECT_ROLES and project == CLAUDE_FLOOR_PROJECT_ROLES[role]):
             return (f"Agent Hub's launch rules could not be read, and Claude is never used for {role} "
                     "work without them")
         return None
@@ -239,6 +270,54 @@ def _claude_refusal(tool: str, args: list[str]) -> str | None:
         return None
     reason = " ".join(str(rules["deny_reason"] or "Agent Hub's launch rules deny it").split())[:300]
     return f"Claude is not allowed for {role} work: {reason}"
+
+
+def _claude_refusal(tool: str, args: list[str]) -> str | None:
+    """Why this session may not have Claude credentials, else None. The work role is the one Tether
+    set for the session; without one, no check. Claude is the claude-code tool, or any tool (Pi) whose
+    session runs on the anthropic provider or a model naming a Claude family."""
+    role, project = _session_scope()
+    claude, model = _launch_identity(tool, args)
+    if not role or not claude:
+        return None
+    rules_tool = CLAUDE_TOOL if tool != CLAUDE_TOOL and (_session_provider(args) or "").lower() == "anthropic" else tool
+    return _claude_denial(role, project, rules_tool, model)
+
+
+def _is_claude_key(key: str) -> bool:
+    return key.lower().startswith(CLAUDE_CREDENTIAL_PREFIXES)
+
+
+def _without_claude_logins(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The credential items minus Claude's logins: env vars named for Anthropic or Claude Code, and the anthropic
+    entries of a JSON login file (Pi's auth.json). A login file that is not JSON object is withheld whole."""
+    kept: list[dict[str, Any]] = []
+    for item in items:
+        if item.get("env_var"):
+            if not _is_claude_key(str(item["env_var"])):
+                kept.append(item)
+            continue
+        try:
+            logins = json.loads(item["value"]) if str(item.get("auth_file", "")).endswith(".json") else None
+        except (ValueError, TypeError):
+            logins = ()
+        if logins is None:
+            kept.append(item)
+        elif isinstance(logins, dict):
+            kept.append({**item, "value": json.dumps({k: v for k, v in logins.items() if not _is_claude_key(str(k))})})
+    return kept
+
+
+def _deliverable(tool: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What this session may be given. A session whose work role Agent Hub denies Claude never gets Claude's
+    logins, even when it starts on another model: Pi can switch models mid-session (/model)."""
+    role, project = _session_scope()
+    if tool == CLAUDE_TOOL or not role:
+        return items
+    kept = _without_claude_logins(items)
+    if kept == items or _claude_denial(role, project, CLAUDE_TOOL, None) is None:
+        return items
+    return kept
 
 
 def launch(tool: str, command: str, args: list[str]) -> NoReturn:
@@ -250,7 +329,7 @@ def launch(tool: str, command: str, args: list[str]) -> NoReturn:
         items = answer.get("credentials") if isinstance(answer, dict) else None
         if not items:
             raise Refused("Agent Hub holds no current credential for that tool")
-        for item in items:
+        for item in _deliverable(tool, items):
             if item.get("env_var"):
                 env[item["env_var"]] = item["value"]
             elif item.get("auth_file"):
