@@ -5,6 +5,7 @@ const CHANGE_COLORS: Record<string, string> = {
   demotion: 'text-red-400',
   promotion: 'text-amber-400',
   retirement: 'text-slate-400',
+  tier_move: 'text-slate-400',
 }
 
 interface TierChangeRowProps {
@@ -20,7 +21,7 @@ function TierChangeRow({ entry }: TierChangeRowProps) {
       </span>
       <span className="text-slate-600">|</span>
       <span className="text-slate-500">
-        {entry.old_tier} → {entry.new_tier}
+        {entry.old_tier ?? 'unknown'} → {entry.new_tier}
       </span>
       {entry.lifecycle_score_before != null &&
         entry.lifecycle_score_after != null && (
@@ -73,7 +74,7 @@ export function TierChangesSection({ data }: TierChangesSectionProps) {
   if (!data || data.total === 0) {
     return (
       <p className="text-xs text-slate-500 text-center py-4">
-        No type changes recorded
+        No tier moves in this range
       </p>
     )
   }

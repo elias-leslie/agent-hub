@@ -205,7 +205,7 @@ export interface TopMemory {
 
 export interface TierChangeEntry {
   episode_uuid: string
-  old_tier: string
+  old_tier: string | null
   new_tier: string
   change_type: string
   lifecycle_score_before: number | null

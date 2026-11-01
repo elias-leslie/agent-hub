@@ -9,6 +9,7 @@ from app.models.memory_unified import Memory
 from app.services.memory_utility_score import utility_score_sql_expr
 
 from .analytics_models import TopMemory
+from .tier_operations import TIER_ACTOR
 
 ALLOWED_SORT_FIELDS = {"utility_score", "referenced_count", "loaded_count", "helpful_count", "lifecycle_score"}
 TIER_NAMES = {1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}
@@ -82,29 +83,52 @@ async def get_top_memories_query(
     ]
 
 
+# Tier moves are memory revisions written by the optimizer (tier_operations.TIER_ACTOR); the tier a
+# memory moved from is the tier on its previous revision. NULL when that revision was never stored.
+_MOVES_CTE = """
+WITH revs AS (
+    SELECT memory_uuid, tier, lifecycle_score, created_at, changed_by,
+           LAG(tier) OVER w AS prev_tier,
+           LAG(lifecycle_score) OVER w AS prev_score
+    FROM memory_revisions
+    WINDOW w AS (PARTITION BY memory_uuid ORDER BY version, created_at)
+), moves AS (
+    SELECT memory_uuid, prev_tier, tier, prev_score, lifecycle_score, created_at,
+           CASE WHEN prev_tier IS NULL THEN 'tier_move'
+                WHEN tier < prev_tier THEN 'promotion'
+                ELSE 'demotion' END AS change_type
+    FROM revs
+    WHERE (changed_by = :actor OR changed_by LIKE :actor_via)
+      AND created_at >= :cutoff
+      AND prev_tier IS DISTINCT FROM tier
+)
+"""
+
 _TIER_CHANGES_SQL = (
-    "SELECT change_type, COUNT(*) as cnt, MAX(created_at) as latest "
-    "FROM tier_change_log "
-    "WHERE created_at >= :cutoff "
-    "GROUP BY change_type"
+    _MOVES_CTE + "SELECT change_type, COUNT(*) AS cnt, MAX(created_at) AS latest FROM moves GROUP BY change_type"
 )
 
 _TIER_RECENT_SQL = (
-    "SELECT episode_uuid, old_tier, new_tier, change_type, "
-    "lifecycle_score_before, lifecycle_score_after, created_at "
-    "FROM tier_change_log "
-    "WHERE created_at >= :cutoff "
-    "ORDER BY created_at DESC LIMIT 20"
+    _MOVES_CTE + "SELECT memory_uuid, prev_tier, tier, prev_score, lifecycle_score, change_type, created_at "
+    "FROM moves ORDER BY created_at DESC LIMIT 20"
 )
+
+
+def _tier_name(tier: int | None) -> str | None:
+    return None if tier is None else TIER_NAMES.get(tier, str(tier))
 
 
 async def get_tier_changes_summary(
     days: int = 30,
     lookback_delta: timedelta | None = None,
 ) -> dict[str, object]:
-    """Get tier change activity from tier_change_log."""
+    """Tier moves in the window, read from the optimizer's memory revisions.
+
+    ``old_tier`` is None when the revision before the move was never stored, so the card
+    can say the source tier is unknown rather than guess.
+    """
     cutoff = datetime.now(UTC) - (lookback_delta or timedelta(days=days))
-    params = {"cutoff": cutoff}
+    params = {"cutoff": cutoff, "actor": TIER_ACTOR, "actor_via": f"{TIER_ACTOR} via %"}
     async with async_session() as session:
         summary_rows = (await session.execute(text(_TIER_CHANGES_SQL), params)).all()
         recent_rows = (await session.execute(text(_TIER_RECENT_SQL), params)).all()
@@ -115,12 +139,12 @@ async def get_tier_changes_summary(
     }
     recent = [
         {
-            "episode_uuid": r.episode_uuid,
-            "old_tier": r.old_tier,
-            "new_tier": r.new_tier,
+            "episode_uuid": r.memory_uuid,
+            "old_tier": _tier_name(r.prev_tier),
+            "new_tier": _tier_name(r.tier),
             "change_type": r.change_type,
-            "lifecycle_score_before": r.lifecycle_score_before,
-            "lifecycle_score_after": r.lifecycle_score_after,
+            "lifecycle_score_before": r.prev_score,
+            "lifecycle_score_after": r.lifecycle_score,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in recent_rows

@@ -14,7 +14,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -524,3 +524,24 @@ async def test_revision_writer_resolves_through_the_context_delivery(pg_db: Asyn
         "agent", "aico-widget-lane", "claude_code", "implementation", "agent-hub", True)
     assert (coordinator.harness, coordinator.work_role, coordinator.coordinator) == ("claude_code", "coordinator", True)
     assert (owner.kind, owner.harness, owner.resolved) == ("owner", None, False)
+
+
+async def test_tier_changes_card_reads_optimizer_revisions(pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.memory import _analytics_top
+    from app.services.memory.tier_operations import TIER_ACTOR
+
+    repo = MemoryRepository()
+    memory = await repo.create(
+        content="**Tier card**: demoted by the optimizer.", memory_type="reference", scope="global",
+        source="human", tier=2, embedding=VECTOR, db=pg_db,
+    )
+    await repo.update(memory.id, db=pg_db, tier=3, changed_by=TIER_ACTOR, change_reason="lifecycle 0.1")
+    await repo.update(memory.id, db=pg_db, summary="owner edit, tier unchanged", changed_by="owner")
+    _use_session(monkeypatch, "app.services.memory._analytics_top", pg_db)
+
+    summary = cast(Any, await _analytics_top.get_tier_changes_summary(days=1))
+
+    assert summary["total"] == 1
+    assert summary["by_type"].keys() == {"demotion"}
+    (move,) = summary["recent"]
+    assert (move["episode_uuid"], move["old_tier"], move["new_tier"]) == (str(memory.id), "guardrail", "reference")
