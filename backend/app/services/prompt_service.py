@@ -346,12 +346,14 @@ async def restore_prompt_revision(
     expected_revision_id: str | None = None,
     changed_by: str | None = None,
     change_reason: str | None = None,
+    commit: bool = True,
 ) -> Prompt | None:
     """Restore a prompt to a previous revision (recreating a deleted one) and record the restore.
 
     The prompt row is locked for the change. ``expected_revision_id`` is the latest
     revision the caller saw; a newer one raises ``PromptRevisionConflictError`` and
     nothing changes. Agent assignments removed by a delete are not recreated.
+    ``commit=False`` leaves the transaction (and the lock) to the caller.
     """
     revision = await get_prompt_revision(db, slug, revision_id)
     if not revision:
@@ -408,8 +410,9 @@ async def restore_prompt_revision(
         changed_by=changed_by,
         change_reason=change_reason or f"Restored revision {revision.id}",
     )
-    await db.commit()
-    await db.refresh(prompt)
+    if commit:
+        await db.commit()
+        await db.refresh(prompt)
     await db.refresh(prompt, attribute_names=["owner_agent"])  # the API's agent cache invalidation reads it
     return prompt
 

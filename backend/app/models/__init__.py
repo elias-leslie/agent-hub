@@ -23,6 +23,7 @@ from .automation import (
 from .base import Base
 from .client import APIKey, Client
 from .config import Credential
+from .context_change_review import ContextChangeReview
 from .context_governance import (
     ContextJudgment,
     ContextMaintenanceAttention,
@@ -88,6 +89,7 @@ __all__ = [
     "Base",
     "Client",
     "CompactnessPolicy",
+    "ContextChangeReview",
     "ContextDelivery",
     "ContextJudgment",
     "ContextMaintenanceAttention",

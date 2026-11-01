@@ -437,7 +437,16 @@ async def replace_runtime_context_overrides(
     project_id: str | None,
     overrides: list[RuntimeContextOverridePayload],
 ) -> list[RuntimeContextOverrideResponse]:
+    from app.services.context_governance import (
+        changed_placement_source_ids,
+        placement_snapshot,
+        record,
+    )
+
     await lock_placement_layer(db, consumer_profile, project_id)
+    layer = CanonicalContextDeliveryRequest(
+        consumer_surface="runtime_context_overrides", consumer_profile=consumer_profile, project_id=project_id)
+    before_placements = await placement_snapshot(db, layer)
     overrides = await _filter_live_override_items(db, overrides)
     previous = await _load_override_rows(
         db, consumer_profile=consumer_profile, project_id=project_id, include_inherited=False
@@ -471,6 +480,15 @@ async def replace_runtime_context_overrides(
         db, consumer_profile=consumer_profile, project_id=project_id, before=before,
         after=[item.model_dump() for item in overrides], changed_by=current_request_actor(),
     )
+    await db.flush()
+    after_placements = await placement_snapshot(db, layer)
+    if after_placements != before_placements:
+        # The same change record as a context draft, so the placement change is in history and the review queue.
+        await record(db, "change", current_request_actor() or "api", {
+            "reason": "Placement overrides replaced", "changes": [], "context": layer.model_dump(mode="json"),
+            "placement_source_ids": changed_placement_source_ids(before_placements, after_placements),
+            "before_placements": before_placements, "after_placements": after_placements,
+        })
     await db.commit()
     for row in rows:
         await db.refresh(row)
