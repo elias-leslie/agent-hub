@@ -196,7 +196,7 @@ The host runs `prepare-clean-snapshot`, then `st vm snapshot` takes the snapshot
   (`virtiofs0`, PVE directory mapping `neri-hunters-codex`, host path
   `/srv/neri-hunters-codex-home` on davion-gem; guest `/etc/fstab`). Snapshots
   and rollbacks never touch it, so the Codex sign-in and its refreshes survive
-  `st vm rollback 201 clean`. Under the mount, `~/.codex` on the VM disk is an
+  `st vm rollback 201 clean-p2a-20261101` (the current clean snapshot, 2026-11-01; the older `clean` is kept). Under the mount, `~/.codex` on the VM disk is an
   empty root-owned mode-000 immutable (`chattr +i`) directory, so without the
   share Codex fails ("Permission denied") instead of using the snapshot disk;
   the VM's original on-disk Codex home is kept, unread, at
