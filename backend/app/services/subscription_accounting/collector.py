@@ -872,6 +872,7 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         await db.commit()
         await _backfill_context_once(db, cursors)
         await _capture_context_extra(db, result)
+        await _evaluate_context_alerts(db)
         return {"files_read": result.files_read, "bytes_read": result.bytes_read, "snapshots": len(snapshots),
                 "new_lots": len(new_lots), "calls": len(result.calls), "replay_pending": result.replay_pending}
 
@@ -941,6 +942,20 @@ async def _capture_context_extra(db: AsyncSession, result: PassResult) -> None:
     except Exception:
         await db.rollback()
         logger.warning("context observability pass failed", exc_info=True)
+
+
+async def _evaluate_context_alerts(db: AsyncSession) -> None:
+    """Nightshift items for the context review queue and budgets. Own commit; never fails the pass."""
+    from app.services.context_observability import alerts
+
+    try:
+        done = await alerts.evaluate(db)
+        await db.commit()
+        if any(v != "quiet" for v in done.values()):
+            logger.info("context alerts: %s", {k: v for k, v in done.items() if v != "quiet"})
+    except Exception:
+        await db.rollback()
+        logger.warning("context alerts failed", exc_info=True)
 
 
 async def _persist(

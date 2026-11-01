@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,3 +50,44 @@ class ContextDelivery(Base):
         Index("ix_context_deliveries_surface_generated", "surface", "generated_at"),
         Index("ix_context_deliveries_payload_hash", "payload_hash"),
     )
+
+
+class ContextBudget(Base):
+    """Warn level for a harness x role cell's median first-turn tokens; policy data the owner edits.
+
+    One row per (harness or '*', role or '*'); role is a Cost-matrix cell (a launch-table job, 'blank',
+    'subagent:<type>', 'unknown'). The most specific row wins: exact, then harness, then role, then ('*', '*').
+    jump_pct is the one global step threshold and lives only on the ('*', '*') row.
+    """
+
+    __tablename__ = "context_budgets"
+
+    harness: Mapped[str] = mapped_column(String(20), primary_key=True)
+    role: Mapped[str] = mapped_column(String(80), primary_key=True)
+    warn_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    jump_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("jump_pct IS NULL OR (harness = '*' AND role = '*')", name="ck_context_budgets_jump_global"),
+        CheckConstraint("warn_tokens > 0", name="ck_context_budgets_warn_positive"),
+    )
+
+
+class ContextKnob(Base):
+    """A config file of ours that changes what a harness loads (for example Tether's lane-tools.json).
+
+    A step in a cell's first turn that comes with a config fingerprint change is named after the knob files that
+    changed in git just before it. harness/role '*' match every harness or cell. repo_path is the git checkout
+    holding file_path (relative to it).
+    """
+
+    __tablename__ = "context_knobs"
+
+    name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    harness: Mapped[str] = mapped_column(String(20), nullable=False, server_default="*")
+    role: Mapped[str] = mapped_column(String(80), nullable=False, server_default="*")
+    repo_path: Mapped[str] = mapped_column(Text, nullable=False)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)

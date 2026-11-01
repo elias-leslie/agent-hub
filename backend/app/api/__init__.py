@@ -11,6 +11,7 @@ from app.api.auth import router as auth_router
 from app.api.automations import router as automations_router
 from app.api.complete import router as complete_router
 from app.api.context_changes import router as context_changes_router
+from app.api.context_observability import router as context_observability_router
 from app.api.cost_ingest import router as cost_ingest_router
 from app.api.credentials import router as credentials_router
 from app.api.dashboard_stats import router as dashboard_stats_router
@@ -85,6 +86,7 @@ router.include_router(project_permissions_router)  # Has its own prefix /project
 router.include_router(project_agent_context_router)  # GET /projects/{id}/agent-context (read-only)
 router.include_router(runtime_context_router)
 router.include_router(context_changes_router)  # /context-observability/changes
+router.include_router(context_observability_router)  # /context-observability/why, steps, markers, budgets
 router.include_router(session_ingestion_router)
 router.include_router(tasks_router)
 router.include_router(workflow_runs_router)  # Has its own prefix /workflow-runs

@@ -20,6 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import UsageSession
 
 
+def cell_label(launch_mode: str, role: str | None) -> str:
+    """Role column of the Cost matrix: launch-table job, launch mode, or unknown."""
+    if launch_mode == "blank" or launch_mode.startswith(("subagent:", "agent:")):
+        return launch_mode
+    if launch_mode == "exec" and role == "coordinator":
+        return "exec:coordinator"  # headless `codex exec` coordinator runs are not the interactive coordinator
+    return role or "unknown"
+
+
 @dataclass(frozen=True)
 class FirstTurn:
     provider: str
@@ -41,12 +50,7 @@ class FirstTurn:
 
     @property
     def cell(self) -> str:
-        """Role column of the Cost matrix: launch-table job, launch mode, or unknown."""
-        if self.launch_mode == "blank" or self.launch_mode.startswith(("subagent:", "agent:")):
-            return self.launch_mode
-        if self.launch_mode == "exec" and self.role == "coordinator":
-            return "exec:coordinator"  # headless `codex exec` coordinator runs are not the interactive coordinator
-        return self.role or "unknown"
+        return cell_label(self.launch_mode, self.role)
 
 
 def _tokens(parts: dict[str, Any], name: str) -> int | None:
