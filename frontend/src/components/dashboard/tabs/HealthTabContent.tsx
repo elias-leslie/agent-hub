@@ -1,6 +1,7 @@
 'use client'
 
 import { Layers, Shield } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { getProviderInfo } from '@/components/settings/constants'
 import type { DashboardStatsResponse } from '@/lib/api'
@@ -153,12 +154,21 @@ export function HealthTabContent({
       </div>
 
       {/* Memory injection: selected references and passive reference-index
-          entries are separate counts by policy. */}
+          entries are separate counts by policy. These rows come from Agent Hub's
+          own agent calls only; every harness's startup context is on /context. */}
       <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/50">
-        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-          <Layers className="h-3 w-3" />
-          Memory Injection
-        </h4>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <Layers className="h-3 w-3" />
+            Memory Injection · Agent Hub agents
+          </h4>
+          <Link
+            href="/context"
+            className="text-xs text-amber-300 underline focus-ring-amber"
+          >
+            All harnesses: Context
+          </Link>
+        </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
           <MemoryCount
             label="Injections"

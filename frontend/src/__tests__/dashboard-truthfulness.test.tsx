@@ -106,6 +106,13 @@ describe('HealthTabContent truthfulness', () => {
     expect(screen.getByText('Selected refs')).toBeInTheDocument()
     expect(screen.getByText('Passive index refs')).toBeInTheDocument()
     expect(screen.getByText('9')).toBeInTheDocument()
+    // Injection rows cover Agent Hub's own agents; all harnesses are on Context.
+    expect(
+      screen.getByText('Memory Injection · Agent Hub agents'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'All harnesses: Context' }),
+    ).toHaveAttribute('href', '/context')
     await waitFor(() => {
       expect(screen.getByText('Calls 24h')).toBeInTheDocument()
     })

@@ -28,7 +28,6 @@ from app.services.context_policy import (
     source_policy,
     source_revision,
 )
-from app.services.global_context_notes import queue_exclusion_notes
 from app.services.memory.applicability import (
     applicability_has_exclusions,
     applicability_has_targets,
@@ -448,11 +447,6 @@ async def replace_runtime_context_overrides(
         consumer_surface="runtime_context_overrides", consumer_profile=consumer_profile, project_id=project_id)
     before_placements = await placement_snapshot(db, layer)
     overrides = await _filter_live_override_items(db, overrides)
-    previous = await _load_override_rows(
-        db, consumer_profile=consumer_profile, project_id=project_id, include_inherited=False
-    )
-    before = [{"source_type": r.source_type, "source_id": r.source_id, "mode": r.mode, "enabled": r.enabled}
-              for r in previous]
     await db.execute(
         delete(RuntimeContextOverride).where(
             RuntimeContextOverride.consumer_profile == consumer_profile,
@@ -476,10 +470,6 @@ async def replace_runtime_context_overrides(
         )
         db.add(row)
         rows.append(row)
-    await queue_exclusion_notes(
-        db, consumer_profile=consumer_profile, project_id=project_id, before=before,
-        after=[item.model_dump() for item in overrides], changed_by=current_request_actor(),
-    )
     await db.flush()
     after_placements = await placement_snapshot(db, layer)
     if after_placements != before_placements:

@@ -104,19 +104,24 @@ describe('efficiency charts and accounting contracts', () => {
     expect(
       screen.getAllByText(/capped or redacted summary/).length,
     ).toBeGreaterThan(0)
-    for (const [button, name, field, value] of [
-      ['Projects', 'project/one', 'project', 'project/one'],
-      ['Work roles', 'Implementation', 'work_role', 'implementation'],
-      ['Harnesses', 'Codex CLI', 'harness', 'codex_cli'],
-    ]) {
-      fireEvent.click(screen.getByRole('button', { name: button }))
-      const href = screen.getByRole('link', { name }).getAttribute('href') ?? ''
-      const params = new URL(href, 'https://example.test').searchParams
-      expect(params.get(field)).toBe(value)
-      expect(params.get('sort')).toBe('admin_share')
-      for (const [key, expected] of scope)
-        expect(params.get(key)).toBe(expected)
-    }
+    const href =
+      screen.getByRole('link', { name: 'project/one' }).getAttribute('href') ??
+      ''
+    const params = new URL(href, 'https://example.test').searchParams
+    expect(params.get('project')).toBe('project/one')
+    expect(params.get('sort')).toBe('admin_share')
+    for (const [key, expected] of scope) expect(params.get(key)).toBe(expected)
+    // Harness and role comparisons moved to the Context page.
+    expect(
+      screen.queryByRole('button', { name: 'Work roles' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Harnesses' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Codex CLI')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Context by harness and role' }),
+    ).toHaveAttribute('href', '/context')
     fireEvent.click(screen.getByText('Coverage and recorded usage'))
     expect(screen.getByText(/API-equivalent value/)).toHaveTextContent(
       '$0.00 (2/4 calls priced). Cash cost: Unavailable (0/4 calls)',

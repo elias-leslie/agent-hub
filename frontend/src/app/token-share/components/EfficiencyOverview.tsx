@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 import { Cell, Pie, PieChart } from 'recharts'
 import {
   type ActivityComparison,
@@ -18,9 +17,6 @@ export function EfficiencyOverview({
   activity: ActivityCost
   scope: URLSearchParams
 }) {
-  const [comparison, setComparison] = useState<
-    'projects' | 'roles' | 'harnesses'
-  >('projects')
   const split = activity.context_split
   if (!split)
     return (
@@ -28,19 +24,14 @@ export function EfficiencyOverview({
         Admin/Other comparisons are unavailable from this server.
       </p>
     )
-  const groups =
-    comparison === 'projects'
-      ? activity.by_project
-      : comparison === 'roles'
-        ? activity.by_work_role
-        : activity.by_harness
-  const link = (row: ActivityComparison) => {
+  // Startup context per harness and role lives on the Context page; this view
+  // compares tool output by project only.
+  const groups = activity.by_project
+  const link = (row: ActivityComparison & { project_id: string }) => {
     const params = new URLSearchParams(scope)
     params.set('sort', 'admin_share')
     params.delete('sel')
-    if ('project_id' in row) params.set('project', String(row.project_id))
-    if ('work_role_id' in row) params.set('work_role', String(row.work_role_id))
-    if ('harness_id' in row) params.set('harness', String(row.harness_id))
+    params.set('project', String(row.project_id))
     return activitySessionsHref(undefined, undefined, params)
   }
   return (
@@ -68,7 +59,7 @@ export function EfficiencyOverview({
         ) : null}
         <div className="min-w-0 flex-1 space-y-2">
           <h3 className="text-sm font-semibold text-slate-100">
-            Estimated tool context
+            Estimated tool output
           </h3>
           <dl className="flex flex-wrap gap-x-8 gap-y-3">
             <div>
@@ -105,39 +96,30 @@ export function EfficiencyOverview({
               : ''}
             . Provider usage: {activity.tokens.denominator.toLocaleString()}{' '}
             recorded tokens; {activity.missing_usage_sessions} sessions without
-            usage. Missing or truncated output has unknown size. Resident
-            context is unavailable in this view.
+            usage. Missing or truncated output has unknown size. Startup context
+            per harness and role is on{' '}
+            <Link
+              href="/context"
+              className="text-amber-300 underline focus-ring-amber"
+            >
+              Context
+            </Link>
+            .
           </p>
           {split.denominator_tokens_estimate === 0 && (
             <p className="section-copy">
-              No retained tool text. Context shares are unavailable.
+              No retained tool text. Tool output shares are unavailable.
             </p>
           )}
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-100">
-          Compare estimated tool context
+          Estimated tool output by project
         </h3>
-        <div className="flex flex-wrap gap-1" aria-label="Comparison groups">
-          {(
-            [
-              ['projects', 'Projects'],
-              ['roles', 'Work roles'],
-              ['harnesses', 'Harnesses'],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={comparison === value}
-              onClick={() => setComparison(value)}
-              className={`rounded-md border px-3 py-1.5 text-xs focus-ring-amber ${comparison === value ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : 'border-slate-700 text-slate-300'}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Link href="/context" className="button-secondary">
+          Context by harness and role
+        </Link>
       </div>
       <p className="section-copy">
         Shares use each group’s total estimated tool tokens, weighted by text
@@ -156,13 +138,7 @@ export function EfficiencyOverview({
         <div className="grid gap-3 lg:grid-cols-2">
           {groups.map((row) => (
             <ComparisonRow
-              key={
-                'project_id' in row
-                  ? String(row.project_id)
-                  : 'work_role_id' in row
-                    ? String(row.work_role_id)
-                    : String(row.harness_id)
-              }
+              key={String(row.project_id)}
               row={row}
               href={link(row)}
             />
@@ -191,7 +167,7 @@ function ComparisonRow({
   if (!split)
     return (
       <p className="section-copy">
-        {row.label}: estimated tool context unavailable.
+        {row.label}: estimated tool output unavailable.
       </p>
     )
   return (

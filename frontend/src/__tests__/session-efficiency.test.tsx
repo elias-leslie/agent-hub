@@ -22,14 +22,14 @@ describe('session efficiency review', () => {
     const activity = data()
     render(<SessionEfficiency activity={activity} />)
     expect(
-      screen.getByText(/ranked by estimated admin tool-context tokens/),
+      screen.getByText(/ranked by estimated admin tool-output tokens/),
     ).toHaveTextContent('Showing 4 of 4 sessions')
     expect(
       screen.getByText(
-        /project · admin · Estimated tool context: Admin 68.1% · Other 31.9% · 94 est. tokens/,
+        /project · admin · Estimated tool output: Admin 68.1% · Other 31.9% · 94 est. tokens/,
       ),
     ).toBeInTheDocument()
-    const summary = screen.getByText(/project · admin · Estimated tool context/)
+    const summary = screen.getByText(/project · admin · Estimated tool output/)
     fireEvent.click(summary)
     expect(summary.closest('details')).toHaveAttribute('open')
     expect(screen.getByText('st.context: 2 calls · 10s')).toBeInTheDocument()

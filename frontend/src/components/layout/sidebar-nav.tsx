@@ -59,10 +59,28 @@ const NAV_ENTRIES: NavEntry[] = [
     description: 'Agent spend & plans',
   },
   {
-    href: '/context',
+    id: 'context',
     label: 'Context',
-    icon: Layers,
-    description: 'Tokens per harness & role',
+    items: [
+      {
+        href: '/context',
+        label: 'Cost & changes',
+        icon: Layers,
+        description: 'Tokens per harness & role',
+      },
+      {
+        href: '/runtime-context',
+        label: 'Agent context',
+        icon: BrainCircuit,
+        description: 'Instructions and memories for agents',
+      },
+      {
+        href: '/token-share',
+        label: 'Token share',
+        icon: Activity,
+        description: 'Admin vs other work',
+      },
+    ],
   },
   {
     href: '/automations',
@@ -116,19 +134,7 @@ const NAV_ENTRIES: NavEntry[] = [
         icon: Brain,
         description: 'Semantic store',
       },
-      {
-        href: '/runtime-context',
-        label: 'Agent context',
-        icon: BrainCircuit,
-        description: 'Instructions and memories for agents',
-      },
     ],
-  },
-  {
-    href: '/token-share',
-    label: 'Token share',
-    icon: Activity,
-    description: 'Admin vs other work',
   },
   {
     href: '/access-control',

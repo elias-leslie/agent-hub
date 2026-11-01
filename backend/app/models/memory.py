@@ -25,6 +25,8 @@ class MemoryInjectionMetric(Base):
 
     Tracks injection latency, counts per block, variant assignment,
     and citation tracking for optimizing JIT context injection.
+    Covers Agent Hub's own agent calls only; startup context for every harness
+    and role is in context_deliveries and usage_sessions (/context).
     """
 
     __tablename__ = "memory_injection_metrics"

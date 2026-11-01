@@ -253,7 +253,7 @@ describe('SessionsPage', () => {
     expect(screen.getByText('Admin share')).toBeInTheDocument()
     // Its detail lives in the expanded session.
     fireEvent.click(rows[1])
-    const facts = await screen.findByText('admin tool context')
+    const facts = await screen.findByText('admin tool output')
     expect(facts.parentElement).toHaveTextContent('100.0% of 10 est. tokens')
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
     await waitFor(() =>

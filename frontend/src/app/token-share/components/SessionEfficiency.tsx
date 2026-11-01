@@ -74,7 +74,7 @@ export function SessionEfficiency({
       </p>
       <p className="section-copy">
         Showing {data.rows.length} of {data.sessions_total} sessions, ranked by
-        estimated admin tool-context tokens. Compare equal windows with the same
+        estimated admin tool-output tokens. Compare equal windows with the same
         project, provider, model and method; check coverage before calling a
         change a regression.
       </p>
@@ -87,7 +87,7 @@ export function SessionEfficiency({
           className="rounded-lg border border-slate-800 bg-slate-950/60 p-3"
         >
           <summary className="cursor-pointer text-sm text-slate-100 focus-ring-amber break-words">
-            {row.project_id} · {row.session_id} · Estimated tool context: Admin{' '}
+            {row.project_id} · {row.session_id} · Estimated tool output: Admin{' '}
             {percent(row.context_split?.admin_share ?? null)} · Other{' '}
             {percent(row.context_split?.other_share ?? null)} ·{' '}
             {row.context_split?.denominator_tokens_estimate.toLocaleString() ??

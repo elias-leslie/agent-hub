@@ -142,7 +142,6 @@ class TestFindAndConsolidateRedundant:
 
         with (
             patch("app.services.memory.redundancy.find_redundant_pairs", new_callable=AsyncMock, return_value=[mock_pair]),
-            patch("app.services.memory.redundancy.log_tier_change", new_callable=AsyncMock),
             patch("app.services.memory.redundancy._consolidate_pair", new_callable=AsyncMock) as mock_consolidate,
         ):
             result = await find_and_consolidate_redundant()
@@ -170,7 +169,6 @@ class TestFindAndConsolidateRedundant:
 
         with (
             patch("app.services.memory.redundancy.find_redundant_pairs", new_callable=AsyncMock, return_value=[mock_pair]),
-            patch("app.services.memory.redundancy.log_tier_change", new_callable=AsyncMock),
             patch("app.services.memory.redundancy._consolidate_pair", new_callable=AsyncMock) as mock_consolidate,
         ):
             result = await find_and_consolidate_redundant()

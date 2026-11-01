@@ -321,10 +321,10 @@ export function SessionsToolbar({
             <option value="last_active">Last active</option>
             <option value="status">Status</option>
             <option value="admin_share">
-              Admin context share · highest first
+              Admin tool output share · highest first
             </option>
             <option value="admin_tokens">
-              Admin context tokens · most first
+              Admin tool output tokens · most first
             </option>
             <option value="admin_duration">
               Admin tool time · longest first

@@ -555,6 +555,9 @@ describe('Agent context', () => {
       await screen.findByRole('button', { name: 'Security Research' }),
     )
     fireEvent.click(screen.getByText('History'))
+    expect(
+      screen.getByRole('link', { name: 'Context changes' }),
+    ).toHaveAttribute('href', '/context/changes')
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
     await waitFor(() =>
       expect(callsTo('/changes/change-1/undo')).toHaveLength(1),

@@ -107,10 +107,10 @@ def is_admin_client(client: dict[str, Any]) -> bool:
     the caller's X-Client-Id header once the shared internal secret matches, so any
     holder of that secret can name an admin client: the secret is the boundary.
     This list only keeps honest callers to their lane. The dashboard's context
-    editor (/api/runtime-context/manage/save) changes scope without it. Changes to
-    global prompts and global mandate memories, including moves into or out of
-    global and exclusions, are reported to the owner instead
-    (app.services.global_context_notes).
+    editor (/api/runtime-context/manage/save) changes scope without it. Agent changes
+    to delivered prompts and memories, including scope moves and placement
+    exclusions, reach the owner through the context review queue instead
+    (app.services.context_changes).
     """
     granted = {settings.summitflow_client_id, *settings.agent_hub_admin_client_ids} - {""}
     return str(client.get("id") or "") in granted

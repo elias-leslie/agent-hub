@@ -15,11 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.request_actor import attribute, writer_columns
 from app.db import async_session
 from app.models.memory_unified import Memory, MemoryRevision
-from app.services.global_context_notes import (
-    GlobalContextNote,
-    flag_changes,
-    queue_global_context_note,
-)
 
 from .budget import count_tokens
 from .embedder import get_embedder
@@ -31,18 +26,6 @@ logger = logging.getLogger(__name__)
 # a hard-deleted memory is recreated with them (``memory_created_at`` -> ``created_at``).
 _ROW_STATE = ("sensitivity_tier", "review_status", "loaded_count", "referenced_count",
               "helpful_count", "harmful_count", "lifecycle_score")
-
-
-def _delivery_switches(row: Memory | MemoryRevision) -> dict[str, object]:
-    """Everything that decides who receives a memory, when and in what form."""
-    return {
-        "scope": row.scope, "tier": row.tier, "status": row.status,
-        "applicability": dict(row.applicability or {}),
-        "trigger_task_types": list(row.trigger_task_types or []),
-        "trigger_phases": list(row.trigger_phases or []),
-        "render_mode": row.render_mode,
-        "disclosure": (row.metadata_ or {}).get("disclosure"),
-    }
 
 
 class RevisionRepository:
@@ -64,17 +47,12 @@ class RevisionRepository:
     ) -> MemoryRevision:
         """Persist an immutable snapshot for one memory state.
 
-        A change to a global-scope mandate (or one that stops being one) queues
-        one Nightshift note with the diff against the previous revision,
-        including changes to who receives it, when and in what form.
+        Agent changes to delivered memories reach the owner through the context
+        review queue (/context/changes), which reads these revisions.
 
         A delete revision takes the next version: a delete is a change, so a caller
         who saw the live memory at version N conflicts with it on restore.
         """
-        previous = (await db.execute(
-            select(MemoryRevision).where(MemoryRevision.memory_id == memory.id)
-            .order_by(MemoryRevision.version.desc(), MemoryRevision.created_at.desc()).limit(1)
-        )).scalar_one_or_none()
         revision = MemoryRevision(
             memory_id=memory.id,
             memory_uuid=str(memory.id),
@@ -114,15 +92,6 @@ class RevisionRepository:
         )
         db.add(revision)
         await db.flush()
-        was_global_mandate = previous is not None and previous.scope == "global" and previous.tier == 1
-        if (memory.scope == "global" and memory.tier == 1) or was_global_mandate:
-            queue_global_context_note(db, GlobalContextNote(
-                kind="Global mandate memory", name=f"{memory.summary or memory.name} ({str(memory.id)[:8]})", action=action,
-                changed_by=revision.changed_by,
-                before=previous.content if previous is not None else None,
-                after=None if action == "delete" else memory.content, reason=change_reason,
-                flags=flag_changes(None if previous is None else _delivery_switches(previous), _delivery_switches(memory)),
-            ))
         return revision
 
     async def list_revisions(

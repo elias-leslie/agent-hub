@@ -8,19 +8,37 @@ const AGENT_SECTION_LINKS = [
   ['Models', '/models'],
   ['Prompts', '/prompts'],
   ['Memory', '/memory'],
+] as const
+
+// Context cost, the context editor and token share live in one Context section.
+const CONTEXT_SECTION_LINKS = [
+  ['Cost & changes', '/context'],
   ['Agent context', '/runtime-context'],
+  ['Token share', '/token-share'],
 ] as const
 
 function agentsGroup() {
   return screen.getByRole('group', { name: 'Agents' })
 }
 
+function contextGroup() {
+  return screen.getByRole('group', { name: 'Context' })
+}
+
 describe('SidebarNav', () => {
   it('groups the agent pages under one Agents section', () => {
     render(<SidebarNav isCollapsed={false} pathname="/dashboard" />)
 
+    const context = contextGroup()
     expect(
-      screen.getByRole('link', { name: 'Token share Admin vs other work' }),
+      within(context)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(CONTEXT_SECTION_LINKS.map(([, href]) => href))
+    expect(
+      within(context).getByRole('link', {
+        name: 'Token share Admin vs other work',
+      }),
     ).toHaveAttribute('href', '/token-share')
     const group = agentsGroup()
     const links = within(group).getAllByRole('link')
@@ -36,6 +54,8 @@ describe('SidebarNav', () => {
     for (const href of [
       '/chat',
       '/dashboard',
+      '/context',
+      '/runtime-context',
       '/token-share',
       '/access-control',
     ]) {
@@ -49,6 +69,7 @@ describe('SidebarNav', () => {
 
   it.each([
     ['/token-share', '/token-share'],
+    ['/context/changes', '/context'],
     ['/agents/assistant', '/agents'],
     ['/memory', '/memory'],
     ['/runtime-context', '/runtime-context'],
@@ -77,7 +98,7 @@ describe('SidebarNav', () => {
     expect(memory).toHaveAttribute('title', 'Memory')
     expect(memory).toHaveAttribute('data-active', 'true')
     expect(
-      within(group).getByRole('link', { name: 'Agent context' }),
+      within(contextGroup()).getByRole('link', { name: 'Agent context' }),
     ).toHaveAttribute('href', '/runtime-context')
     expect(screen.queryByText('Semantic store')).not.toBeInTheDocument()
   })

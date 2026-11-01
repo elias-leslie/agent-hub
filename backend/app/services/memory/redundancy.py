@@ -2,7 +2,7 @@
 
 Thresholds:
   >= 0.97 similarity: Auto-consolidate (merge stats, subordinate archived)
-  0.92-0.97: Log suggestion to tier_change_log, no auto-action
+  0.92-0.97: Suggestion in the run result and log, no auto-action
   < 0.92: Not redundant
 
 Rules:
@@ -24,7 +24,6 @@ from app.models.memory_unified import Memory
 
 from ._repo_helpers import TIER_REVERSE
 from ._repo_revisions import RevisionRepository
-from .tier_operations import log_tier_change
 
 logger = logging.getLogger(__name__)
 
@@ -148,21 +147,9 @@ async def find_and_consolidate_redundant() -> dict[str, Any]:
                 "similarity": pair["similarity"],
             })
         else:
-            # Log suggestion
-            reason = f"redundancy_suggestion: similarity={pair['similarity']:.4f}"
-            if either_pinned:
-                reason += " (pinned — no auto-action)"
-            await log_tier_change(
-                pair["id_a"],
-                pair["tier_a"],
-                pair["tier_a"],  # no change
-                reason,
-                "suggestion",
-                metadata={
-                    "pair_id": pair["id_b"],
-                    "similarity": pair["similarity"],
-                },
-            )
+            # Suggestion only: reported in the run result, nothing changes.
+            logger.info("Redundancy suggestion %s ~ %s similarity=%.4f%s", pair["id_a"][:8], pair["id_b"][:8],
+                        pair["similarity"], " (pinned, no auto-action)" if either_pinned else "")
             results["suggestions"] += 1
             results["details"].append({
                 "action": "suggestion",
@@ -220,15 +207,3 @@ async def _consolidate_pair(
         )
 
         await session.commit()
-
-    await log_tier_change(
-        subordinate_id,
-        pair.get("tier_b", "reference") if subordinate_id == pair["id_b"] else pair.get("tier_a", "reference"),
-        "archive",
-        f"consolidated: superseded by {survivor_id[:8]}, similarity={pair['similarity']:.4f}",
-        "consolidation",
-        metadata={
-            "survivor_id": survivor_id,
-            "similarity": pair["similarity"],
-        },
-    )

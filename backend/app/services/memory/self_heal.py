@@ -19,7 +19,7 @@ from app.db import async_session
 from app.models.memory_unified import Memory
 
 from .lifecycle_score import TIER_CONFIGS
-from .tier_operations import get_next_tier_up, log_tier_change, promote_episode
+from .tier_operations import get_next_tier_up, promote_episode
 
 logger = logging.getLogger(__name__)
 
@@ -85,14 +85,6 @@ async def find_and_apply_self_heals() -> dict[str, Any]:
 
         success = await promote_episode(str(mem.id), new_tier, reason)
         if success:
-            await log_tier_change(
-                str(mem.id),
-                "archive",
-                new_tier,
-                reason,
-                "self_heal",
-                lifecycle_score_before=mem.lifecycle_score,
-            )
             results["healed"] += 1
             results["details"].append({
                 "uuid": str(mem.id)[:8],

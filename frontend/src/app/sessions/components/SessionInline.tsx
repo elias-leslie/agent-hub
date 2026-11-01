@@ -164,7 +164,7 @@ function Facts({
       ) : null}
       {listRow && context ? (
         <Fact
-          label="admin tool context"
+          label="admin tool output"
           title={`${accountingWindowText(accountingWindow)} ${adminMetricTitle(listRow)}`}
         >
           {durationPercent(context.admin_share)} of{' '}

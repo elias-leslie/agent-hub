@@ -127,10 +127,9 @@ async def pg_engine() -> AsyncGenerator[AsyncEngine]:
 
 @pytest.fixture(autouse=True)
 def quiet(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
-    """No embedder, Nightshift or project registry calls; the embedder returns a fixed vector."""
+    """No embedder or project registry calls; the embedder returns a fixed vector."""
     embed = AsyncMock(return_value=VECTOR)
     monkeypatch.setattr("app.services.memory._repo_revisions.get_embedder", lambda: MagicMock(embed=embed))
-    monkeypatch.setattr("app.services.global_context_notes.send_note", AsyncMock())
     monkeypatch.setattr("app.services.context_changes.decisions.get_registered_project_roots",
                         AsyncMock(return_value=ROOTS), raising=False)
     return embed

@@ -355,7 +355,6 @@ async def test_consolidation_archives_the_duplicate_with_a_revision(
     pg_db.add_all([survivor, duplicate])
     await pg_db.flush()
     _use_session(monkeypatch, "app.services.memory.redundancy", pg_db)
-    monkeypatch.setattr(redundancy, "log_tier_change", AsyncMock())
 
     await redundancy._consolidate_pair(str(survivor.id), str(duplicate.id),
                                        {"similarity": 0.99, "id_b": str(duplicate.id), "tier_b": "reference"})

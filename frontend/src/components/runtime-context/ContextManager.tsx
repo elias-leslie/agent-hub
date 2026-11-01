@@ -6,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import Link from 'next/link'
 import { useState } from 'react'
 import { fetchAgents } from '@/lib/api/agents'
 import {
@@ -213,6 +214,10 @@ function History({
   return (
     <details onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>History</summary>
+      <p>
+        Edits saved here. Agent changes to this item are reviewed in{' '}
+        <Link href="/context/changes">Context changes</Link>.
+      </p>
       {history.isPending && open && <p>Loading changes…</p>}
       {history.error && <p role="alert">Could not load this item’s history.</p>}
       {!history.isPending && changes.length === 0 && <p>No changes yet.</p>}

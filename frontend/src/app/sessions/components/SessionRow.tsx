@@ -81,7 +81,7 @@ export function accountingWindowText(
 export function adminMetricTitle(session: SessionListItem): string {
   const accounting = session.activity_accounting
   const context = accounting?.context_split
-  if (!context) return 'Estimated tool context unavailable from this server.'
+  if (!context) return 'Estimated tool output unavailable from this server.'
   return `${contextTokens(context.admin_tokens_estimate)} admin / ${contextTokens(context.denominator_tokens_estimate)} added tool text. Unknown ${durationPercent(context.unknown_share)} included in Other. Retained text on ${context.tools_sampled - context.tools_missing_output}/${context.tools_sampled} calls. Excludes prose, system instructions, repeated context reads and compaction. Resident context is unavailable here; provider usage is cumulative. Retained text may be a capped or redacted summary and undercount model-seen output. Missing output has unknown size.${context.events_truncated ? ' Capped sample.' : ''}${accounting ? ` Tool time: ${durationSeconds(accounting.admin_seconds)} admin / ${durationSeconds(accounting.denominator_seconds)} recorded.` : ''}`
 }
 

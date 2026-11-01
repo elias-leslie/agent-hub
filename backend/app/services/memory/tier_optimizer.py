@@ -16,7 +16,6 @@ from .tier_operations import (
     demote_episode,
     get_next_tier_down,
     get_next_tier_up,
-    log_tier_change,
     promote_episode,
 )
 from .tier_queries import (
@@ -70,7 +69,6 @@ async def _apply_tier_changes(
     get_next_tier: _TierFn,
     apply_change: _ApplyFn,
     action: str,
-    log_action: str,
     count_key: str,
     results: _OptResult,
 ) -> None:
@@ -85,7 +83,6 @@ async def _apply_tier_changes(
             results["errors"] += 1
             continue
         lc = c.get("lifecycle_score")
-        await log_tier_change(uuid, tier, new_tier, reason, log_action, lifecycle_score_before=lc)
         results[count_key] += 1  # type: ignore[literal-required]
         results["details"].append({"uuid": uuid[:8], "action": action, "from": tier,
                                    "to": new_tier, "reason": reason, "lifecycle_score": lc})
@@ -116,7 +113,7 @@ async def optimize_tiers() -> _OptResult:
             min_age_days=MIN_AGE_DAYS, harmful_threshold=HARMFUL_COUNT_THRESHOLD,
             ghost_ratio_threshold=GHOST_RATIO_THRESHOLD,
         ),
-        get_next_tier_down, demote_episode, "demote", "demotion", "demotions", results,
+        get_next_tier_down, demote_episode, "demote", "demotions", results,
     )
 
     await _apply_tier_changes(
@@ -124,7 +121,7 @@ async def optimize_tiers() -> _OptResult:
             min_refs=MIN_REFS_FOR_PROMOTION, min_age_days=MIN_AGE_DAYS,
             helpful_threshold=HELPFUL_COUNT_THRESHOLD,
         ),
-        get_next_tier_up, promote_episode, "promote", "promotion", "promotions", results,
+        get_next_tier_up, promote_episode, "promote", "promotions", results,
     )
 
     try:
@@ -148,5 +145,5 @@ __all__ = [
     "HELPFUL_COUNT_THRESHOLD", "MIN_AGE_DAYS", "MIN_LOADS_FOR_DEMOTION", "MIN_REFS_FOR_PROMOTION",
     "TierCandidate", "calculate_ghost_ratio", "demote_episode",
     "find_demotion_candidates", "find_promotion_candidates", "get_next_tier_down",
-    "get_next_tier_up", "log_tier_change", "optimize_tiers", "promote_episode",
+    "get_next_tier_up", "optimize_tiers", "promote_episode",
 ]

@@ -47,7 +47,6 @@ class TestFindAndApplySelfHeals:
         with (
             patch("app.services.memory.self_heal.async_session", return_value=mock_session),
             patch("app.services.memory.self_heal.promote_episode", new_callable=AsyncMock, return_value=True) as mock_promote,
-            patch("app.services.memory.self_heal.log_tier_change", new_callable=AsyncMock),
         ):
             result = await find_and_apply_self_heals()
 
@@ -73,7 +72,6 @@ class TestFindAndApplySelfHeals:
         with (
             patch("app.services.memory.self_heal.async_session", return_value=mock_session),
             patch("app.services.memory.self_heal.promote_episode", new_callable=AsyncMock, return_value=True),
-            patch("app.services.memory.self_heal.log_tier_change", new_callable=AsyncMock),
         ):
             result = await find_and_apply_self_heals()
 
@@ -94,7 +92,6 @@ class TestFindAndApplySelfHeals:
         with (
             patch("app.services.memory.self_heal.async_session", return_value=mock_session),
             patch("app.services.memory.self_heal.promote_episode", new_callable=AsyncMock) as mock_promote,
-            patch("app.services.memory.self_heal.log_tier_change", new_callable=AsyncMock),
         ):
             result = await find_and_apply_self_heals()
 

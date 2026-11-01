@@ -64,7 +64,7 @@ class MemoryMetrics(BaseModel):
 
     total_injections: int = Field(..., description="Total memory injections")
     avg_latency_ms: float = Field(..., description="Average injection latency")
-    avg_tokens: float = Field(..., description="Average tokens injected")
+    avg_tokens: float = Field(..., description="Average memory tokens injected per Agent Hub agent call (all harnesses: /context)")
     total_mandates: int = Field(..., description="Total mandates injected")
     total_guardrails: int = Field(..., description="Total guardrails injected")
     total_references: int = Field(..., description="Total selected references injected")

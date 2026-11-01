@@ -14,13 +14,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.request_actor import attribute, writer_columns
 from app.models.prompt import AgentPrompt, Prompt, PromptRevision
-from app.services.context_policy import ContextPolicy
-from app.services.global_context_notes import (
-    GLOBAL_PROMPT_TYPES,
-    GlobalContextNote,
-    flag_changes,
-    queue_global_context_note,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -51,24 +44,6 @@ def _sync_owned_agent_system_prompt_mirror(prompt: Prompt) -> None:
         owner_agent.system_prompt = prompt.content
 
 
-def _reaches_every_agent(row: Prompt | PromptRevision) -> bool:
-    policy = row.context_policy
-    return bool(row.is_global or row.prompt_type in GLOBAL_PROMPT_TYPES
-                or (isinstance(policy, dict) and policy.get("scope") == "global"))
-
-
-def _delivery_switches(row: Prompt | PromptRevision) -> dict[str, object]:
-    """Everything that decides who receives a prompt and when, so a targeting or trigger edit is noted too."""
-    switches: dict[str, object] = {"enabled": row.enabled, "is_global": row.is_global,
-                                   "exclude_agents": list(row.exclude_agents or [])}
-    try:
-        policy = (ContextPolicy.model_validate(row.context_policy) if isinstance(row.context_policy, dict)
-                  else ContextPolicy(scope="global" if row.is_global else "unassigned"))
-    except ValueError:
-        return {**switches, "context_policy": row.context_policy}
-    return {**switches, **{f"policy {key}": value for key, value in policy.model_dump().items()}}
-
-
 async def record_prompt_revision(
     db: AsyncSession,
     prompt: Prompt,
@@ -79,14 +54,9 @@ async def record_prompt_revision(
 ) -> PromptRevision:
     """Persist an immutable revision snapshot for one prompt state.
 
-    A change to a global prompt (or one that stops being global) queues one
-    Nightshift note with the diff against the previous revision, including
-    changes to who receives it and when (targeting, triggers, workflows).
+    Agent changes to delivered prompts reach the owner through the context review
+    queue (/context/changes), which reads these revisions.
     """
-    previous = (await db.execute(
-        select(PromptRevision).where(PromptRevision.prompt_id == prompt.id)
-        .order_by(PromptRevision.created_at.desc()).limit(1)
-    )).scalar_one_or_none()
     revision = PromptRevision(
         prompt_id=prompt.id,
         prompt_slug=prompt.slug,
@@ -111,13 +81,6 @@ async def record_prompt_revision(
     )
     db.add(revision)
     await db.flush()
-    if _reaches_every_agent(prompt) or (previous is not None and _reaches_every_agent(previous)):
-        queue_global_context_note(db, GlobalContextNote(
-            kind="Global prompt", name=prompt.slug, action=action, changed_by=revision.changed_by,
-            before=previous.content if previous is not None else None,
-            after=None if action == "delete" else prompt.content, reason=change_reason,
-            flags=flag_changes(None if previous is None else _delivery_switches(previous), _delivery_switches(prompt)),
-        ))
     return revision
 
 

@@ -10,9 +10,12 @@ import pytest
 
 from app.services.memory._repo_helpers import TIER_MAP, TIER_REVERSE
 from app.services.memory.tier_operations import (
+    TIER_ACTOR,
     TIER_HIERARCHY,
+    demote_episode,
     get_next_tier_down,
     get_next_tier_up,
+    promote_episode,
 )
 
 
@@ -50,6 +53,22 @@ class TestTierHierarchy:
     def test_get_next_tier_up_mandate(self):
         """mandate is the top — no further promotion."""
         assert get_next_tier_up("mandate") is None
+
+
+class TestTierMovesAreRevisions:
+    """A tier move is a memory revision naming the optimizer and its reason (tier_change_log is no longer written)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("move", [demote_episode, promote_episode])
+    async def test_move_records_actor_and_reason(self, move, monkeypatch):
+        repo = MagicMock(update=AsyncMock(return_value=True))
+        monkeypatch.setattr("app.services.memory.tier_operations.get_memory_repository", lambda: repo)
+
+        assert await move("0b0e3c1a-0000-0000-0000-000000000000", "reference", "lifecycle 0.12") is True
+
+        kwargs = repo.update.await_args.kwargs
+        assert (kwargs["injection_tier"], kwargs["changed_by"], kwargs["change_reason"]) == (
+            "reference", TIER_ACTOR, "lifecycle 0.12")
 
 
 class TestTierMap:
