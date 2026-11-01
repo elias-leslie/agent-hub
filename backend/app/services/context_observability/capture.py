@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import UsageSession
 from app.utils.native_homes import claude_project_roots, codex_session_roots
 
-from . import first_turn
+from . import extra_capture, first_turn
 from .deliveries import find_delivery_by_hash, find_delivery_in_text, import_delivery_files
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,8 @@ async def backfill(
     heads = await asyncio.to_thread(_heads_since, since.timestamp(), until)
     heads = [h for h in heads if h.raw["first_at"] >= since]
     updated = await apply_first_turns(db, heads)
+    extra = await extra_capture.backfill_extra(db, since=since, until=until, now=now)
     return {
         "deliveries_imported": imported, "sessions_read": len(heads), "sessions_updated": updated,
-        "sessions_skipped": len(heads) - updated, "seconds": int(time.monotonic() - started),
+        "sessions_skipped": len(heads) - updated, **extra, "seconds": int(time.monotonic() - started),
     }

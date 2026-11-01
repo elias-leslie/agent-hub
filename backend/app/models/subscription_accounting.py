@@ -181,6 +181,9 @@ class UsageSession(Base):
     parts: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     delivery_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     config_fp: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Growth within the session, from usage_calls (services/context_observability/growth.py). NULL: no calls to read.
+    peak_context_tokens: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    compaction_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         Index(

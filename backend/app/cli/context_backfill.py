@@ -45,7 +45,11 @@ EXPECTED = (
     ("codex", "coordinator", "total", 22_300), ("codex", "lane (implementation)", "total", 22_100),
     ("codex", "review", "total", 20_600), ("codex", "hunter", "total", 23_100), ("codex", "blank", "total", 14_100),
     ("codex", "lane (implementation)", "harness", 16_700), ("codex", "lane (implementation)", "ours", 5_500),
+    # Pi 1.4.0 with deepseek-v4.1-flash. "other" is the delivery's work role "other".
+    ("pi", "coordinator", "total", 8_000), ("pi", "hunter", "total", 8_200), ("pi", "review", "total", 7_100),
+    ("pi", "other", "total", 8_000), ("pi", "no delivery (probes)", "total", 2_000),
 )
+PI_MODEL = "deepseek-v4.1-flash"
 
 
 def split_at_biggest_drop(rows: list[baseline.FirstTurn]) -> tuple[list[baseline.FirstTurn], list[baseline.FirstTurn]]:
@@ -65,6 +69,7 @@ def baseline_groups(rows: list[baseline.FirstTurn]) -> dict[tuple[str, str], lis
     """The DESIGN section 2 rows as filters over measured first turns."""
     claude = [r for r in rows if r.harness == "claude"]
     codex = [r for r in rows if r.harness == "codex"]
+    pi = [r for r in rows if r.harness == "pi" and r.model == PI_MODEL]
     lane_impl = [r for r in claude if _is_project(r) and r.role == "implementation"]
     blank_before, blank_after = split_at_biggest_drop([r for r in claude if r.launch_mode == "blank"])
     sub_rows = [r for r in claude if r.at >= SUBAGENT_SINCE]
@@ -86,6 +91,11 @@ def baseline_groups(rows: list[baseline.FirstTurn]) -> dict[tuple[str, str], lis
         ("codex", "review"): [r for r in codex if _is_project(r) and r.role == "review"],
         ("codex", "hunter"): [r for r in codex if _is_project(r) and r.role == "hunting"],
         ("codex", "blank"): [r for r in codex if r.launch_mode == "blank"],
+        ("pi", "coordinator"): [r for r in pi if r.delivery_id and r.role == "coordinator"],
+        ("pi", "hunter"): [r for r in pi if r.delivery_id and r.role == "hunting"],
+        ("pi", "review"): [r for r in pi if r.delivery_id and r.role == "review"],
+        ("pi", "other"): [r for r in pi if r.delivery_id and r.role == "other"],
+        ("pi", "no delivery (probes)"): [r for r in pi if not r.delivery_id],
     }
 
 
@@ -107,7 +117,9 @@ async def report(as_of: datetime, days: int) -> int:
         since = as_of - timedelta(days=days)
         rows = await baseline.load_first_turns(db, since=since, until=as_of)
     groups = baseline_groups(rows)
-    summaries = {key: baseline.summarize(items) for key, items in groups.items()}
+    # Pi rows: DESIGN's coordinator n=3 counted a blank-slate session bound to a coordinator delivery that cannot fit in
+    # its 1.7K first turn. The two real sessions are 8.0K and 8.4K; the usual median (their mean) is the fair read.
+    summaries = {key: baseline.summarize(items, mean_of_middle=key[0] == "pi") for key, items in groups.items()}
     failures = 0
     print(f"first turns {since:%Y-%m-%d %H:%MZ} .. {as_of:%Y-%m-%d %H:%MZ}: {len(rows)} measured")
     print(f"{'harness':7} {'row':32} {'n':>4} {'total':>8} {'harness':>8} {'ours':>7} {'brief':>7}")

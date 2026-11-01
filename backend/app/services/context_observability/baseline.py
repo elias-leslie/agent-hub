@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import pairwise
-from statistics import median_high
+from statistics import median, median_high
 from typing import Any
 
 from sqlalchemy import select
@@ -42,7 +42,7 @@ class FirstTurn:
     @property
     def cell(self) -> str:
         """Role column of the Cost matrix: launch-table job, launch mode, or unknown."""
-        if self.launch_mode == "blank" or self.launch_mode.startswith("subagent:"):
+        if self.launch_mode == "blank" or self.launch_mode.startswith(("subagent:", "agent:")):
             return self.launch_mode
         return self.role or "unknown"
 
@@ -74,16 +74,24 @@ async def load_first_turns(
     return out
 
 
-def med(values: Iterable[int | None]) -> int | None:
-    """Upper median of the known values (None when there are none): the measurement scripts' sorted(v)[n // 2]."""
+def med(values: Iterable[int | None], *, mean_of_middle: bool = False) -> int | None:
+    """Upper median of the known values (None when there are none): the measurement scripts' sorted(v)[n // 2].
+
+    mean_of_middle takes the mean of the middle two for an even count instead (the usual median).
+    """
     known = [v for v in values if v is not None]
-    return int(median_high(known)) if known else None
+    if not known:
+        return None
+    return int(median(known) if mean_of_middle else median_high(known))
 
 
-def summarize(rows: list[FirstTurn]) -> dict[str, int | None]:
+def summarize(rows: list[FirstTurn], *, mean_of_middle: bool = False) -> dict[str, int | None]:
+    def pick(values: Iterable[int | None]) -> int | None:
+        return med(values, mean_of_middle=mean_of_middle)
+
     return {
-        "n": len(rows), "total": med(r.total for r in rows), "harness": med(r.harness_tokens for r in rows),
-        "ours": med(r.ours_tokens for r in rows), "brief": med(r.brief_tokens for r in rows),
+        "n": len(rows), "total": pick(r.total for r in rows), "harness": pick(r.harness_tokens for r in rows),
+        "ours": pick(r.ours_tokens for r in rows), "brief": pick(r.brief_tokens for r in rows),
     }
 
 

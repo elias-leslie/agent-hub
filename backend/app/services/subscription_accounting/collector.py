@@ -871,6 +871,7 @@ async def collect(db: AsyncSession, *, min_interval_s: float = 300.0, replay: st
         await _persist(db, result, snapshots, new_lots, prune=replay is None)
         await db.commit()
         await _backfill_context_once(db, cursors)
+        await _capture_context_extra(db, result)
         return {"files_read": result.files_read, "bytes_read": result.bytes_read, "snapshots": len(snapshots),
                 "new_lots": len(new_lots), "calls": len(result.calls), "replay_pending": result.replay_pending}
 
@@ -916,6 +917,19 @@ async def _backfill_context_once(db: AsyncSession, cursors: dict[str, tuple[int,
     except Exception:
         await db.rollback()
         logger.warning("context observability backfill failed", exc_info=True)
+
+
+async def _capture_context_extra(db: AsyncSession, result: PassResult) -> None:
+    """Pi and Agent Hub first turns and per-session growth. Own commit; never fails the pass."""
+    try:
+        touched = sorted({(provider, sid) for provider, sid, _ in result.sessions})
+        summary = await context_capture.extra_capture.capture_pass(db, touched=touched)
+        await db.commit()
+        if any(summary.values()):
+            logger.info("context observability pass: %s", summary)
+    except Exception:
+        await db.rollback()
+        logger.warning("context observability pass failed", exc_info=True)
 
 
 async def _persist(
