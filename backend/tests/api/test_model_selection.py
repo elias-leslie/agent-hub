@@ -384,9 +384,47 @@ async def test_launch_defaults_api_carries_facts_and_survives_unreadable_usage_t
     headers = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=headers) as client:
         with patch.object(launch_facts, "load_facts", new=AsyncMock(return_value=launch_facts.Facts())):
-            ok = await client.get("/api/models/launch-defaults", params={"role": "research"})
+            ok = await client.get("/api/models/launch-defaults", params={"role": "research", "facts": 1})
         with patch.object(launch_facts, "load_facts", new=broken):
-            down = await client.get("/api/models/launch-defaults", params={"role": "research"})
+            down = await client.get("/api/models/launch-defaults", params={"role": "research", "facts": 1})
     assert ok.status_code == 200 and all("usage" in row and "last_refusal" in row for row in ok.json()["rows"])
     assert ok.json()["rows"][0]["model"] == "claude-opus-5-5"  # existing fields kept
     assert down.status_code == 200 and "unreadable" in down.json()["facts_error"] and down.json()["rows"][0]["allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_launch_defaults_reads_no_usage_facts_unless_asked() -> None:
+    """st aico create and the host shim call this on every start; they need allowed and the table, not the usage tables."""
+    from app.routing import launch_facts
+
+    load = AsyncMock(return_value=launch_facts.Facts())
+    headers = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=headers) as client:
+        with patch.object(launch_facts, "load_facts", new=load):
+            plain = await client.get("/api/models/launch-defaults", params={"role": "hunting", "tool": "claude-code"})
+    load.assert_not_awaited()
+    row = plain.json()["rows"][0]
+    assert plain.status_code == 200 and row["allowed"] is False and row["deny_reason"] == HUNT_DENY
+    assert {"model", "effort", "daybreak", "context", "launchable"} <= set(row)  # the table defaults stay in the answer
+    assert "usage" not in row and "last_refusal" not in row and "facts_as_of" not in plain.json()
+
+
+def test_a_window_with_room_beside_an_unknown_one_is_partly_unknown_never_plain_room() -> None:
+    # The 5h reading's reset passed and the provider has not read it since; the week still has room.
+    five = _reading("claude", 300, 10, observed="2026-11-01T10:00:00+00:00", resets="2026-11-01T15:00:00+00:00")
+    week = _reading("claude", 10080, 30, observed="2026-11-01T08:00:00+00:00", resets="2026-11-06T10:00:00+00:00")
+    usage = _usage(_facts_payload("research", [five, week]), "claude-code")
+    assert {w["label"]: w["state"] for w in usage["windows"]} == {"5h": "unknown", "weekly": "ok"}
+    assert usage["status"] == "partly_unknown" and usage["unknown_windows"] == ["5h"]
+    assert _usage(_facts_payload("research", [week]), "claude-code")["status"] == "ok"
+
+
+def test_an_empty_credit_balance_never_lasts_past_the_reset() -> None:
+    week = _reading("codex", 10080, 100, observed="2026-11-01T19:31:00+00:00", resets="2026-11-04T10:28:00+00:00")
+    for pace in (0.0, 2803.0):
+        empty = {"codex": {"balance": 0.0, "pace_per_day_7d": pace, "earliest_expiry": None}}
+        credits = _usage(_facts_payload("coordinator", [week], credits=empty), "codex")["credits"]
+        assert credits["lasts_past_reset"] is False and credits["lasts_days"] == 0.0
+    # Credits with no draw in the last 7 days still last past the reset.
+    idle = {"codex": {"balance": 500.0, "pace_per_day_7d": 0.0, "earliest_expiry": None}}
+    assert _usage(_facts_payload("coordinator", [week], credits=idle), "codex")["credits"]["lasts_past_reset"] is True

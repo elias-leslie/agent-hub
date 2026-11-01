@@ -477,11 +477,13 @@ async def model_launch_defaults(
     tool: Annotated[str | None, Query(max_length=80, pattern=r"^[a-z][a-z0-9_-]*$")] = None,
     model: Annotated[str | None, Query(max_length=200, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")] = None,
     project: Annotated[str | None, Query(max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")] = None,
+    facts: Annotated[bool, Query(description="Add usage facts and the last refusal to every row (st models route asks).")] = False,
 ) -> dict:
     """Model, effort, Daybreak and context for launching an agent, by job and tool, and whether
     the launch is allowed (the table's model, or ``model`` when given, checked against the deny rows).
-    Each row also carries usage facts (windows left, reset, reading age, credits) and the last refusal;
-    when they cannot be read the rows still answer and ``facts_error`` says why."""
+    With ``facts=1`` each row also carries usage facts (windows left, reset, reading age, credits) and the
+    last refusal; when they cannot be read the rows still answer and ``facts_error`` says why. Launches
+    (st aico create, the host shim) leave facts off: they need only allowed and the table defaults."""
     from app.routing.launch_facts import attach, load_facts
     from app.routing.model_selection import UnknownLaunchKey, launch_defaults, selection_policy
 
@@ -490,6 +492,8 @@ async def model_launch_defaults(
         payload = launch_defaults(policy, role=role, tool=tool, model=model, project=project)
     except UnknownLaunchKey as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not facts:
+        return payload
     try:
         return attach(payload, await load_facts(db), policy["launch"], datetime.now(UTC))
     except Exception as exc:  # the allowed/deny answer must not depend on the usage tables

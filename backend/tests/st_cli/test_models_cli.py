@@ -145,7 +145,7 @@ def test_route_role_and_tool_prints_one_launch_row_with_reasons() -> None:
         result = runner.invoke(app, ["route", "--role", "verification", "--tool", "claude-code"])
 
     assert result.exit_code == 0
-    launch.assert_called_once_with("verification", "claude-code", None, None)
+    launch.assert_called_once_with("verification", "claude-code", None, None, facts=True)
     lines = result.output.splitlines()
     assert lines[0].startswith("LAUNCH[verification claude-code] job=testing (Testing)")
     assert lines[1] == "  model=claude-haiku-5-5 effort=high daybreak=- context=blank-slate"
@@ -166,7 +166,8 @@ def test_route_passes_an_explicit_model_and_project() -> None:
                             "--project", "neri-hunters", "--json"])
     request.assert_called_once_with(
         "GET", "/api/models/launch-defaults",
-        params={"role": "hunting", "tool": "pi", "model": "anthropic/claude-opus-5-5", "project": "neri-hunters"},
+        params={"role": "hunting", "tool": "pi", "model": "anthropic/claude-opus-5-5", "project": "neri-hunters",
+                "facts": "1"},
         tool_name="st models route")
     assert runner.invoke(app, ["route", "--model", "claude-opus-5-5"]).exit_code != 0
 
@@ -174,7 +175,7 @@ def test_route_passes_an_explicit_model_and_project() -> None:
 def test_route_sends_role_and_tool_as_query_and_refuses_task_with_role() -> None:
     with patch("agent_hub_st.models.agent_hub_request", return_value=_launch("hunting", "codex")) as request:
         result = runner.invoke(app, ["route", "--role", "hunting", "--tool", "codex", "--json"])
-    request.assert_called_once_with("GET", "/api/models/launch-defaults", params={"role": "hunting", "tool": "codex"},
+    request.assert_called_once_with("GET", "/api/models/launch-defaults", params={"role": "hunting", "tool": "codex", "facts": "1"},
                                     tool_name="st models route")
     assert json.loads(result.output)["rows"][0]["daybreak"] is True
     assert runner.invoke(app, ["route", "--task", "coding", "--role", "review"]).exit_code != 0
@@ -280,3 +281,12 @@ def test_options_json_is_a_superset_of_the_launch_rows_and_tool_keeps_the_single
         out = runner.invoke(app, ["route", "--role", "research", "--tool", "claude-code"]).output
     assert out.startswith("LAUNCH[research claude-code] job=research") and "  usage: has room" in out
     assert "weekly 30% left, resets" in out
+
+
+def test_options_view_names_the_unknown_window_beside_one_with_room() -> None:
+    readings = [("claude", 300, 10, "2026-11-01T10:00:00+00:00", "2026-11-01T15:00:00+00:00"),
+                ("claude", 10080, 30, "2026-11-01T08:00:00+00:00", "2026-11-06T10:00:00+00:00")]
+    with patch("agent_hub_st.models._launch_api", return_value=_options("research", readings)):
+        out = runner.invoke(app, ["route", "--role", "research"]).output
+    assert "claude-code  claude-opus-5-5 high  has room in one window, 5h unknown" in out
+    assert "5h unknown (its reset passed" in out

@@ -32,9 +32,11 @@ def _selection_policy_api() -> dict[str, Any]:
 
 
 def _launch_api(role: str | None, tool: str | None, model: str | None = None,
-                project: str | None = None) -> dict[str, Any]:
+                project: str | None = None, *, facts: bool = False) -> dict[str, Any]:
     params = {key: value for key, value in (("role", role), ("tool", tool), ("model", model), ("project", project))
               if value}
+    if facts:
+        params["facts"] = "1"
     return agent_hub_request("GET", MODELS_LAUNCH_DEFAULTS_PATH, params=params or None, tool_name="st models route")
 
 
@@ -245,6 +247,14 @@ _STATUS = {"ok": "has room", "used_up": "used up", "on_credits": "running on cre
            "unknown": "usage unknown", "untracked": "usage not tracked"}
 
 
+def _status_text(usage: dict[str, Any]) -> str:
+    """The status words of an option. A window with room beside an unknown one is not plain room."""
+    if usage.get("status") == "partly_unknown":
+        unknown = ", ".join(str(label) for label in usage.get("unknown_windows") or []) or "another window"
+        return f"has room in one window, {unknown} unknown"
+    return _STATUS.get(usage.get("status"), "usage unknown")
+
+
 def _usage_line(usage: dict[str, Any]) -> str:
     windows = [w for w in usage.get("windows") or [] if isinstance(w, dict)]
     if not windows:
@@ -290,7 +300,7 @@ def _option_lines(row: dict[str, Any]) -> list[str]:
     if not row.get("model"):
         return [f"{tool}  {row.get('why') or 'no model set'}"]
     usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
-    head = f"{tool}  {_effort(row)}  {_STATUS.get(usage.get('status'), 'usage unknown')}"
+    head = f"{tool}  {_effort(row)}  {_status_text(usage)}"
     alts = [f"{_effort(alt)} ({alt.get('when') or '-'})" for alt in row.get("alternates") or [] if isinstance(alt, dict)]
     if alts:
         head += "  | also: " + "; ".join(alts)
@@ -335,7 +345,7 @@ def _print_launch(payload: dict[str, Any]) -> None:
         print(f"  why={row.get('why') or '-'}")
         usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
         if row.get("allowed") is not False:
-            print(f"  usage: {_STATUS.get(usage.get('status'), 'usage unknown')}")
+            print(f"  usage: {_status_text(usage)}")
             for text in (_usage_line(usage), _credit_line(usage), _refusal_line(row.get("last_refusal"))):
                 if text:
                     print(f"    {text}")
@@ -413,7 +423,7 @@ def route_model(
     if (model or project) and not (role or tool):
         raise typer.BadParameter("--model and --project check a launch; use them with --role/--tool")
     if role or tool:
-        payload = _launch_api(role, tool, model, project)
+        payload = _launch_api(role, tool, model, project, facts=True)
     elif task:
         payload = _select_api(task)
     else:

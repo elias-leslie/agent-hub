@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants.catalog import resolve_model
@@ -93,17 +93,18 @@ def credit_facts(lots: list[CreditLot], drawn_since_lots: float, drawn_by_day: d
 
 
 def option_usage(provider: str | None, windows: dict[str, list[dict]], credits: dict[str, dict], now: datetime) -> dict:
-    """The usage block of one option. ``status``: ok, used_up, on_credits, unknown, or untracked (no
-    usage source for this tool)."""
+    """The usage block of one option. ``status``: ok, partly_unknown (a window has room but another is
+    unknown: its reset passed, so nothing says it still has room), used_up, on_credits, unknown, or
+    untracked (no usage source for this tool). ``unknown_windows`` names the unknown ones."""
     if provider is None:
-        return {"provider": None, "status": "untracked", "windows": [], "credits": None}
+        return {"provider": None, "status": "untracked", "windows": [], "credits": None, "unknown_windows": []}
     own = windows.get(provider, [])
     credit = credits.get(provider)
     used_up = [w for w in own if w["state"] == "used_up"]
     if used_up:
         status = "on_credits" if credit and credit["balance"] > 0 else "used_up"
     elif any(w["state"] == "ok" for w in own):
-        status = "ok"
+        status = "partly_unknown" if any(w["state"] == "unknown" for w in own) else "ok"
     else:
         status = "unknown"
     out_credit = None
@@ -113,13 +114,16 @@ def option_usage(provider: str | None, windows: dict[str, list[dict]], credits: 
             (w for w in own if w["window_minutes"] == 10080 and w["state"] == "ok"), None)
         reset_in = ref["resets_in_seconds"] if ref else None
         pace = credit["pace_per_day_7d"]
-        days = credit["balance"] / pace if pace > 0 else None
+        empty = credit["balance"] <= 0
+        days = 0.0 if empty else credit["balance"] / pace if pace > 0 else None
         out_credit = credit | {
             "lasts_days": None if days is None else round(days, 1),
             "reset_at": ref["resets_at"] if ref else None,
-            "lasts_past_reset": None if reset_in is None else (days is None or days * 86400 > reset_in),
+            # An empty balance lasts past nothing, whatever the pace.
+            "lasts_past_reset": False if empty else None if reset_in is None else (days is None or days * 86400 > reset_in),
         }
-    return {"provider": provider, "status": status, "windows": own, "credits": out_credit}
+    return {"provider": provider, "status": status, "windows": own, "credits": out_credit,
+            "unknown_windows": [w["label"] for w in own if w["state"] == "unknown"]}
 
 
 def usage_provider(launch: dict, tool: str, model: str | None) -> str | None:
@@ -179,7 +183,7 @@ async def _refusals(db: AsyncSession) -> list[dict[str, Any]]:
     rows = (await db.execute(
         select(SessionEvent.created_at, SessionEvent.usage, Session.provider_metadata, Session.project_id)
         .join(Session, Session.id == SessionEvent.session_id, isouter=True)
-        .where(kind == "refused").order_by(SessionEvent.created_at.desc()).limit(REFUSAL_ROWS)
+        .where(kind == literal_column("'refused'"))  # a literal, so the partial index on refusals applies.order_by(SessionEvent.created_at.desc()).limit(REFUSAL_ROWS)
     )).all()
     out = []
     for created_at, usage, metadata, project in rows:
