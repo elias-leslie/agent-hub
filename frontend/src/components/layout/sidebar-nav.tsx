@@ -9,6 +9,7 @@ import {
   CircleDollarSign,
   Cpu,
   History,
+  Layers,
   LayoutDashboard,
   MessageSquare,
   ScrollText,
@@ -56,6 +57,12 @@ const NAV_ENTRIES: NavEntry[] = [
     label: 'Costs',
     icon: CircleDollarSign,
     description: 'Agent spend & plans',
+  },
+  {
+    href: '/context',
+    label: 'Context',
+    icon: Layers,
+    description: 'Tokens per harness & role',
   },
   {
     href: '/automations',

@@ -10,7 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from app.db import get_db
 from app.models import ContextBudget
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.context_observability import markers as marker_service
+from app.services.context_observability import views as view_service
 from app.services.context_observability import why as why_service
 from app.services.context_observability.budgets import CellState, cell_states
 from app.services.context_observability.markers import Marker
@@ -49,6 +50,25 @@ class BudgetWrite(BaseModel):
 
 class JumpWrite(BaseModel):
     jump_pct: int = Field(gt=0, le=1000)
+
+
+@router.get("/matrix", response_model=view_service.Matrix)
+async def get_matrix(db: DB, auth: Auth = None, days: Annotated[int, Query(ge=1, le=90)] = 30) -> view_service.Matrix:
+    """The Cost matrix: per (harness, role) the median first turn of the last `days` split into harness, ours and brief, the change
+    against the `days` before, the latest start and the budget flag."""
+    return await view_service.matrix(db, days=days)
+
+
+@router.get("/trend", response_model=view_service.Trend)
+async def get_trend(db: DB, harness: Harness, role: Role, auth: Auth = None, days: Annotated[int, Query(ge=1, le=90)] = 30) -> view_service.Trend:
+    """One cell over time: per-start points, daily medians, harness versions seen, and the steps with the cause `why` gives each."""
+    return await view_service.trend(db, harness, role, days=days)
+
+
+@router.get("/cell", response_model=view_service.CellView)
+async def get_cell(db: DB, harness: Harness, role: Role, auth: Auth = None) -> view_service.CellView:
+    """One cell's latest start: the measured parts, the delivered blocks with their last writer, in-session growth and the newest move."""
+    return await view_service.cell(db, harness, role)
 
 
 @router.get("/why", response_model=Why)
@@ -91,10 +111,11 @@ async def list_budgets(db: DB, auth: Auth = None) -> list[BudgetRow]:
 
 @router.put("/budgets", response_model=BudgetRow)
 async def put_budget(body: BudgetWrite, db: DB, auth: Auth = None) -> BudgetRow:
-    """Set the warn level of one (harness or '*', role or '*') cell."""
+    """Set the warn level of one (harness or '*', role or '*') cell. Role may be a cell or the group 'lane' (every lane cell)."""
     stmt = pg_insert(ContextBudget).values(harness=body.harness, role=body.role, warn_tokens=body.warn_tokens, note=body.note)
     await db.execute(stmt.on_conflict_do_update(
-        index_elements=["harness", "role"], set_={"warn_tokens": stmt.excluded.warn_tokens, "note": stmt.excluded.note}))
+        index_elements=["harness", "role"],
+        set_={"warn_tokens": stmt.excluded.warn_tokens, "note": stmt.excluded.note, "updated_at": func.now()}))  # upsert skips onupdate
     await db.commit()
     row = (await db.execute(select(ContextBudget).where(ContextBudget.harness == body.harness, ContextBudget.role == body.role))).scalar_one()
     await db.refresh(row)
