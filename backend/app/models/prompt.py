@@ -135,6 +135,10 @@ class PromptRevision(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     changed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Writer identity, as on memory_revisions.
+    writer_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    writer_delivery: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    writer_session: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     prompt: Mapped[Prompt | None] = relationship("Prompt", back_populates="revisions", lazy="raise")

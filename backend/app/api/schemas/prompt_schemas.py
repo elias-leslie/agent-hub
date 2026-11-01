@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.services.context_writer import RevisionWriter
+
 
 class PromptCreateRequest(BaseModel):
     slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
@@ -73,6 +75,7 @@ class PromptRevisionResponse(BaseModel):
     content_hash: str
     changed_by: str | None
     change_reason: str | None
+    writer: RevisionWriter | None = None
     created_at: datetime
 
 
@@ -83,6 +86,8 @@ class PromptRevisionListResponse(BaseModel):
 
 class PromptRestoreRequest(BaseModel):
     change_reason: str | None = None
+    # Latest revision id the caller saw; a newer revision returns 409 and restores nothing.
+    expected_revision_id: str | None = None
 
 
 class AgentPromptAssignRequest(BaseModel):

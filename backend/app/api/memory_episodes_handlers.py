@@ -7,7 +7,10 @@ from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 
+from app.db import async_session
+from app.services.context_writer import RevisionWriter, resolve_writers
 from app.services.memory import MemoryService
+from app.services.memory._repo_revisions import RevisionConflictError
 from app.services.memory.repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
@@ -229,7 +232,7 @@ async def handle_update_episode(
         raise HTTPException(status_code=500, detail=f"Failed to update episode: {e}") from e
 
 
-def _revision_to_response(revision: object) -> MemoryRevisionResponse:
+def _revision_to_response(revision: object, writer: RevisionWriter | None = None) -> MemoryRevisionResponse:
     from app.models.memory_unified import MemoryRevision
 
     from .memory_schemas import MemoryRevisionResponse
@@ -252,6 +255,7 @@ def _revision_to_response(revision: object) -> MemoryRevisionResponse:
         tags=list(revision.tags or []),
         changed_by=revision.changed_by,
         change_reason=revision.change_reason,
+        writer=writer,
         content_hash=revision.content_hash,
         created_at=revision.created_at,
     )
@@ -279,9 +283,11 @@ async def handle_list_episode_revisions(
 
     full_uuid = await resolve_episode_or_revision_uuid(episode_id)
     repo = get_memory_repository()
-    revisions = await repo.list_revisions(full_uuid, limit=limit)
+    async with async_session() as session:
+        revisions = await repo.list_revisions(full_uuid, limit=limit, db=session)
+        writers = await resolve_writers(session, revisions)
     return MemoryRevisionListResponse(
-        revisions=[_revision_to_response(revision) for revision in revisions],
+        revisions=[_revision_to_response(revision, writer) for revision, writer in zip(revisions, writers, strict=True)],
         total=len(revisions),
     )
 
@@ -296,18 +302,25 @@ async def handle_restore_episode_revision(
 
     full_uuid = await resolve_episode_or_revision_uuid(episode_id)
     repo = get_memory_repository()
-    restored = await repo.restore_revision(
-        full_uuid,
-        revision_id,
-        changed_by="api",
-        change_reason=request.change_reason,
-    )
+    try:
+        restored = await repo.restore_revision(
+            full_uuid,
+            revision_id,
+            expected_version=request.expected_version,
+            changed_by="api",
+            change_reason=request.change_reason,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:  # unknown or ambiguous revision prefix
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     if restored is None:
         raise HTTPException(status_code=404, detail="Memory revision not found")
     return UpdateEpisodeResponse(
         success=True,
         episode_id=full_uuid,
-        injection_tier=restored.injection_tier,
-        message=f"Restored revision {revision_id}",
-        version=restored.version,
+        injection_tier=restored.memory.injection_tier,
+        message=f"Restored revision {restored.restored_from}",
+        version=restored.memory.version,
+        revision_id=restored.revision_id,
     )

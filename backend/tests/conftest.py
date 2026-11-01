@@ -269,6 +269,7 @@ def clear_request_actor() -> None:
     from app.core import request_actor
 
     request_actor._actor.set(None)
+    request_actor._writer.set(None)
 
 
 @pytest.fixture(autouse=True)

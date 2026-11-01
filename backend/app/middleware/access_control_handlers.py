@@ -20,6 +20,7 @@ from app.middleware.access_control_constants import (
     TOOL_NAME_HEADER,
 )
 from app.middleware.access_control_handler_helpers import (
+    bind_writer_from_request,
     extract_request_headers,
     handle_missing_headers,
     identify_client,
@@ -61,6 +62,7 @@ def set_internal_state(request: Request) -> None:
         request_source=request.headers.get(REQUEST_SOURCE_HEADER) or "agent-hub-dashboard",
         internal=True,
     )
+    bind_writer_from_request(request, internal=True)
 
 
 async def handle_auth_bypass(
@@ -82,6 +84,7 @@ async def handle_auth_bypass(
     request.state.request_source = request_source or "auth-bypass"
     request.state.is_internal = False
     bind_request_actor(client_id=client_id, request_source=request.state.request_source, internal=False)
+    bind_writer_from_request(request, internal=False)
 
     # Process request
     response: Response = await call_next(request)

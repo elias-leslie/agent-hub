@@ -225,6 +225,11 @@ class MemoryRevision(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     changed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Writer identity (request_actor.RequestWriter): owner|agent|client|system, plus the agent's
+    # context delivery hash and Aico session, resolved to harness/role/project on read.
+    writer_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    writer_delivery: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    writer_session: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     memory: Mapped[Memory | None] = relationship("Memory", back_populates="revisions", lazy="raise")

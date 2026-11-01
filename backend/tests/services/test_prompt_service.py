@@ -197,7 +197,7 @@ class TestPromptServiceRevisions:
 
         with (
             patch(
-                "app.services.prompt_service.get_prompt_by_slug",
+                "app.services.prompt_service.lock_prompt_by_slug",
                 new=AsyncMock(return_value=prompt),
             ),
             patch(
@@ -256,7 +256,7 @@ class TestPromptServiceRevisions:
 
         with (
             patch(
-                "app.services.prompt_service.get_prompt_by_slug",
+                "app.services.prompt_service.lock_prompt_by_slug",
                 new=AsyncMock(return_value=prompt),
             ),
             patch(

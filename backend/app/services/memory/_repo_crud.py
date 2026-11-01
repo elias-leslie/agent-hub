@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
-from sqlalchemy import delete
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session
@@ -284,16 +284,24 @@ class CrudRepository(RevisionRepository):
         self,
         memory_ids: list[_uuid.UUID | str],
         *,
+        changed_by: str | None = None,
+        change_reason: str | None = None,
         db: AsyncSession | None = None,
     ) -> int:
-        """Delete multiple memories. Returns count deleted."""
+        """Delete multiple memories, each with a delete revision. Returns count deleted."""
         if not memory_ids:
             return 0
         uids = [_uuid.UUID(str(mid)) if isinstance(mid, str) else mid for mid in memory_ids]
-        stmt = delete(Memory).where(Memory.id.in_(uids))
+        stmt = select(Memory).where(Memory.id.in_(uids)).with_for_update()
 
         async def _execute(session: AsyncSession) -> int:
-            result = await session.execute(stmt)
-            return result.rowcount  # type: ignore[union-attr]
+            memories = list((await session.execute(stmt)).scalars().all())
+            for memory in memories:
+                await self.record_revision(
+                    session, memory, action="delete", changed_by=changed_by,
+                    change_reason=change_reason or "Memory deleted",
+                )
+                await session.delete(memory)
+            return len(memories)
 
         return await _with_session(db, _execute, commit=db is None)

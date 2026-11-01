@@ -55,11 +55,19 @@ class TestRetireStaleArchives:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock()
 
-        with patch("app.services.memory.retirement.async_session", return_value=mock_session):
+        record = AsyncMock()
+        with (
+            patch("app.services.memory.retirement.async_session", return_value=mock_session),
+            patch("app.services.memory.retirement._history_has_current_state", AsyncMock(return_value=False)),
+            patch("app.services.memory.retirement.RevisionRepository.record_revision", record),
+        ):
             result = await retire_stale_archives()
 
         assert result["retired"] == 1
         assert result["skipped"] is False
+        # The text is kept in history before the tombstone, which is recorded too.
+        assert [call.kwargs["action"] for call in record.await_args_list] == ["snapshot", "retire"]
+        assert (stale.status, stale.content, stale.embedding) == ("retired", "[retired]", None)
 
     @pytest.mark.asyncio
     async def test_skips_inactive_system(self) -> None:

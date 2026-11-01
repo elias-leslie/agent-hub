@@ -10,7 +10,14 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.core.request_actor import bind_request_actor
+from app.config import settings
+from app.core.access_identity import OWNER_TOKEN_HEADER, presents_owner_token
+from app.core.request_actor import (
+    WRITER_CONTEXT_HEADER,
+    bind_request_actor,
+    bind_request_writer,
+    classify_request_writer,
+)
 from app.middleware.access_control_auth import (
     detect_tool_type,
     get_cached_client,
@@ -152,3 +159,18 @@ def set_identified_state(request: Request, client_data: dict[str, Any], request_
     request.state.request_source = request_source
     request.state.is_internal = False
     bind_request_actor(client_id=client_data["id"], request_source=request_source, internal=False)
+    bind_writer_from_request(request, internal=False)
+
+
+def bind_writer_from_request(request: Request, *, internal: bool) -> None:
+    """Bind who is writing: the owner (owner token or dashboard), an agent session, or another client."""
+    def header(name: str) -> str | None:
+        value = request.headers.get(name)
+        return value if isinstance(value, str) else None
+
+    dashboard_source = settings.agent_hub_dashboard_request_source
+    bind_request_writer(classify_request_writer(
+        writer_header=header(WRITER_CONTEXT_HEADER),
+        owner=header(OWNER_TOKEN_HEADER) is not None and presents_owner_token(request),
+        dashboard=internal and (header(REQUEST_SOURCE_HEADER) or "").strip() == dashboard_source,
+    ))

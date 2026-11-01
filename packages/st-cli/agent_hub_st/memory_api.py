@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json as jsonlib
+import os
 import time
 from typing import Any, cast
 
@@ -18,6 +19,18 @@ _HTTP_TIMEOUT_READ = 90.0
 _DEFAULT_RETRY_ATTEMPTS = 3
 _DEFAULT_RETRY_BACKOFF_SECONDS = 0.25
 _DEFAULT_RETRY_MAX_BACKOFF_SECONDS = 1.0
+
+
+def writer_context_header() -> str | None:
+    """``delivery=<hash>; session=<id>`` from the agent's launch env, so revisions name the writing session.
+
+    Agent Hub resolves harness, role and project from the delivery; subagents inherit
+    their parent's env and show as the parent session.
+    """
+    delivery = os.environ.get("AGENT_HUB_CONTEXT_PREINJECTED_HASH", "").strip()
+    session = os.environ.get("AICO_SESSION_ID", "").strip()
+    parts = [f"delivery={delivery}" if delivery else "", f"session={session}" if session else ""]
+    return "; ".join(part for part in parts if part) or None
 
 
 def _dispatch(client: httpx.Client, method: str, url: str, **kw: Any) -> httpx.Response:
@@ -110,6 +123,9 @@ def agent_hub_request(
         "X-Source-Client": "st-cli",
         "X-Tool-Name": tool_name,
     }
+    writer = writer_context_header()
+    if writer:
+        headers["X-Context-Writer"] = writer
     if internal:
         headers["X-Agent-Hub-Internal"] = load_internal_service_secret()
     if scope != "global":

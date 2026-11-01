@@ -29,7 +29,9 @@ from app.db import get_db
 from app.services.agent_service import get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 from app.services.context_style import style_warnings
+from app.services.context_writer import RevisionWriter, resolve_writers
 from app.services.prompt_service import (
+    PromptRevisionConflictError,
     assign_prompt,
     create_prompt,
     delete_prompt,
@@ -90,7 +92,7 @@ def _prompt_to_response(p: object) -> PromptResponse:
     )
 
 
-def _revision_to_response(revision: object) -> PromptRevisionResponse:
+def _revision_to_response(revision: object, writer: RevisionWriter | None = None) -> PromptRevisionResponse:
     from app.models.prompt import PromptRevision
 
     assert isinstance(revision, PromptRevision)
@@ -112,6 +114,7 @@ def _revision_to_response(revision: object) -> PromptRevisionResponse:
         content_hash=revision.content_hash,
         changed_by=revision.changed_by,
         change_reason=revision.change_reason,
+        writer=writer,
         created_at=revision.created_at,
     )
 
@@ -212,8 +215,9 @@ async def list_prompt_revisions_endpoint(
     limit: Annotated[int, Query(ge=1, le=100, description="Maximum prompt revisions to return")] = 20,
 ) -> PromptRevisionListResponse:
     revisions = await list_prompt_revisions(db, slug, limit=limit)
+    writers = await resolve_writers(db, revisions)
     return PromptRevisionListResponse(
-        revisions=[_revision_to_response(revision) for revision in revisions],
+        revisions=[_revision_to_response(revision, writer) for revision, writer in zip(revisions, writers, strict=True)],
         total=len(revisions),
     )
 
@@ -233,13 +237,18 @@ async def restore_prompt_revision_endpoint(
     if not revision:
         raise HTTPException(status_code=404, detail="Prompt revision not found")
 
-    restored = await restore_prompt_revision(
-        db,
-        slug,
-        revision_id,
-        changed_by="api",
-        change_reason=request.change_reason,
-    )
+    try:
+        restored = await restore_prompt_revision(
+            db,
+            slug,
+            revision_id,
+            expected_revision_id=request.expected_revision_id,
+            changed_by="api",
+            change_reason=request.change_reason,
+        )
+    except PromptRevisionConflictError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not restored:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
     await _invalidate_owned_agent_cache(restored)

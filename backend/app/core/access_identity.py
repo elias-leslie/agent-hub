@@ -60,6 +60,11 @@ def require_owner(request: Request) -> Caller:
     return caller
 
 
+def presents_owner_token(request: HTTPConnection) -> bool:
+    """True when the request carries the owner token."""
+    return _owner_token_matches(request.headers.get(OWNER_TOKEN_HEADER))
+
+
 def _owner_token_matches(presented: str | None) -> bool:
     """True when the presented token equals the owner token file's contents (file mode keeps agents out)."""
     path = settings.agent_hub_owner_token_file.strip()

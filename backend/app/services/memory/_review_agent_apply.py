@@ -5,8 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from app.models.memory_unified import Memory
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.memory_unified import Memory, MemoryRevision
+
+from ._repo_revisions import RevisionRepository
 from ._review_agent_decisions import (
     MIN_COMPACT_REVIEW_CONTENT_CHARS,
     MemoryReviewDecision,
@@ -208,4 +211,27 @@ def _apply_decision(
     memory.updated_at = now
 
 
-__all__ = ["_apply_decision"]
+async def apply_review_decision(
+    db: AsyncSession,
+    memory: Memory,
+    decision: MemoryReviewDecision,
+    now: datetime,
+    *,
+    active_memory_ids: set[str] | None = None,
+    reviewer: str = "agent:memory-reviewer",
+) -> MemoryRevision:
+    """Apply a reviewer decision and record the resulting state as a revision.
+
+    The decision can change scope, tier, tags, applicability or archive the memory,
+    so it must land in history like any other write.
+    """
+    _apply_decision(memory, decision, now, active_memory_ids=active_memory_ids)
+    await db.flush()
+    applied = (memory.metadata_ or {}).get("last_review", {}).get("applied_remediations") or []
+    return await RevisionRepository().record_revision(
+        db, memory, action="review", changed_by=reviewer,
+        change_reason=f"Review {decision.decision}: " + (", ".join(applied) or "no remediation applied"),
+    )
+
+
+__all__ = ["_apply_decision", "apply_review_decision"]

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, cast, func, select
+from sqlalchemy import String, cast, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.request_actor import attribute
+from app.core.request_actor import attribute, writer_columns
 from app.models.prompt import AgentPrompt, Prompt, PromptRevision
 from app.services.context_policy import ContextPolicy
 from app.services.global_context_notes import (
@@ -103,6 +105,9 @@ async def record_prompt_revision(
         content_hash=_prompt_content_hash(prompt.content),
         changed_by=attribute(changed_by),
         change_reason=change_reason,
+        **writer_columns(),
+        # Wall-clock, not the transaction start, so revisions written in one transaction still order.
+        created_at=datetime.now(UTC),
     )
     db.add(revision)
     await db.flush()
@@ -321,20 +326,57 @@ async def resolve_prompt_revision_id_prefix(
     return rows[0]
 
 
+async def lock_prompt_by_slug(db: AsyncSession, slug: str) -> Prompt | None:
+    """The prompt row, locked FOR UPDATE until the transaction ends."""
+    return (await db.execute(
+        select(Prompt).options(selectinload(Prompt.owner_agent)).where(Prompt.slug == slug)
+        .with_for_update().execution_options(populate_existing=True)
+    )).scalar_one_or_none()
+
+
+class PromptRevisionConflictError(Exception):
+    """The prompt changed since the caller looked at it; reload before acting."""
+
+
 async def restore_prompt_revision(
     db: AsyncSession,
     slug: str,
     revision_id: str,
     *,
+    expected_revision_id: str | None = None,
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> Prompt | None:
-    """Restore a prompt to a previous revision and record the restore."""
-    prompt = await get_prompt_by_slug(db, slug)
-    revision = await get_prompt_revision(db, slug, revision_id)
-    if not prompt or not revision:
-        return None
+    """Restore a prompt to a previous revision (recreating a deleted one) and record the restore.
 
+    The prompt row is locked for the change. ``expected_revision_id`` is the latest
+    revision the caller saw; a newer one raises ``PromptRevisionConflictError`` and
+    nothing changes. Agent assignments removed by a delete are not recreated.
+    """
+    revision = await get_prompt_revision(db, slug, revision_id)
+    if not revision:
+        return None
+    prompt = await lock_prompt_by_slug(db, slug)
+    latest = (await db.execute(
+        select(PromptRevision.id).where(PromptRevision.prompt_slug == slug)
+        .order_by(PromptRevision.created_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    if expected_revision_id is not None and str(latest) != expected_revision_id:
+        raise PromptRevisionConflictError(
+            f"Prompt '{slug}' changed (latest revision {str(latest)[:8]}); reload before restoring"
+        )
+
+    recreated = prompt is None
+    if prompt is None:
+        owner_agent_id = revision.owner_agent_id
+        if owner_agent_id is not None:
+            from app.models.agent import Agent
+
+            if await db.get(Agent, owner_agent_id) is None:
+                owner_agent_id = None
+        prompt = Prompt(slug=slug, owner_agent_id=owner_agent_id, prompt_type=revision.prompt_type or "standard",
+                        deletion_locked=bool(revision.deletion_locked))
+        db.add(prompt)
     prompt.name = revision.prompt_name
     prompt.content = revision.content
     prompt.description = revision.description
@@ -344,14 +386,24 @@ async def restore_prompt_revision(
     prompt.context_policy = revision.context_policy
     prompt.exclude_agents = list(revision.exclude_agents or [])
 
-    _sync_owned_agent_system_prompt_mirror(prompt)
-    await db.flush()
+    if not recreated:
+        _sync_owned_agent_system_prompt_mirror(prompt)
+    try:
+        await db.flush()
+    except IntegrityError as exc:  # a concurrent restore recreated the slug first
+        raise PromptRevisionConflictError(f"Prompt '{slug}' was recreated meanwhile; reload before restoring") from exc
+    if recreated:
+        await db.execute(
+            update(PromptRevision)
+            .where(PromptRevision.prompt_slug == slug, PromptRevision.prompt_id.is_(None))
+            .values(prompt_id=prompt.id)
+        )
     await record_prompt_revision(
         db,
         prompt,
         action="restore",
         changed_by=changed_by,
-        change_reason=change_reason or f"Restored revision {revision_id}",
+        change_reason=change_reason or f"Restored revision {revision.id}",
     )
     await db.commit()
     await db.refresh(prompt)

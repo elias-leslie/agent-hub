@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.services.context_writer import RevisionWriter
 from app.services.memory.memory_models import (
     InjectionTier,
     MemoryApplicability,
@@ -115,6 +116,7 @@ class UpdateEpisodeResponse(BaseModel):
     injection_tier: str | None = None
     message: str
     version: int | None = None
+    revision_id: str | None = None
     style_warnings: list[str] = Field(default_factory=list)
 
 
@@ -191,6 +193,7 @@ class MemoryRevisionResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
     changed_by: str | None = None
     change_reason: str | None = None
+    writer: RevisionWriter | None = None
     content_hash: str
     created_at: datetime
 
@@ -206,3 +209,6 @@ class MemoryRestoreRequest(BaseModel):
     """Restore one memory to a historical revision."""
 
     change_reason: str | None = None
+    expected_version: int | None = Field(
+        None, description="memories.version the caller saw; a newer change returns 409 and restores nothing"
+    )

@@ -15,7 +15,7 @@ from sqlalchemy import String, cast, select
 from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.request_actor import attribute
+from app.core.request_actor import attribute, writer_columns
 from app.middleware.access_control_auth import is_admin_client
 from app.models.client import check_project_access
 from app.models.context_governance import ContextRecord
@@ -103,6 +103,7 @@ async def record(db: AsyncSession, kind: str, actor: str, payload: dict[str, Any
         source_ids.add(payload["source_id"])
     if payload.get("source", {}).get("source_id"):
         source_ids.add(payload["source"]["source_id"])
+    payload = {**payload, "writer": payload.get("writer") or writer_columns()}
     evidence = ContextRecord(id=key, kind=kind, actor=actor, source_keys=sorted(source_ids), payload=payload)
     db.add(evidence)
     await db.flush()

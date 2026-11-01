@@ -6,7 +6,7 @@ prompt construction, decision parsing, and batch execution.
 
 from __future__ import annotations
 
-from ._review_agent_apply import _apply_decision
+from ._review_agent_apply import _apply_decision, apply_review_decision
 from ._review_agent_call import _call_reviewer_agent
 from ._review_agent_decisions import (
     MIN_COMPACT_REVIEW_CONTENT_CHARS,
@@ -41,6 +41,7 @@ __all__ = [
     "_apply_decision",
     "_call_reviewer_agent",
     "_normalize_compact_content",
+    "apply_review_decision",
     "build_memory_review_prompt",
     "collect_memory_governance_snapshot",
     "parse_memory_review_content",
