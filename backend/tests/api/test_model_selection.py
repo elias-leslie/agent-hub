@@ -231,14 +231,29 @@ def test_hunting_rows_without_claude_and_unknown_non_claude_ids_stay_allowed() -
     assert _row("research", "claude-code", model="claude-opus-5-5", project="neri-hunters")["allowed"] is True
 
 
+CASE_DENY = "Owner 2026-11-01: Claude never for real case work (verification, review or reporting in Neri Hunters)"
+
+
 def test_verification_is_denied_on_claude_only_in_neri_hunters() -> None:
     denied = _row("verification", "claude-code", project="neri-hunters")
-    assert (denied["allowed"], denied["deny_reason"]) == (False, "Owner 2026-11-01: Claude never for full case/hunt review")
+    assert (denied["allowed"], denied["deny_reason"]) == (False, CASE_DENY)
     assert _row("verification", "pi", model="anthropic/claude-haiku-5-5", project="neri-hunters")["allowed"] is False
     assert _row("verification", "codex", project="neri-hunters")["allowed"] is True
     for project in (None, "neri", "summitflow"):
         row = _row("verification", "claude-code", project=project)
         assert (row["allowed"], row["model"], row["use"]) == (True, "claude-haiku-5-5", True), project
+
+
+def test_case_review_and_reporting_are_denied_on_claude_only_in_neri_hunters() -> None:
+    # Owner 2026-11-01: Claude never sees real case details; review and reporting of real findings run in Neri Hunters.
+    for role in ("review", "reporting"):
+        denied = _row(role, "claude-code", project="neri-hunters")
+        assert (denied["allowed"], denied["deny_reason"]) == (False, CASE_DENY), role
+        assert _row(role, "pi", model="anthropic/claude-opus-5-5", project="neri-hunters")["allowed"] is False, role
+        assert _row(role, "codex", project="neri-hunters")["allowed"] is True, role
+        for project in (None, "neri", "summitflow"):  # code review, blank-slate phone-a-friend, other reports
+            assert _row(role, "claude-code", project=project)["allowed"] is True, (role, project)
+    assert _row("research", "claude-code", project="neri-hunters")["allowed"] is True  # program selection stays allowed
 
 
 def test_shipped_launch_policy_is_consistent_and_refuses_a_tools_row_a_deny_row_contradicts() -> None:

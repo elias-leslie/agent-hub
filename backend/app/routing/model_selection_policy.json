@@ -129,13 +129,15 @@
       },
       {
         "work_roles": [
-          "verification"
+          "verification",
+          "review",
+          "reporting"
         ],
         "projects": [
           "neri-hunters"
         ],
         "provider": "claude",
-        "reason": "Owner 2026-11-01: Claude never for full case/hunt review",
+        "reason": "Owner 2026-11-01: Claude never for real case work (verification, review or reporting in Neri Hunters)",
         "source": "Owner approved 2026-11-01: /srv/workspaces/handoffs/model-choice-2026-11-01/BUILD-PLAN.md (REVIEW.md P1)"
       }
     ],
