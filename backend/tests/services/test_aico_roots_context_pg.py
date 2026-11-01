@@ -50,9 +50,11 @@ async def db() -> AsyncGenerator[AsyncSession]:
     await engine.dispose()
 
 
-def _session(sid: str, metadata: dict[str, Any], *, minutes: int = 0, parent: str | None = None, session_type: str = "claude_code") -> Session:
-    return Session(id=sid, project_id="p", provider="anthropic", model="claude-opus-5-5", status="active", session_type=session_type,
-                   parent_session_id=parent, provider_metadata=metadata, last_activity_at=BASE + timedelta(minutes=minutes))
+def _session(sid: str, metadata: dict[str, Any], *, minutes: int = 0, parent: str | None = None, session_type: str = "claude_code",
+             created: int | None = None, status: str = "active") -> Session:
+    return Session(id=sid, project_id="p", provider="anthropic", model="claude-opus-5-5", status=status, session_type=session_type,
+                   parent_session_id=parent, provider_metadata=metadata, last_activity_at=BASE + timedelta(minutes=minutes),
+                   created_at=BASE + timedelta(minutes=minutes - 1 if created is None else created))
 
 
 def _call(key: str, sid: str, minutes: int, inp: int, read: int, write: int, agent: str = "") -> UsageCall:
@@ -89,7 +91,7 @@ async def test_a_root_with_no_session_or_no_usage_is_left_out_never_zero(db: Asy
 
 
 async def test_the_newest_session_of_a_root_wins_and_children_never_match(db: AsyncSession) -> None:
-    db.add_all([_session("old", _bound("aico-root-a"), minutes=1), _session("new", _bound("aico-root-a"), minutes=9),
+    db.add_all([_session("old", _bound("aico-root-a"), minutes=1, status="completed"), _session("new", _bound("aico-root-a"), minutes=9),
                 _session("kid", _bound("aico-root-a"), minutes=20, parent="new")])
     await db.flush()
     db.add_all([_call("o", "old", 1, 1, 50_000, 0), _call("n", "new", 9, 1, 12_000, 0), _call("k", "kid", 20, 1, 99_000, 0)])
@@ -98,6 +100,72 @@ async def test_the_newest_session_of_a_root_wins_and_children_never_match(db: As
     result = await aico_roots.latest_context(db, ["aico-root-a"])
 
     assert (result["aico-root-a"].session_id, result["aico-root-a"].context_tokens) == ("new", 12_001)
+
+
+async def test_same_source_processes_a_root_started_never_stand_in_for_the_root(db: AsyncSession) -> None:
+    # The root's own session is at 218K; the `claude -p` / `codex exec` children it started share its source, are
+    # top-level too and are newer.
+    # Its own last activity is the stale one (Agent Hub still holds it active); the children's are newer.
+    db.add_all([_session("own", _bound("aico-root-a"), minutes=20, created=0),
+                _session("kid1", _bound("aico-root-a"), minutes=31, created=30, status="completed"),
+                _session("kid2", _bound("aico-root-a"), minutes=36, created=35, status="completed")])
+    await db.flush()
+    db.add_all([_call("o", "own", 19, 1, 218_000, 0), _call("k1", "kid1", 31, 1, 29_000, 0), _call("k2", "kid2", 36, 1, 29_500, 0)])
+    await db.flush()
+
+    result = await aico_roots.latest_context(db, ["aico-root-a"])
+
+    assert (result["aico-root-a"].session_id, result["aico-root-a"].context_tokens) == ("own", 218_001)
+
+
+async def test_a_session_started_while_an_earlier_one_was_still_running_is_left_out(db: AsyncSession) -> None:
+    db.add_all([_session("own", _bound("aico-root-a"), minutes=40, created=0, status="completed"),
+                _session("kid", _bound("aico-root-a"), minutes=45, created=30, status="completed")])
+    await db.flush()
+    db.add_all([_call("o", "own", 39, 1, 218_000, 0), _call("k", "kid", 45, 1, 29_000, 0)])
+    await db.flush()
+
+    assert (await aico_roots.latest_context(db, ["aico-root-a"]))["aico-root-a"].session_id == "own"
+
+
+async def test_a_root_s_native_session_id_picks_its_session_whatever_shares_the_source(db: AsyncSession) -> None:
+    native = "f5863e95-a57e-4804-bd32-97b330236c36"
+    db.add_all([_session(native, _bound("aico-root-a"), minutes=10, created=0, status="completed"),
+                _session("kid", _bound("aico-root-a"), minutes=50, created=45, status="completed")])  # created after the root went quiet
+    await db.flush()
+    db.add_all([_call("o", native, 9, 1, 218_000, 0), _call("k", "kid", 50, 1, 29_000, 0)])
+    await db.flush()
+
+    result = await aico_roots.latest_context(db, ["aico-root-a", native])
+
+    assert result[native].context_tokens == 218_001
+    assert result[native].session_id == native
+    assert result["aico-root-a"].session_id == "kid"  # the source alone can't tell: the caller prefers the native id
+
+
+async def test_pi_events_with_the_same_timestamp_resolve_by_turn_and_sequence(db: AsyncSession) -> None:
+    db.add(_session("pi1", {"aico_session_id": "aico-widget-ab12cd34"}, session_type="pi"))
+    await db.flush()
+    for turn, sequence, total in ((1, 0, 10_000), (2, 0, 30_000), (2, 1, 40_000)):
+        db.add(SessionEvent(session_id="pi1", turn=turn, sequence=sequence, event_type="usage", created_at=BASE,
+                            usage={"scope": "response", "input_tokens": total}))
+    await db.flush()
+
+    result = await aico_roots.latest_context(db, ["aico-widget-ab12cd34"])
+
+    assert result["aico-widget-ab12cd34"].context_tokens == 40_000
+
+
+async def test_every_root_of_a_busy_host_is_measured(db: AsyncSession) -> None:
+    keys = [f"aico-root-{n}" for n in range(80)]
+    db.add_all([_session(f"s{n}", _bound(key), minutes=n, created=n - 1) for n, key in enumerate(keys)])
+    await db.flush()
+    db.add_all([_call(f"c{n}", f"s{n}", n, 1, 1000 + n, 0) for n in range(80)])
+    await db.flush()
+
+    result = await aico_roots.latest_context(db, [k for key in keys for k in (key, f"aico-widget-{key}", f"native-{key}")])
+
+    assert set(result) == set(keys)
 
 
 async def test_a_pi_session_is_matched_by_its_aico_session_id_and_read_from_its_response_usage(db: AsyncSession) -> None:
