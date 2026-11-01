@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.responses import StreamingResponse
@@ -236,7 +237,7 @@ async def test_agent_stream_aborts_before_response_without_verified_context() ->
         prompt_mode="none",
         max_turns=2,
     )
-    resolved_agent = type("ResolvedAgent", (), {})()
+    resolved_agent = _agent_with([], None)
     build_response = AsyncMock()
     raw_messages = [Message(role="user", content="do work")]
 
@@ -342,3 +343,65 @@ async def test_a_session_runs_one_turn_at_a_time_and_a_cancelled_turn_is_waited_
     gate.set()
     await asyncio.wait_for(waiting, 2)
     assert not run.running
+
+
+def _hunting_db() -> SimpleNamespace:
+    session = SimpleNamespace(project_id="neri", provider_metadata={
+        "work_role": {"id": "hunting", "source": "tether", "declared_at": "2026-11-01T20:00:00+00:00"}})
+    return SimpleNamespace(get=AsyncMock(return_value=session), rollback=AsyncMock())
+
+
+def _agent_with(fallbacks: list[str], escalation: str | None) -> SimpleNamespace:
+    return SimpleNamespace(agent=SimpleNamespace(fallback_models=fallbacks, escalation_model_id=escalation))
+
+
+async def _stream_in_hunting_session(resolved_model: str, provider: str, agent: SimpleNamespace) -> MagicMock:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="hi")], project_id="neri", session_id="sess-hunt",
+        prompt_mode="none", max_turns=1, use_memory=False,
+    )
+    raw_messages = [Message(role="user", content="hi")]
+    build = MagicMock(return_value="response")
+    with (
+        patch("app.api.complete.streaming_handlers._setup_streaming_session", new=AsyncMock(return_value=("sess-hunt", [], False))),
+        patch("app.api.complete.streaming_handlers._inject_streaming_memory", new=AsyncMock(return_value=raw_messages)),
+        patch("app.api.complete.streaming_handlers._compact_streaming_context", new=AsyncMock(return_value=raw_messages)),
+        patch("app.api.complete.streaming_handlers._build_sse_response", new=build),
+        patch("app.api.complete.streaming_handlers.has_verified_canonical_context", return_value=True),
+        patch("app.api.complete.streaming_handlers.get_thinking_level", return_value=None),
+    ):
+        await handle_streaming_request(
+            request=request, resolved_model=resolved_model, provider=provider, resolved_agent=agent,
+            agent_mandate_injection=None, agent_used="investment-committee", model_used=None, fallback_used=False,
+            db=_hunting_db(), client_id=None, request_source="pytest",
+        )
+    return build
+
+
+@pytest.mark.asyncio
+async def test_a_hunting_chat_stream_never_falls_back_or_escalates_to_claude() -> None:
+    build = await _stream_in_hunting_session(
+        "codex/gpt-6-sol", "codex", _agent_with(["claude-sonnet-5-5", "gemini/gemini-3-flash"], "claude-opus-5-5")
+    )
+    args = build.call_args.args
+    assert args[1] == "codex/gpt-6-sol"
+    assert args[-1] == ["gemini/gemini-3-flash"]
+
+
+@pytest.mark.asyncio
+async def test_a_hunting_chat_stream_on_a_claude_primary_starts_on_the_first_allowed_candidate() -> None:
+    build = await _stream_in_hunting_session("claude-opus-5-5", "claude", _agent_with(["codex/gpt-6-sol"], None))
+    args = build.call_args.args
+    assert args[1] == "codex/gpt-6-sol" and args[2] == "codex"
+    assert args[7:9] == ("codex/gpt-6-sol", True)  # model_used, fallback_used
+    assert args[-1] == []
+
+
+@pytest.mark.asyncio
+async def test_a_hunting_chat_stream_with_only_claude_is_refused_with_the_deny_reason() -> None:
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as refused:
+        await _stream_in_hunting_session("claude-opus-5-5", "claude", _agent_with(["claude-sonnet-5-5"], None))
+    assert refused.value.status_code == 403
+    assert "Claude never for active hunting" in str(refused.value.detail)

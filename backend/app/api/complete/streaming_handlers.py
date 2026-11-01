@@ -16,6 +16,8 @@ from app.api.complete.request_setup import (
     compact_context_if_needed,
 )
 from app.api.complete.tool_provisioner import provision_standard_tools
+from app.routing.launch_policy import session_launch_denial
+from app.routing.registry import get_provider_for_model
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
 from app.services.llm_messages import Message
@@ -210,6 +212,43 @@ async def _compact_streaming_context(
     ]
 
 
+def _fallback_chain(request: CompletionRequest, resolved_agent: ResolvedAgent | None) -> list[str]:
+    """The agent's fallbacks, then its escalation model."""
+    chain: list[str] = []
+    if resolved_agent is not None and not request.disable_agent_fallbacks:
+        chain.extend(resolved_agent.agent.fallback_models or [])
+        escalation_model = resolved_agent.agent.escalation_model_id
+        if escalation_model and escalation_model not in chain:
+            chain.append(escalation_model)
+    return chain
+
+
+async def _drop_denied_candidates(
+    request: CompletionRequest,
+    resolved_model: str,
+    provider: str,
+    resolved_agent: ResolvedAgent | None,
+    db: AsyncSession | None,
+    model_used: str | None,
+    fallback_used: bool,
+) -> tuple[str, str, str | None, bool, list[str]]:
+    """The model, provider and fallbacks a streaming turn may run, skipping every provider the session's
+    work role is denied (primary, fallbacks and escalation). The first allowed candidate becomes the primary
+    when the requested one is denied; with none left the request is refused with the deny reason (403)."""
+    chain = _fallback_chain(request, resolved_agent)
+    denial = await session_launch_denial(db, request.session_id)
+    if denial is None:
+        return resolved_model, provider, model_used, fallback_used, chain
+    reasons = {m: denial.blocks(m) for m in [resolved_model, *chain]}
+    allowed = [m for m in [resolved_model, *chain] if not reasons[m]]
+    if not allowed:
+        raise HTTPException(status_code=403, detail=reasons[resolved_model])
+    if allowed[0] != resolved_model:
+        logger.info("Skipping streaming model %s: %s", resolved_model, reasons[resolved_model])
+        return allowed[0], get_provider_for_model(allowed[0]), allowed[0], True, allowed[1:]
+    return resolved_model, provider, model_used, fallback_used, allowed[1:]
+
+
 def _turn_running_error(run: TurnRun) -> HTTPException:
     return HTTPException(
         status_code=409,
@@ -320,6 +359,9 @@ async def handle_streaming_request(
         )
 
     await _claim_session_turn(request.session_id)
+    resolved_model, provider, model_used, fallback_used, fallback_models = await _drop_denied_candidates(
+        request, resolved_model, provider, resolved_agent, db, model_used, fallback_used
+    )
     session_id, context_messages, is_new_session = await _setup_streaming_session(
         request, provider, resolved_model, resolved_agent, db, client_id, request_source
     )
@@ -352,13 +394,6 @@ async def handle_streaming_request(
         agent_slug=agent_used,
     )
     tools = provisioned_tools.loaded_tools or None
-    fallback_models: list[str] = []
-    if resolved_agent is not None and not request.disable_agent_fallbacks:
-        fallback_models.extend(resolved_agent.agent.fallback_models or [])
-        escalation_model = resolved_agent.agent.escalation_model_id
-        if escalation_model and escalation_model not in fallback_models:
-            fallback_models.append(escalation_model)
-
     if db is not None:
         # The turn outlives this request and writes through its own sessions. Holding the request's connection
         # (idle in a transaction) for the whole turn would cost the pool one connection per running chat.
