@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.models import ContextBudget
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
+from app.services.context_observability import aico_roots as aico_roots_service
 from app.services.context_observability import markers as marker_service
 from app.services.context_observability import views as view_service
 from app.services.context_observability import why as why_service
@@ -57,6 +58,20 @@ async def get_matrix(db: DB, auth: Auth = None, days: Annotated[int, Query(ge=1,
     """The Cost matrix: per (harness, role) the median first turn of the last `days` split into harness, ours and brief, the change
     against the `days` before, the latest start and the budget flag."""
     return await view_service.matrix(db, days=days)
+
+
+class AicoRootsContext(BaseModel):
+    roots: dict[str, aico_roots_service.RootContext]
+
+
+@router.get("/aico-roots", response_model=AicoRootsContext)
+async def get_aico_roots(
+    db: DB, keys: Annotated[str, Query(max_length=4000, description="Comma-separated Aico root logicalSessionIds or aico-widget ids")],
+    auth: Auth = None,
+) -> AicoRootsContext:
+    """Per key, the context size of its newest session's latest response (what the model was sent). A key with no matched
+    session or no usage yet is left out: unknown, never 0."""
+    return AicoRootsContext(roots=await aico_roots_service.latest_context(db, keys.split(",")))
 
 
 @router.get("/trend", response_model=view_service.Trend)
