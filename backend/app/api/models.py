@@ -470,6 +470,20 @@ async def select_model_advice(request: SelectionRequest) -> dict:
     return result
 
 
+@router.get("/models/launch-defaults")
+async def model_launch_defaults(
+    role: Annotated[str | None, Query(max_length=80, pattern=r"^[a-z][a-z0-9_-]*$")] = None,
+    tool: Annotated[str | None, Query(max_length=80, pattern=r"^[a-z][a-z0-9_-]*$")] = None,
+) -> dict:
+    """Model, effort, Daybreak and context for launching an agent, by job or work role and tool."""
+    from app.routing.model_selection import UnknownLaunchKey, launch_defaults, selection_policy
+
+    try:
+        return launch_defaults(await selection_policy(), role=role, tool=tool)
+    except UnknownLaunchKey as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/models/selection-policy")
 async def model_selection_policy() -> dict:
     """List configured task categories for advisory callers."""

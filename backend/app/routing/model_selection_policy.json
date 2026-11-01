@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "policies": {
     "coding": {
       "requires_tools": true,
@@ -93,6 +93,351 @@
           "rationale": "Provider guidance describes multimodal, agent and software workloads; effort is an operator starting point."
         }
       ]
+    }
+  },
+  "launch": {
+    "about": "Which model, effort, Daybreak and context each kind of agent gets, by job and tool. st models route --role JOB --tool TOOL reads it; st aico create applies it when --model/--reasoning-effort are not given (explicit flags win). A job's work_roles are the Agent Hub work roles (session_roles.json) whose launches default to it; every registered work role belongs to exactly one job. context: full = Agent Hub delivery in the project; blank-slate = --blank-slate plus a specific brief (create uses it when neither --project nor --blank-slate is given). prefer lists tools best first. subagent names the lean Claude Code agent definition (claude-config/agents) to use for this job as a native subagent. Owner decisions 2026-11-01: /srv/workspaces/handoffs/followups-2026-10-31/token-audit/BRIEF-launch-defaults.md.",
+    "tools": {
+      "claude-code": {
+        "label": "Claude Code"
+      },
+      "codex": {
+        "label": "Codex",
+        "note": "Few credits: quick cheap tests only.",
+        "default": {
+          "model": "gpt-6.1-sol",
+          "effort": "xhigh",
+          "daybreak": false,
+          "why": "Owner 2026-11-01: Codex non-hunting work runs gpt-6.1-sol xhigh; Codex credits are few, so quick cheap tests only."
+        }
+      },
+      "pi": {
+        "label": "Pi",
+        "note": "Hunters; otherwise the last choice.",
+        "default": {
+          "model": "opencode-go/deepseek-v4.1-flash",
+          "effort": "high",
+          "alternates": [
+            {
+              "model": "opencode-go/glm-5.3",
+              "effort": "high",
+              "when": "DeepSeek is unavailable or stuck"
+            }
+          ],
+          "why": "Owner 2026-11-01: Pi is the last choice outside hunting (DeepSeek 4.1 Flash, GLM 5.3)."
+        }
+      },
+      "agent-hub": {
+        "label": "Agent Hub chat",
+        "default": {
+          "model": null,
+          "effort": null,
+          "why": "The Agent Hub agent's own row sets model and effort; --model overrides it."
+        }
+      },
+      "antigravity": {
+        "label": "Antigravity",
+        "default": {
+          "model": null,
+          "effort": null,
+          "launchable": false,
+          "why": "Unknown/owner-opened: no guidance yet and Aico cannot launch it."
+        }
+      }
+    },
+    "jobs": {
+      "coordinator": {
+        "label": "Coordinators",
+        "work_roles": [
+          "coordinator"
+        ],
+        "context": "full",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "xhigh",
+            "why": "Owner 2026-11-01: coordinators run Opus 5.5 xhigh."
+          }
+        }
+      },
+      "implementation": {
+        "label": "Well-scoped builds and fixes",
+        "work_roles": [
+          "implementation"
+        ],
+        "context": "full",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-sonnet-5-5",
+            "effort": "high",
+            "alternates": [
+              {
+                "model": "claude-opus-5-5",
+                "effort": "high",
+                "when": "design, hard debugging, or security/root/delete code"
+              }
+            ],
+            "why": "Owner 2026-11-01: Sonnet 5.5 high for well-scoped builds and fixes; Opus 5.5 high for design, hard debugging and security/root/delete code."
+          }
+        }
+      },
+      "research": {
+        "label": "Research, selection and reports someone will act on",
+        "work_roles": [
+          "research",
+          "selection",
+          "reporting"
+        ],
+        "context": "full",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "alternates": [
+              {
+                "model": "claude-sonnet-5-5",
+                "effort": "high",
+                "when": "plain fact-gathering nobody acts on directly"
+              }
+            ],
+            "why": "Owner 2026-11-01: Opus 5.5 high for research or advice someone will act on; Sonnet 5.5 high for fact-gathering."
+          }
+        }
+      },
+      "mapping": {
+        "label": "Product maps",
+        "work_roles": [
+          "mapping"
+        ],
+        "context": "full",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "why": "Product-map route 1; maps are research someone acts on (owner 2026-11-01: Opus 5.5 high)."
+          },
+          "codex": {
+            "model": "gpt-6.1-sol",
+            "effort": "xhigh",
+            "daybreak": false,
+            "why": "Product-map route 2: gpt-6.1-sol xhigh (owner 2026-11-01: Codex non-hunting is gpt-6.1-sol xhigh)."
+          },
+          "pi": {
+            "model": "opencode-go/deepseek-v4.1-flash",
+            "effort": "max",
+            "why": "Product-map route 3: DeepSeek 4.1 Flash max."
+          }
+        }
+      },
+      "review": {
+        "label": "Code and report review",
+        "work_roles": [
+          "review"
+        ],
+        "context": "blank-slate",
+        "prefer": [
+          "claude-code",
+          "pi"
+        ],
+        "subagent": "code-reviewer",
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "why": "Owner 2026-11-01: reviews run Opus 5.5 high."
+          },
+          "codex": {
+            "model": null,
+            "effort": null,
+            "use": false,
+            "why": "Owner 2026-11-01: no Codex reviews. Pass --model to launch one anyway."
+          }
+        }
+      },
+      "testing": {
+        "label": "Testing",
+        "work_roles": [
+          "verification"
+        ],
+        "context": "blank-slate",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "subagent": "user-tester",
+        "tools": {
+          "claude-code": {
+            "model": "claude-haiku-5-5",
+            "effort": "high",
+            "alternates": [
+              {
+                "model": "claude-sonnet-5-5",
+                "effort": "high",
+                "when": "Haiku can't do the job"
+              },
+              {
+                "model": "claude-opus-5-5",
+                "effort": "high",
+                "when": "truly necessary; say why"
+              }
+            ],
+            "why": "Owner 2026-11-01: testing runs Haiku 5.5, Sonnet 5.5 if Haiku can't, Opus only if truly necessary."
+          }
+        }
+      },
+      "lookup": {
+        "label": "Lookups, file finding and mechanical work",
+        "work_roles": [],
+        "context": "blank-slate",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-haiku-5-5",
+            "effort": "high",
+            "why": "Owner 2026-11-01: Haiku 5.5 for lookups and file finding."
+          },
+          "pi": {
+            "model": "opencode-go/deepseek-v4.1-flash",
+            "effort": "low",
+            "why": "Pi is the last choice; low effort for mechanical sweeps and lookups."
+          }
+        }
+      },
+      "operations": {
+        "label": "Routine operations",
+        "work_roles": [
+          "operations"
+        ],
+        "context": "full",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-sonnet-5-5",
+            "effort": "high",
+            "why": "Owner 2026-11-01: Sonnet 5.5 high for routine operations."
+          }
+        }
+      },
+      "recon": {
+        "label": "Security recon",
+        "work_roles": [
+          "recon"
+        ],
+        "context": "full",
+        "prefer": [
+          "pi",
+          "codex",
+          "claude-code"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-sonnet-5-5",
+            "effort": "high",
+            "why": "Recon is fact-gathering (owner 2026-11-01: Sonnet 5.5 high); Pi and Codex Daybreak come first for security work."
+          },
+          "codex": {
+            "model": "gpt-6-sol",
+            "effort": "xhigh",
+            "daybreak": true,
+            "why": "Recon is part of hunting: Owner 2026-11-01: Codex hunting runs the current Daybreak model at xhigh with Daybreak on (Codex's catalog lists gpt-6-sol with Daybreak, checked 2026-11-01; create refuses a model that lost it)."
+          },
+          "pi": {
+            "model": "opencode-go/deepseek-v4.1-flash",
+            "effort": "high",
+            "why": "Same as hunters: DeepSeek 4.1 Flash high."
+          }
+        }
+      },
+      "hunting": {
+        "label": "Hunting",
+        "work_roles": [
+          "hunting"
+        ],
+        "context": "full",
+        "prefer": [
+          "pi",
+          "codex",
+          "claude-code"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "why": "No owner rule for Claude hunters; when unsure, Opus 5.5 (owner 2026-11-01)."
+          },
+          "codex": {
+            "model": "gpt-6-sol",
+            "effort": "xhigh",
+            "daybreak": true,
+            "why": "Owner 2026-11-01: Codex hunting runs the current Daybreak model at xhigh with Daybreak on (Codex's catalog lists gpt-6-sol with Daybreak, checked 2026-11-01; create refuses a model that lost it)."
+          },
+          "pi": {
+            "model": "opencode-go/deepseek-v4.1-flash",
+            "effort": "high",
+            "alternates": [
+              {
+                "model": "opencode-go/glm-5.3",
+                "effort": "high",
+                "when": "a second hunter model"
+              },
+              {
+                "model": "opencode-go/glm-5.3-flash",
+                "effort": "high",
+                "when": "a cheaper second hunter model"
+              }
+            ],
+            "why": "Owner 2026-11-01: Pi hunters run DeepSeek 4.1 Flash high; GLM 5.3 and GLM 5.3 Flash are good hunters too. Neri's hunts.tools picks per hunt."
+          }
+        }
+      },
+      "other": {
+        "label": "Narrow one-off jobs",
+        "work_roles": [
+          "other"
+        ],
+        "context": "blank-slate",
+        "prefer": [
+          "claude-code",
+          "codex",
+          "pi"
+        ],
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "why": "Owner 2026-11-01: when unsure, Opus 5.5."
+          }
+        }
+      }
     }
   }
 }

@@ -102,16 +102,24 @@ def test_route_says_when_no_candidate_is_available_and_when_automatic_qualifies(
     assert "catalog=fresh last_sync=2026-10-28" in result.output
 
 
-def test_route_without_task_lists_task_types_and_json_is_the_raw_payload() -> None:
+def _launch(role: str | None = None, tool: str | None = None) -> dict:
+    from app.routing.model_selection import _load_policy, launch_defaults
+
+    return launch_defaults(_load_policy(), role=role, tool=tool)
+
+
+def test_route_without_task_lists_task_types_and_the_launch_table() -> None:
     policy = {"version": 2, "task_types": ["coding", "writing"]}
-    with patch("agent_hub_st.models._selection_policy_api", return_value=policy):
+    with (patch("agent_hub_st.models._selection_policy_api", return_value=policy),
+          patch("agent_hub_st.models._launch_api", return_value=_launch())):
         listed = runner.invoke(app, ["route"])
         as_json = runner.invoke(app, ["route", "--json"])
     with patch("agent_hub_st.models._select_api", return_value=_advice()):
         advice_json = runner.invoke(app, ["route", "--task", "coding", "--json"])
 
-    assert listed.output.splitlines() == ["TASK_TYPES[2] policy=v2", "  coding  writing"]
-    assert json.loads(as_json.output) == policy
+    assert listed.output.splitlines()[:2] == ["TASK_TYPES[2] policy=v2", "  coding  writing"]
+    assert "LAUNCH[55 rows]" in listed.output and "claude-haiku-5-5" in listed.output
+    assert json.loads(as_json.output)["task_types"] == policy
     assert json.loads(advice_json.output)["candidates_checked"][0]["available"] is False
 
 
@@ -123,3 +131,31 @@ def test_route_posts_only_the_task_type_in_advisory_mode() -> None:
         "POST", "/api/models/select", json={"task_type": "coding", "mode": "advisory"},
         tool_name="st models route",
     )
+
+
+def test_route_role_and_tool_prints_one_launch_row_with_reasons() -> None:
+    with patch("agent_hub_st.models._launch_api", return_value=_launch("verification", "claude-code")) as launch:
+        result = runner.invoke(app, ["route", "--role", "verification", "--tool", "claude-code"])
+
+    assert result.exit_code == 0
+    launch.assert_called_once_with("verification", "claude-code")
+    lines = result.output.splitlines()
+    assert lines[0].startswith("LAUNCH[verification claude-code] job=testing (Testing)")
+    assert lines[1] == "  model=claude-haiku-5-5 effort=high daybreak=- context=blank-slate"
+    assert "instead: claude-sonnet-5-5 high when Haiku can't do the job" in result.output
+    assert "native subagent: user-tester" in result.output and "why=Owner 2026-11-01" in result.output
+
+
+def test_route_marks_rows_no_default_applies_to() -> None:
+    with patch("agent_hub_st.models._launch_api", return_value=_launch("review", "codex")):
+        result = runner.invoke(app, ["route", "--role", "review", "--tool", "codex"])
+    assert "(not used: no default applies)" in result.output and "no Codex reviews" in result.output
+
+
+def test_route_sends_role_and_tool_as_query_and_refuses_task_with_role() -> None:
+    with patch("agent_hub_st.models.agent_hub_request", return_value=_launch("hunting", "codex")) as request:
+        result = runner.invoke(app, ["route", "--role", "hunting", "--tool", "codex", "--json"])
+    request.assert_called_once_with("GET", "/api/models/launch-defaults", params={"role": "hunting", "tool": "codex"},
+                                    tool_name="st models route")
+    assert json.loads(result.output)["rows"][0]["daybreak"] is True
+    assert runner.invoke(app, ["route", "--task", "coding", "--role", "review"]).exit_code != 0

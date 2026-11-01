@@ -15,6 +15,7 @@ from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers.google import _get_thinking_level
 from app.llm.simple_options import clamp_reasoning
 from app.services.agent_routing_completion import route_preflight_error
+from app.services.session_roles import WORK_ROLES
 
 _POLICY_PATH = Path(__file__).parent / "model_selection_policy.json"
 
@@ -25,6 +26,10 @@ def _load_policy() -> dict:
 
 
 class UnknownTaskType(ValueError):
+    pass
+
+
+class UnknownLaunchKey(ValueError):
     pass
 
 
@@ -164,4 +169,44 @@ async def select_model(request: SelectionRequest) -> dict:
             {"assigned_model": resolve_model(request.assigned_model), "same_model": resolve_model(request.assigned_model) == model}
             if request.mode == "shadow" and request.assigned_model else None
         ),
+    }
+
+
+def _launch_job(launch: dict, role: str) -> str:
+    """A job id, or the job a registered work role launches as."""
+    if role in launch["jobs"]:
+        return role
+    for key, job in launch["jobs"].items():
+        if role in job.get("work_roles", []):
+            return key
+    jobs = sorted(set(launch["jobs"]) - set(WORK_ROLES))
+    raise UnknownLaunchKey(f"Unknown work role or job {role!r}. Work roles: {', '.join(WORK_ROLES)}. "
+                           f"Other jobs: {', '.join(jobs)}.")
+
+
+def _launch_row(launch: dict, key: str, tool: str) -> dict:
+    job = launch["jobs"][key]
+    row = job["tools"].get(tool) or launch["tools"][tool].get("default") or {
+        "model": None, "effort": None, "use": False, "why": f"No {tool} entry for this job."}
+    prefer = job.get("prefer", [])
+    return {
+        "job": key, "label": job["label"], "tool": tool, "model": row.get("model"), "effort": row.get("effort"),
+        "daybreak": row.get("daybreak"), "context": job["context"], "use": row.get("use", True),
+        "launchable": row.get("launchable", True), "rank": prefer.index(tool) + 1 if tool in prefer else None,
+        "prefer": prefer, "alternates": row.get("alternates", []), "subagent": job.get("subagent"),
+        "work_roles": job.get("work_roles", []), "why": row.get("why"),
+    }
+
+
+def launch_defaults(policy: dict, *, role: str | None = None, tool: str | None = None) -> dict:
+    """Rows of the launch table, optionally for one job/work role and one tool."""
+    launch = policy["launch"]
+    if tool is not None and tool not in launch["tools"]:
+        raise UnknownLaunchKey(f"Unknown tool {tool!r}; use one of: {', '.join(launch['tools'])}")
+    keys = [_launch_job(launch, role)] if role is not None else list(launch["jobs"])
+    tools = [tool] if tool is not None else list(launch["tools"])
+    return {
+        "version": policy["version"], "role": role, "work_role": role if role in WORK_ROLES else None,
+        "work_roles": list(WORK_ROLES), "about": launch["about"],
+        "rows": [_launch_row(launch, key, name) for key in keys for name in tools],
     }

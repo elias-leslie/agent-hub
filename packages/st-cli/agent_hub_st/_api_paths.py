@@ -36,6 +36,7 @@ AGENTS_PREVIEW_PATH = "/api/agents/{slug}/preview"
 MODELS_BASE_PATH = "/api/models"
 MODELS_SELECT_PATH = "/api/models/select"
 MODELS_SELECTION_POLICY_PATH = "/api/models/selection-policy"
+MODELS_LAUNCH_DEFAULTS_PATH = "/api/models/launch-defaults"
 
 # ── Prompts ──────────────────────────────────────────────────────────
 PROMPTS_BASE_PATH = "/api/prompts"
