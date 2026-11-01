@@ -2,6 +2,7 @@
 
 Agents keep writing context with no gate; these endpoints are for reviewing afterwards. A rework or refuse against
 a target that changed since the reviewer loaded the queue returns 409 and changes nothing; reload and decide again.
+So does a decision Postgres aborted because it collided with another change (deadlock or serialization failure).
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.prompts import _invalidate_owned_agent_cache
@@ -83,8 +85,23 @@ async def list_decisions(
                          by=r.by, by_kind=r.by_kind, created_at=r.created_at) for r in rows]
 
 
+_COLLISION_SQLSTATES = {"40P01", "40001"}  # deadlock_detected, serialization_failure
+
+
 def _conflict(exc: ReviewConflict) -> HTTPException:
     return HTTPException(409, {"message": str(exc), "key": exc.key, "latest_revision": exc.latest_revision})
+
+
+def _collided(exc: DBAPIError) -> bool:
+    for error in (exc.orig, getattr(exc.orig, "__cause__", None)):
+        if (getattr(error, "pgcode", None) or getattr(error, "sqlstate", None)) in _COLLISION_SQLSTATES:
+            return True
+    return False
+
+
+def _collision() -> HTTPException:
+    return HTTPException(409, {"message": "Another change to the same context landed at the same time; nothing was"
+                                          " changed. Reload and decide again.", "key": None, "latest_revision": None})
 
 
 async def _finish(db: AsyncSession, touched: Touched) -> None:
@@ -113,6 +130,11 @@ async def refuse_changes(request: DecideRequest, db: DB, auth: Auth = None) -> D
     except HTTPException:
         await db.rollback()
         raise
+    except DBAPIError as exc:
+        await db.rollback()
+        if _collided(exc):
+            raise _collision() from exc
+        raise
     await _finish(db, touched)
     return result
 
@@ -128,6 +150,11 @@ async def rework_change(request: ReworkRequest, db: DB, auth: Auth = None) -> De
         raise _conflict(exc) from exc
     except HTTPException:
         await db.rollback()
+        raise
+    except DBAPIError as exc:
+        await db.rollback()
+        if _collided(exc):
+            raise _collision() from exc
         raise
     await _finish(db, touched)
     return result

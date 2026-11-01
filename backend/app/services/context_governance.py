@@ -7,6 +7,7 @@ memory scope moves for registered service clients build on the same drafts.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import HTTPException
@@ -104,7 +105,10 @@ async def record(db: AsyncSession, kind: str, actor: str, payload: dict[str, Any
     if payload.get("source", {}).get("source_id"):
         source_ids.add(payload["source"]["source_id"])
     payload = {**payload, "writer": payload.get("writer") or writer_columns()}
-    evidence = ContextRecord(id=key, kind=kind, actor=actor, source_keys=sorted(source_ids), payload=payload)
+    # Wall clock at insert (after the caller's locks), not the transaction start: a change that waited behind a
+    # context review decision must be stamped after it, or the review queue would treat it as already reviewed.
+    evidence = ContextRecord(id=key, kind=kind, actor=actor, source_keys=sorted(source_ids), payload=payload,
+                             created_at=datetime.now(UTC))
     db.add(evidence)
     await db.flush()
     return key

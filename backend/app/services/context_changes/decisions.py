@@ -5,12 +5,16 @@
   archives it), writing one revision as the reviewer.
 - Refuse undoes the unreviewed changes: a create is archived (its revisions stay), an update or delete is restored to
   the revision before the first unreviewed one, through the M0 restore (every field, re-embedded, row lock and
-  memories.version check). A placement change puts the layer's earlier rules back.
+  memories.version check). A renamed prompt gets its old slug back. A placement change puts the layer's earlier rules
+  back. Owner or system writes made after the first unreviewed change are undone too; the result lists them
+  (``also_undid``), as the queue row did (``also_undoes``).
 
 Rework and refuse need the target's latest revision to be the one the reviewer saw (``through_revision``) and, for a
 memory, memories.version to be the version they saw; anything newer raises ``ReviewConflict`` (HTTP 409, reload).
-The checks run under the same row lock (or placement-layer lock) as the write. Several items decided together run
-in one transaction, locked in a fixed order: one conflict changes nothing. Nothing here commits; the caller does.
+Rework on a deleted target is a 422: reloading cannot help, refuse restores it. The checks run under the same row
+lock (or placement-layer lock) as the write. Several items decided together run in one transaction, placement layers
+locked first and then memories and prompts in a fixed order, the same order as a context draft (layer, then its
+sources); one conflict changes nothing. Nothing here commits; the caller does.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.project_roots import get_registered_project_roots
 from app.core.request_actor import attribute, current_request_writer
 from app.models.context_change_review import ContextChangeReview
 from app.models.memory_unified import Memory, MemoryRevision
@@ -39,10 +44,13 @@ from app.services.context_policy import (
 from app.services.context_writer import resolve_writers
 from app.services.memory._repo_revisions import RevisionConflictError, _embed_or_none
 from app.services.memory.applicability import ROLE_CONSUMER_TAGS, WORK_ROLE_TAG_PREFIX
+from app.services.memory.memory_models import MemoryScope
+from app.services.memory.memory_utils import build_group_id
 from app.services.memory.repository import MemoryRepository
 from app.services.prompt_service import (
     PromptRevisionConflictError,
     _sync_owned_agent_system_prompt_mirror,
+    latest_prompt_revision_id,
     lock_prompt_by_slug,
     record_prompt_revision,
     restore_prompt_revision,
@@ -50,9 +58,11 @@ from app.services.prompt_service import (
 
 from .queue import (
     Fold,
+    LaterWrite,
     Step,
     TargetKind,
     WriterView,
+    later_writes,
     layer_request,
     parse_placement_key,
     session_of,
@@ -128,6 +138,8 @@ class DecisionResult(BaseModel):
     through_revision: str
     result_revision: str | None
     outcome: str  # recorded | archived | restored | disabled | edited | narrowed | nothing to undo
+    also_undid: list[LaterWrite] = Field(default_factory=list,
+                                         description="Owner or system writes this refuse undid along with the change")
 
 
 class DecideResponse(BaseModel):
@@ -184,7 +196,8 @@ def _sorted(items: list[ReviewItem]) -> list[ReviewItem]:
     keys = [i.key for i in items]
     if len(set(keys)) != len(keys):
         raise HTTPException(422, "Each change can be decided once per request")
-    return sorted(items, key=lambda i: (i.target_kind, i.target_id))  # fixed lock order: no deadlocks
+    # Placement layers first, then sources by kind and id: the order a context draft locks (layer, then sources).
+    return sorted(items, key=lambda i: (i.target_kind != "placement", i.target_kind, i.target_id))
 
 
 async def keep(db: AsyncSession, request: DecideRequest) -> DecideResponse:
@@ -222,7 +235,7 @@ async def refuse(db: AsyncSession, request: DecideRequest, touched: Touched | No
                                       previous_covered=target.covered_until)
         results.append(DecisionResult(key=item.key, decision="refuse", review_id=str(review.id),
                                       through_revision=through.id, result_revision=None if result is None else result[0],
-                                      outcome=outcome))
+                                      outcome=outcome, also_undid=later_writes(target) if result else []))
     return DecideResponse(results=results, linked_pending=await _linked_pending(db, request.items, sessions))
 
 
@@ -253,7 +266,7 @@ async def _linked_pending(db: AsyncSession, items: list[ReviewItem], sessions: s
     if not sessions:
         return []
     decided = {i.key for i in items}
-    rows = (await build_queue(db)).rows
+    rows = (await build_queue(db, automatic=False)).rows
     return sorted(r.key for r in rows if r.key not in decided and sessions.intersection(r.sessions))
 
 
@@ -330,9 +343,9 @@ async def _rework_memory(
     fallback_project = await _writer_project(db, target)
     memory = await _lock_memory(db, request, through)
     if memory is None:
-        raise ReviewConflict(request.key, f"{request.key} is deleted; refuse restores it", latest_revision=through.id)
+        raise _deleted(request)
     if request.narrow is not None:
-        updates |= _narrow_memory(memory, request.narrow, fallback_project)
+        updates |= await _narrow_memory(memory, request.narrow, fallback_project)
         outcome.append("narrowed")
     await MemoryRepository().update(memory.id, db=db, action="rework", changed_by=_changed_by("rework"),
                                     change_reason=request.note or "Reworked in context review", **updates)
@@ -346,7 +359,17 @@ async def _writer_project(db: AsyncSession, target: Fold) -> str | None:
     return next((w.project for w in reversed(writers) if w.project), None)
 
 
-def _narrow_memory(memory: Memory, narrow: Narrow, fallback_project: str | None) -> dict[str, Any]:
+def _deleted(item: ReviewItem) -> HTTPException:
+    return HTTPException(422, f"{item.key} is deleted, so it cannot be reworked; refuse restores it")
+
+
+async def _registered_project(project: str) -> str:
+    if project not in await get_registered_project_roots():
+        raise HTTPException(422, f"{project} is not a registered project")
+    return project
+
+
+async def _narrow_memory(memory: Memory, narrow: Narrow, fallback_project: str | None) -> dict[str, Any]:
     if narrow.to == "session":
         return {"status": "archived"}
     updates: dict[str, Any] = {}
@@ -354,7 +377,10 @@ def _narrow_memory(memory: Memory, narrow: Narrow, fallback_project: str | None)
     if narrow.to == "project" or narrow.project_id:
         if not project:
             raise HTTPException(422, "Name the project to narrow to")
-        updates |= {"scope": "project", "scope_id": project}
+        project = await _registered_project(project)
+        # group_id follows scope, as a context edit does: group lookups must stop treating it as global.
+        updates |= {"scope": "project", "scope_id": project,
+                    "group_id": build_group_id(MemoryScope.PROJECT, project)}
     if narrow.to == "role":
         applicability = dict(memory.applicability or {})
         applicability["audience_tags"] = [WORK_ROLE_TAG_PREFIX + str(narrow.role)]
@@ -368,12 +394,9 @@ def _narrow_memory(memory: Memory, narrow: Narrow, fallback_project: str | None)
 
 async def _lock_prompt(db: AsyncSession, item: ReviewItem, through: Step) -> Prompt | None:
     prompt = await lock_prompt_by_slug(db, item.target_id)
-    latest = (await db.execute(
-        select(PromptRevision.id).where(PromptRevision.prompt_slug == item.target_id)
-        .order_by(PromptRevision.created_at.desc()).limit(1)
-    )).scalar_one_or_none()
-    if str(latest) != through.id:
-        raise ReviewConflict(item.key, f"{item.key} changed since you looked; reload", latest_revision=str(latest))
+    latest = await latest_prompt_revision_id(db, prompt, item.target_id)
+    if latest != through.id:
+        raise ReviewConflict(item.key, f"{item.key} changed since you looked; reload", latest_revision=latest)
     return prompt
 
 
@@ -402,7 +425,7 @@ async def _refuse_prompt(
         raise HTTPException(404, f"{item.key}: revision {base.id[:8]} is gone")
     touched.prompts.append(prompt)
     revision = (await db.execute(
-        select(PromptRevision).where(PromptRevision.prompt_slug == item.target_id)
+        select(PromptRevision).where(PromptRevision.prompt_id == prompt.id)
         .order_by(PromptRevision.created_at.desc()).limit(1)
     )).scalar_one()
     return "restored", (str(revision.id), revision.created_at)
@@ -413,7 +436,7 @@ async def _rework_prompt(
 ) -> tuple[str, tuple[str, datetime]]:
     prompt = await _lock_prompt(db, request, through)
     if prompt is None:
-        raise ReviewConflict(request.key, f"{request.key} is deleted; refuse restores it", latest_revision=through.id)
+        raise _deleted(request)
     outcome = []
     if request.edit is not None:
         if request.edit.content is not None:

@@ -1,8 +1,9 @@
 """PostgreSQL contracts for the context review queue and keep / rework / refuse.
 
-Agents keep writing; the owner reviews afterwards. Owner writes never queue, every other non-archive change does,
-one row per target; refuse undoes through the locked, version-checked restore and a change the reviewer did not see
-returns a conflict that changes nothing.
+Agents keep writing; the owner reviews afterwards. Owner and system writes never queue (system ones are listed as
+automatic), every other non-archive change does, one row per target (a prompt's across renames); refuse undoes
+through the locked, version-checked restore, says which later owner or system writes it undid too, and a change the
+reviewer did not see returns a conflict that changes nothing.
 
 Runs against the explicit test database: private tables in a throwaway schema, rolled back or dropped.
 """
@@ -19,9 +20,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import Enum, make_url, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.schema import CreateTable
 
@@ -46,8 +48,16 @@ from app.services.context_changes import (
     rework,
 )
 from app.services.context_changes.decisions import Edit, Narrow
+from app.services.context_policy import lock_placement_layer
+from app.services.memory.memory_models import MemoryScope
+from app.services.memory.memory_utils import build_group_id
 from app.services.memory.repository import MemoryRepository
-from app.services.prompt_service import create_prompt, update_prompt
+from app.services.prompt_service import (
+    create_prompt,
+    delete_prompt,
+    lock_prompt_by_slug,
+    update_prompt,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -56,6 +66,8 @@ HASH = "h" * 64
 LANE = RequestWriter(kind="agent", delivery=HASH, session="aico-widget-lane")
 OTHER_LANE = RequestWriter(kind="agent", delivery="o" * 64, session="aico-widget-other")
 OWNER = RequestWriter(kind="owner")
+SYSTEM = RequestWriter(kind="system")
+ROOTS = {"agent-hub": "/srv/workspaces/projects/agent-hub", "summitflow": "/srv/workspaces/projects/summitflow"}
 
 
 def _test_db_url() -> Any:
@@ -115,10 +127,12 @@ async def pg_engine() -> AsyncGenerator[AsyncEngine]:
 
 @pytest.fixture(autouse=True)
 def quiet(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
-    """No embedder or Nightshift calls; the embedder returns a fixed vector."""
+    """No embedder, Nightshift or project registry calls; the embedder returns a fixed vector."""
     embed = AsyncMock(return_value=VECTOR)
     monkeypatch.setattr("app.services.memory._repo_revisions.get_embedder", lambda: MagicMock(embed=embed))
     monkeypatch.setattr("app.services.global_context_notes.send_note", AsyncMock())
+    monkeypatch.setattr("app.services.context_changes.decisions.get_registered_project_roots",
+                        AsyncMock(return_value=ROOTS), raising=False)
     return embed
 
 
@@ -129,9 +143,10 @@ def _as(writer: RequestWriter) -> None:
 async def _memory(db: AsyncSession, content: str, *, writer: RequestWriter, scope: str = "global",
                   scope_id: str | None = None, tier: int = 3, metadata: dict[str, Any] | None = None) -> Memory:
     _as(writer)
+    group_id = build_group_id(MemoryScope(scope), scope_id)
     return await MemoryRepository().create(
         content=content, memory_type="reference", scope=scope, scope_id=scope_id, tier=tier, embedding=VECTOR,
-        name=content[:20], summary=content[:40], context_kind="policy", metadata=metadata, db=db)
+        name=content[:20], summary=content[:40], context_kind="policy", metadata=metadata, group_id=group_id, db=db)
 
 
 async def _update(db: AsyncSession, memory: Memory, *, writer: RequestWriter, **changes: Any) -> None:
@@ -143,10 +158,11 @@ async def _update(db: AsyncSession, memory: Memory, *, writer: RequestWriter, **
 
 async def _delivery(db: AsyncSession, *, blocks: list[tuple[str, str]], surface: str = "claude_code",
                     role: str | None = "implementation", project: str | None = "agent-hub",
-                    session: str = "aico-widget-lane", payload_hash: str = HASH, profile: str = "agent_startup") -> str:
+                    session: str = "aico-widget-lane", payload_hash: str = HASH, profile: str = "agent_startup",
+                    generated_at: datetime | None = None) -> str:
     delivery_id = uuid.uuid4().hex
     db.add(ContextDelivery(
-        delivery_id=delivery_id, generated_at=datetime.now(UTC) - timedelta(hours=1), source="api", surface=surface,
+        delivery_id=delivery_id, generated_at=generated_at or datetime.now(UTC), source="api", surface=surface,
         profile=profile, project_id=project, session_id=session, work_role=role, coordinator=False, consumer_tags=[],
         est_tokens=100, payload_hash=payload_hash, rendered_chars=400, by_scope={},
         blocks=[{"source_type": t, "source_id": i, "tokens": 50} for t, i in blocks]))
@@ -198,8 +214,8 @@ async def test_queue_folds_agent_changes_and_never_queues_owner_or_archive_write
     assert row.delta_tokens == row.after["tokens"] > 0
     assert row.reach is not None and (row.reach.starts, row.reach.subagent_starts) == (2, 1)
     assert {(r.harness, r.role) for r in row.reach.receivers} == {("claude_code", "implementation"), ("codex", "review")}
-    assert row.reach.starts_per_day == 0.4  # (2 starts + 1 subagent) / 7 days
-    assert row.tokens_per_day == round(row.delta_tokens * 0.4)
+    assert row.reach.starts_per_day == 3.0  # (2 starts + 1 subagent) since the change, counted over at least a day
+    assert row.tokens_per_day == round(row.delta_tokens * 3.0)
     (writer,) = row.writers
     assert (writer.kind, writer.session, writer.harness, writer.work_role, writer.project) == (
         "agent", "aico-widget-lane", "claude_code", "implementation", "agent-hub")
@@ -440,3 +456,234 @@ async def test_placement_change_refuse_restores_the_layer_and_conflicts_on_unsee
     assert result.results[0].outcome == "restored"
     assert (await pg_db.execute(select(RuntimeContextOverride))).scalars().all() == []
     assert (await build_queue(pg_db)).rows == []
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Review fixes (REVIEW-M2)
+
+
+async def test_system_writes_never_queue_and_are_listed_as_automatic(pg_db: AsyncSession) -> None:
+    """Consolidation archiving a near-duplicate is the system's, not an agent's: history and a separate list only."""
+    copy = await _memory(pg_db, "**Deploys**: ask first (copy).", writer=OWNER)
+    await _update(pg_db, copy, writer=SYSTEM, status="archived", change_reason="Consolidated into a near-duplicate")
+    await _update(pg_db, copy, writer=SYSTEM, status="retired")  # archive to archive: not even listed
+    agent_made = await _memory(pg_db, "**Lane rule**: agent wrote it.", writer=LANE)
+    await _update(pg_db, agent_made, writer=SYSTEM, scope="project", scope_id="agent-hub")  # normalization
+
+    queue = await build_queue(pg_db)
+
+    assert [r.key for r in queue.rows] == [f"memory:{agent_made.id}"]
+    assert queue.summary.count == 1
+    assert [(c.key, c.action) for c in queue.automatic] == [
+        (f"memory:{agent_made.id}", "update"), (f"memory:{copy.id}", "update")]
+    assert queue.automatic[1].reason == "Consolidated into a near-duplicate"
+    (later,) = queue.rows[0].also_undoes  # refusing the agent's create also undoes the normalization
+    assert (later.writer_kind, later.action) == ("system", "update")
+
+
+async def test_refuse_says_which_later_owner_edit_it_also_undoes(pg_db: AsyncSession) -> None:
+    memory = await _memory(pg_db, "**Rule**: original.", writer=OWNER)
+    await _update(pg_db, memory, writer=LANE, content="**Rule**: agent edit.")
+    await _update(pg_db, memory, writer=OWNER, summary="owner tidied the summary")
+    owner_edit = (await _revisions(pg_db, memory.id))[-1]
+    row = (await build_queue(pg_db)).rows[0]
+    assert [(w.revision, w.writer_kind) for w in row.also_undoes] == [(owner_edit.id, "owner")]
+    assert row.after is not None and row.after["summary"] == "owner tidied the summary"  # shown in the diff
+    _as(OWNER)
+
+    result = await refuse(pg_db, DecideRequest(items=[_item(row)]))
+
+    assert [(w.revision, w.writer_kind) for w in result.results[0].also_undid] == [(owner_edit.id, "owner")]
+    await pg_db.refresh(memory)
+    assert (memory.content, memory.summary) == ("**Rule**: original.", "**Rule**: original.")
+
+
+async def test_refusing_a_renamed_prompt_restores_the_old_slug_and_text(pg_db: AsyncSession) -> None:
+    _as(OWNER)
+    await create_prompt(pg_db, slug="x-rule", name="X rule", content="Reviewed global text.", is_global=True)
+    _as(LANE)
+    await update_prompt(pg_db, "x-rule", slug="y-rule", content="Agent rewrite.")
+    queue = await build_queue(pg_db)
+    assert [r.key for r in queue.rows] == ["prompt:y-rule"]
+    row = queue.rows[0]
+    assert row.change == "update" and row.before is not None and row.after is not None
+    assert (row.before["slug"], row.before["content"], row.after["slug"]) == ("x-rule", "Reviewed global text.", "y-rule")
+    _as(OWNER)
+
+    result = await refuse(pg_db, DecideRequest(items=[_item(row)]))
+
+    assert result.results[0].outcome == "restored"
+    prompts = {p.slug: p for p in (await pg_db.execute(select(Prompt).execution_options(populate_existing=True))).scalars()}
+    assert set(prompts) == {"x-rule"}
+    assert (prompts["x-rule"].content, prompts["x-rule"].enabled, prompts["x-rule"].is_global) == (
+        "Reviewed global text.", True, True)
+    assert (await build_queue(pg_db)).rows == []
+
+
+async def test_narrowing_to_a_project_rebuilds_group_id_and_needs_a_registered_project(pg_db: AsyncSession) -> None:
+    memory = await _memory(pg_db, "**Lane note**: only summitflow needs it.", writer=LANE)
+    assert memory.group_id == "global"
+    row = (await build_queue(pg_db)).rows[0]
+    _as(OWNER)
+
+    with pytest.raises(HTTPException) as unregistered:
+        await rework(pg_db, ReworkRequest(**_item(row).model_dump(), narrow=Narrow(to="project", project_id="nowhere")))
+    assert unregistered.value.status_code == 422
+    await rework(pg_db, ReworkRequest(**_item(row).model_dump(), narrow=Narrow(to="project", project_id="summitflow")))
+
+    await pg_db.refresh(memory)
+    assert (memory.scope, memory.scope_id) == ("project", "summitflow")
+    assert memory.group_id == build_group_id(MemoryScope.PROJECT, "summitflow") != "global"
+
+
+async def test_rework_on_a_deleted_target_is_422_not_a_reload_conflict(pg_db: AsyncSession) -> None:
+    memory = await _memory(pg_db, "**Old rule**: owner's.", writer=OWNER)
+    _as(LANE)
+    assert await MemoryRepository().delete(memory.id, db=pg_db)
+    await pg_db.flush()
+    _as(OWNER)
+    await create_prompt(pg_db, slug="gone", name="Gone", content="Owner text.")
+    _as(LANE)
+    assert await delete_prompt(pg_db, "gone")
+    queue = await build_queue(pg_db)
+    _as(OWNER)
+
+    for key in (f"memory:{memory.id}", "prompt:gone"):
+        row = _row(queue, key)
+        assert row.change == "delete"
+        with pytest.raises(HTTPException) as deleted:
+            await rework(pg_db, ReworkRequest(**_item(row).model_dump(), edit=Edit(content="Edited.")))
+        assert deleted.value.status_code == 422
+
+
+async def test_reach_counts_deliveries_since_the_change_and_is_unknown_until_there_are_any(
+    pg_db: AsyncSession,
+) -> None:
+    earlier = datetime.now(UTC) - timedelta(days=2)
+    widened = await _memory(pg_db, "**Lane rule**: project only.", writer=OWNER, scope="project", scope_id="agent-hub")
+    dropped = await _memory(pg_db, "**Old habit**: delivered before.", writer=OWNER)
+    for _ in range(3):
+        await _delivery(pg_db, blocks=[("memory", str(widened.id)), ("memory", str(dropped.id))], generated_at=earlier)
+    await _update(pg_db, widened, writer=LANE, scope="global", scope_id=None)
+    created = await _memory(pg_db, "**Brand new**: global from the start.", writer=LANE)
+    await _update(pg_db, dropped, writer=LANE, status="archived")
+
+    queue = await build_queue(pg_db)
+
+    for key in (f"memory:{widened.id}", f"memory:{created.id}"):
+        row = _row(queue, key)
+        assert (row.reach, row.tokens_per_day) == (None, None)  # unknown, not 0
+    assert queue.summary.unknown_reach == 2
+    removed = _row(queue, f"memory:{dropped.id}")  # what an archive took away: the week before it
+    assert removed.reach is not None and removed.reach.starts == 3
+    assert removed.delta_tokens is not None and removed.tokens_per_day == round(removed.delta_tokens * 3 / 7)
+
+    await _delivery(pg_db, blocks=[("memory", str(widened.id))])
+    row = _row(await build_queue(pg_db), f"memory:{widened.id}")
+    assert row.reach is not None and (row.reach.starts, row.reach.starts_per_day) == (1, 1.0)
+
+
+async def test_refuse_locks_the_placement_layer_before_sources_like_a_context_draft(pg_engine: AsyncEngine) -> None:
+    """A draft locks its layer, then its sources; a refuse of a memory plus that layer must not deadlock with it."""
+    from app.services.runtime_context import (
+        RuntimeContextOverridePayload,
+        replace_runtime_context_overrides,
+    )
+
+    async with AsyncSession(pg_engine, expire_on_commit=False) as setup:
+        memory = await _memory(setup, "**Rule**: four.", writer=OWNER)
+        await _update(setup, memory, writer=LANE, content="**Rule**: four, agent edit.")
+        _as(OWNER)
+        await create_prompt(setup, slug="guard", name="Guard", content="Never expose secrets.", is_global=True)
+        _as(LANE)
+        await replace_runtime_context_overrides(setup, consumer_profile="agent_startup", project_id="agent-hub",
+                                                overrides=[RuntimeContextOverridePayload(
+                                                    source_type="prompt", source_id="guard", mode="exclude")])
+        queue = await build_queue(setup)
+        items = [_item(_row(queue, f"memory:{memory.id}")), _item(_row(queue, "placement:agent_startup|agent-hub"))]
+        await setup.commit()
+
+    async with AsyncSession(pg_engine) as draft, AsyncSession(pg_engine) as owner:
+        await lock_placement_layer(draft, "agent_startup", "agent-hub")
+        _as(OWNER)
+        refusal = await _behind_row_lock(pg_engine, refuse(owner, DecideRequest(items=items)))
+        await draft.execute(select(Memory).where(Memory.id == memory.id).with_for_update())  # then its sources
+        await draft.commit()
+        result = await refusal
+        await owner.commit()
+    assert sorted(r.outcome for r in result.results) == ["restored", "restored"]
+
+
+async def test_a_placement_change_that_started_before_a_refuse_queues_after_it(pg_engine: AsyncEngine) -> None:
+    """Change records carry the clock at insert, not their transaction's start."""
+    from app.services.runtime_context import (
+        RuntimeContextOverridePayload,
+        replace_runtime_context_overrides,
+    )
+
+    exclude = [RuntimeContextOverridePayload(source_type="prompt", source_id="guard", mode="exclude")]
+    async with AsyncSession(pg_engine, expire_on_commit=False) as setup:
+        _as(OWNER)
+        await create_prompt(setup, slug="guard", name="Guard", content="Never expose secrets.", is_global=True)
+        _as(LANE)
+        await replace_runtime_context_overrides(setup, consumer_profile="agent_startup", project_id="agent-hub",
+                                                overrides=exclude)
+        row = _row(await build_queue(setup), "placement:agent_startup|agent-hub")
+        await setup.commit()
+
+    async with AsyncSession(pg_engine) as agent, AsyncSession(pg_engine) as owner:
+        await agent.execute(text("SELECT 1"))  # the agent's transaction is already open
+        _as(OWNER)
+        await refuse(owner, DecideRequest(items=[_item(row)]))
+        await owner.commit()
+        _as(OTHER_LANE)
+        await replace_runtime_context_overrides(agent, consumer_profile="agent_startup", project_id="agent-hub",
+                                                overrides=exclude)
+
+    async with AsyncSession(pg_engine) as check:
+        again = _row(await build_queue(check), "placement:agent_startup|agent-hub")
+        assert again.sessions == ["aico-widget-other"]
+
+
+async def test_a_prompt_delete_waiting_behind_a_refuse_is_stamped_after_it_and_queues(pg_engine: AsyncEngine) -> None:
+    async with AsyncSession(pg_engine, expire_on_commit=False) as setup:
+        _as(OWNER)
+        await create_prompt(setup, slug="lane-prompt", name="Lane prompt", content="Owner text.")
+        _as(LANE)
+        await update_prompt(setup, "lane-prompt", content="Lane text.")
+        row = (await build_queue(setup)).rows[0]
+
+    async with AsyncSession(pg_engine) as owner, AsyncSession(pg_engine) as agent:
+        await lock_prompt_by_slug(owner, "lane-prompt")  # the refuse's first step: lock the row, then write
+        _as(OTHER_LANE)
+        deleting = await _behind_row_lock(pg_engine, delete_prompt(agent, "lane-prompt"))
+        _as(OWNER)
+        await refuse(owner, DecideRequest(items=[_item(row)]))
+        await owner.commit()
+        assert await deleting
+
+    async with AsyncSession(pg_engine) as check:
+        rows = (await build_queue(check)).rows
+        assert [(r.key, r.change, r.sessions) for r in rows] == [("prompt:lane-prompt", "delete", ["aico-widget-other"])]
+
+
+async def test_a_refuse_postgres_aborts_as_a_deadlock_is_a_409(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.context_changes import router
+    from app.db import get_db
+
+    class Deadlock(Exception):
+        pgcode = "40P01"
+
+    db = MagicMock(rollback=AsyncMock(), commit=AsyncMock())
+    monkeypatch.setattr("app.api.context_changes.refuse",
+                        AsyncMock(side_effect=DBAPIError("SELECT ... FOR UPDATE", {}, Deadlock())))
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_api_key] = lambda: None
+    body = {"items": [{"target_kind": "memory", "target_id": str(uuid.uuid4()), "through_revision": "r1"}]}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/context-observability/changes/refuse", json=body)
+    assert response.status_code == 409, response.text
+    assert "same time" in response.json()["detail"]["message"]
+    db.rollback.assert_awaited_once()
