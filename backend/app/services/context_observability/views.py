@@ -282,7 +282,7 @@ async def trend(db: AsyncSession, harness: str, role: str, *, days: int, now: da
     steps: list[TrendStep] = []
     if policy.jump_pct is not None and window:
         for step in find_steps(window, policy.jump_pct)[-MAX_STEPS:]:
-            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model)
+            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role)
             marks = sorted(why.markers, key=lambda m: (m.kind in ("memory", "prompt"), m.at))[:MAX_STEP_MARKERS]
             steps.append(TrendStep(
                 at=step.at, kind=step.kind, cause=why.cause, model=step.model, delta=step.delta, pct=step.pct,
@@ -451,7 +451,7 @@ async def cell(db: AsyncSession, harness: str, role: str, *, now: datetime | Non
         found = find_steps(rows, policy.jump_pct)
         if found:
             step = found[-1]
-            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model)
+            why = await explain(db, rows, harness, role, step.at, policy=policy, now=now, kind=step.kind, model=step.model, cell=step.role)
             move = CellLatestMove(at=step.at, kind=step.kind, cause=why.cause, delta=why.delta, pct=why.pct, summary=why.summary)
     return empty.model_copy(update={
         "latest": _start(latest), "config_fp": latest.config_fp, "delivery_id": latest.delivery_id, "parts": parts, "blocks": blocks,
