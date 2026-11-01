@@ -32,6 +32,10 @@ _WORK_ROLE_IDS = frozenset(
 ROLE_CONSUMER_TAGS = frozenset(
     {"aico-coordinator", *(WORK_ROLE_TAG_PREFIX + role for role in _WORK_ROLE_IDS)}
 )
+# Matching adds this tag only when a consumer carries no role tag at all, so a
+# rule can target "coordinators and sessions whose role is not known". A
+# caller can never supply it: it is not a registered work role.
+UNKNOWN_ROLE_TAG = WORK_ROLE_TAG_PREFIX + "unknown"
 _TRIGGER_TASK_TYPE_ALIASES = {
     "testing": "test",
     "tests": "test",
@@ -259,6 +263,9 @@ def applicability_matches(
     consumer_profile = normalize_context_identifier(consumer_profile)
     consumer_agent_slug = normalize_agent_slug(consumer_agent_slug)
     tag_set = {tag.strip().lower() for tag in consumer_tags or [] if tag.strip()}
+    tag_set.discard(UNKNOWN_ROLE_TAG)
+    if not tag_set & ROLE_CONSUMER_TAGS:
+        tag_set.add(UNKNOWN_ROLE_TAG)
 
     if resolved.consumer_surfaces and (
         not consumer_surface or consumer_surface not in resolved.consumer_surfaces

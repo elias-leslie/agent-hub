@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 
 from app.services.memory.applicability import (
     ROLE_CONSUMER_TAGS,
+    UNKNOWN_ROLE_TAG,
+    applicability_matches,
     legacy_routing_tags,
     normalize_consumer_tags,
 )
@@ -95,3 +97,36 @@ def test_required_policy_follows_role_applicability() -> None:
 
 def test_role_tag_keeps_untargeted_references() -> None:
     assert [item.uuid for item in _select([RECON]).reference] == ["legacy-ref"]
+
+
+# Coordinator-only rules reach coordinators and sessions whose role is not
+# known, never a session that declared a narrower role.
+COORDINATOR_OR_UNKNOWN = MemoryApplicability(
+    audience_tags=["aico-coordinator", "work-role:coordinator", UNKNOWN_ROLE_TAG]
+)
+
+
+def test_coordinator_rules_reach_coordinators_and_unknown_roles_only() -> None:
+    for tags, expected in (
+        ([], True),
+        (["topic"], True),
+        (["aico-coordinator"], True),
+        (["work-role:coordinator"], True),
+        (["aico-coordinator", "work-role:implementation"], True),
+        ([RECON], False),
+        ([REVIEW], False),
+        (["work-role:verification"], False),
+        (["work-role:implementation", "topic"], False),
+    ):
+        assert applicability_matches(COORDINATOR_OR_UNKNOWN, consumer_tags=tags) is expected, tags
+
+
+def test_unknown_role_tag_cannot_be_supplied_by_a_caller() -> None:
+    # A declared role wins over a forged unknown tag.
+    assert not applicability_matches(COORDINATOR_OR_UNKNOWN, consumer_tags=[UNKNOWN_ROLE_TAG, REVIEW])
+    # It is not a registered role, so canonical requests drop it.
+    assert normalize_consumer_tags([UNKNOWN_ROLE_TAG, REVIEW]) == [REVIEW]
+    # Excluding unknown roles keeps declared ones.
+    excluded = MemoryApplicability(exclude_audience_tags=[UNKNOWN_ROLE_TAG])
+    assert not applicability_matches(excluded, consumer_tags=[])
+    assert applicability_matches(excluded, consumer_tags=[REVIEW])
