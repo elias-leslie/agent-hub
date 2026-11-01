@@ -208,8 +208,7 @@ export interface TierChangeEntry {
   old_tier: string | null
   new_tier: string
   change_type: string
-  lifecycle_score_before: number | null
-  lifecycle_score_after: number | null
+  lifecycle_score: number | null
   created_at: string | null
 }
 

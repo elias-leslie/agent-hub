@@ -23,16 +23,14 @@ function TierChangeRow({ entry }: TierChangeRowProps) {
       <span className="text-slate-500">
         {entry.old_tier ?? 'unknown'} → {entry.new_tier}
       </span>
-      {entry.lifecycle_score_before != null &&
-        entry.lifecycle_score_after != null && (
-          <>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-500 font-mono">
-              {(entry.lifecycle_score_before * 100).toFixed(0)} →{' '}
-              {(entry.lifecycle_score_after * 100).toFixed(0)}
-            </span>
-          </>
-        )}
+      {entry.lifecycle_score != null && (
+        <>
+          <span className="text-slate-600">|</span>
+          <span className="text-slate-500 font-mono">
+            score {(entry.lifecycle_score * 100).toFixed(0)}
+          </span>
+        </>
+      )}
       <span className="text-slate-600 ml-auto font-mono">
         {entry.episode_uuid.slice(0, 8)}
       </span>

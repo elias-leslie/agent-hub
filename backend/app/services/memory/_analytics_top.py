@@ -85,16 +85,20 @@ async def get_top_memories_query(
 
 # Tier moves are memory revisions written by the optimizer (tier_operations.TIER_ACTOR); the tier a
 # memory moved from is the tier on its previous revision. NULL when that revision was never stored.
+# Lifecycle scores change without writing revisions, so the previous revision's score can be months
+# old: only the score stored on the move's own revision is returned, never a "before" score.
+# A self-heal (archive back to reference) is the optimizer's promotion whose reason starts with
+# "self-heal:" (written by self_heal.find_and_apply_self_heals).
 _MOVES_CTE = """
 WITH revs AS (
-    SELECT memory_uuid, tier, lifecycle_score, created_at, changed_by,
-           LAG(tier) OVER w AS prev_tier,
-           LAG(lifecycle_score) OVER w AS prev_score
+    SELECT memory_uuid, tier, lifecycle_score, created_at, changed_by, change_reason,
+           LAG(tier) OVER w AS prev_tier
     FROM memory_revisions
     WINDOW w AS (PARTITION BY memory_uuid ORDER BY version, created_at)
 ), moves AS (
-    SELECT memory_uuid, prev_tier, tier, prev_score, lifecycle_score, created_at,
-           CASE WHEN prev_tier IS NULL THEN 'tier_move'
+    SELECT memory_uuid, prev_tier, tier, lifecycle_score, created_at,
+           CASE WHEN change_reason LIKE 'self-heal:%' THEN 'self_heal'
+                WHEN prev_tier IS NULL THEN 'tier_move'
                 WHEN tier < prev_tier THEN 'promotion'
                 ELSE 'demotion' END AS change_type
     FROM revs
@@ -109,7 +113,7 @@ _TIER_CHANGES_SQL = (
 )
 
 _TIER_RECENT_SQL = (
-    _MOVES_CTE + "SELECT memory_uuid, prev_tier, tier, prev_score, lifecycle_score, change_type, created_at "
+    _MOVES_CTE + "SELECT memory_uuid, prev_tier, tier, lifecycle_score, change_type, created_at "
     "FROM moves ORDER BY created_at DESC LIMIT 20"
 )
 
@@ -143,8 +147,7 @@ async def get_tier_changes_summary(
             "old_tier": _tier_name(r.prev_tier),
             "new_tier": _tier_name(r.tier),
             "change_type": r.change_type,
-            "lifecycle_score_before": r.prev_score,
-            "lifecycle_score_after": r.lifecycle_score,
+            "lifecycle_score": r.lifecycle_score,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in recent_rows

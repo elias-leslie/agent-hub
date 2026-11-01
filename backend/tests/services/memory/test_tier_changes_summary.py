@@ -39,9 +39,9 @@ async def test_card_returns_tier_moves_recorded_as_revisions(monkeypatch):
     summary = [SimpleNamespace(change_type="demotion", cnt=2, latest=NOW),
                SimpleNamespace(change_type="promotion", cnt=1, latest=NOW - timedelta(days=1))]
     recent = [SimpleNamespace(memory_uuid="0b0e3c1a-0000-0000-0000-000000000000", prev_tier=2, tier=3,
-                              prev_score=0.4, lifecycle_score=0.1, change_type="demotion", created_at=NOW),
+                              lifecycle_score=0.1, change_type="demotion", created_at=NOW),
               SimpleNamespace(memory_uuid="1c1f4d2b-0000-0000-0000-000000000000", prev_tier=None, tier=3,
-                              prev_score=None, lifecycle_score=None, change_type="tier_move", created_at=NOW)]
+                              lifecycle_score=None, change_type="tier_move", created_at=NOW)]
     calls = _fake_session(monkeypatch, summary, recent)
 
     result = cast(Any, await _analytics_top.get_tier_changes_summary(lookback_delta=timedelta(days=7)))
@@ -53,7 +53,7 @@ async def test_card_returns_tier_moves_recorded_as_revisions(monkeypatch):
     assert result["by_type"]["demotion"] == {"count": 2, "latest": NOW.isoformat()}
     assert result["recent"][0] == {
         "episode_uuid": "0b0e3c1a-0000-0000-0000-000000000000", "old_tier": "guardrail", "new_tier": "reference",
-        "change_type": "demotion", "lifecycle_score_before": 0.4, "lifecycle_score_after": 0.1,
+        "change_type": "demotion", "lifecycle_score": 0.1,
         "created_at": NOW.isoformat()}
     # A move whose earlier revision was never stored says so; it does not invent a source tier.
     assert result["recent"][1]["old_tier"] is None
@@ -64,3 +64,31 @@ async def test_no_moves_is_an_honest_empty_summary(monkeypatch):
     _fake_session(monkeypatch, [], [])
 
     assert await _analytics_top.get_tier_changes_summary(days=30) == {"by_type": {}, "recent": [], "total": 0}
+
+
+@pytest.mark.asyncio
+async def test_card_gives_only_the_moves_own_score_never_a_before_score(monkeypatch):
+    """Scores change without revisions, so the previous revision's score can be months stale."""
+    recent = [SimpleNamespace(memory_uuid="2d2a5e3c-0000-0000-0000-000000000000", prev_tier=3, tier=4,
+                              lifecycle_score=0.12, change_type="demotion", created_at=NOW)]
+    calls = _fake_session(monkeypatch, [], recent)
+
+    result = cast(Any, await _analytics_top.get_tier_changes_summary(days=30))
+
+    (move,) = result["recent"]
+    assert move["lifecycle_score"] == 0.12
+    assert not [key for key in move if "before" in key or "after" in key]
+    for sql, _ in calls:
+        assert "LAG(lifecycle_score)" not in sql and "prev_score" not in sql
+
+
+@pytest.mark.asyncio
+async def test_card_tells_self_heals_from_other_promotions(monkeypatch):
+    summary = [SimpleNamespace(change_type="self_heal", cnt=1, latest=NOW)]
+    calls = _fake_session(monkeypatch, summary, [])
+
+    result = cast(Any, await _analytics_top.get_tier_changes_summary(days=30))
+
+    assert result["by_type"]["self_heal"]["count"] == 1
+    # self_heal.py writes the reason "self-heal: ..." on the optimizer's revision.
+    assert all("change_reason LIKE 'self-heal:%'" in sql and "'self_heal'" in sql for sql, _ in calls)
