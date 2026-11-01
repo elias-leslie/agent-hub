@@ -278,7 +278,7 @@ def _credit_line(usage: dict[str, Any]) -> str:
     else:
         text += f"; about {days:g}d at the last-7-day pace"
     if credit.get("earliest_expiry"):
-        text += f"; lot expires {_when(credit['earliest_expiry'])[:5]}"
+        text += f"; the earliest credits expire {_when(credit['earliest_expiry'])[:5]}"
     return text
 
 
@@ -286,8 +286,9 @@ def _refusal_line(refusal: Any) -> str:
     if not isinstance(refusal, dict):
         return ""
     who = "/".join(str(part) for part in (refusal.get("role") or "role unknown", refusal.get("project")) if part)
+    kind = f" ({refusal['category']})" if refusal.get("category") else ""
     count = f" ({refusal['count']} recorded)" if refusal.get("count", 1) > 1 else ""
-    return f"last refusal {_when(refusal.get('at'))}, {who}{count}"
+    return f"last refusal {_when(refusal.get('at'))}{kind}, {who}{count}"
 
 
 def _option_lines(row: dict[str, Any]) -> list[str]:
@@ -314,7 +315,7 @@ def _print_options(payload: dict[str, Any], role: str, project: str | None) -> N
     rows = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
     where = f" project={project}" if project else ""
     print(f"OPTIONS[{role}{where}] policy=v{payload.get('version', '-')} facts as of {_when(payload.get('facts_as_of'))}; "
-          f"you choose, then st aico create --work-role {role} --tool T [--model M]")
+          f"you choose, then st aico create --work-role {role}{f' --project {project}' if project else ''} --tool T [--model M]")
     if payload.get("facts_error"):
         print(f"  usage facts unavailable ({payload['facts_error']}); allowed and denied are still right")
     for row in rows:

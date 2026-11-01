@@ -238,7 +238,7 @@ def test_options_view_is_short_and_shows_each_tools_usage_credits_and_reading_ag
     assert "claude-code  claude-opus-5-5 high  has room" in out and "| also: claude-sonnet-5-5 high" in out
     assert "weekly 30% left, resets" in out and "read " in out and "5h not reported" in out
     assert "codex  gpt-6.1-sol xhigh  running on credits" in out and "weekly used up until" in out
-    assert "12.7K credits; at the last-7-day pace they last past the 11-04 reset; lot expires 12-31" in out
+    assert "12.7K credits; at the last-7-day pace they last past the 11-04 reset; the earliest credits expire 12-31" in out
     assert "pi  deepseek-v4.1-flash high" in out.replace("opencode-go/", "") and "monthly 55% left" in out
     assert "antigravity  not launchable" in out
     assert "5h unknown" not in out  # a window missing from the latest reading is not reported, not unknown
@@ -246,7 +246,8 @@ def test_options_view_is_short_and_shows_each_tools_usage_credits_and_reading_ag
 
 def test_options_view_shows_the_last_refusal_and_a_denied_option_only_its_reason() -> None:
     coordinator = _route_options("coordinator", "--project", "neri", project="neri").output
-    assert "last refusal 11-01" in coordinator and "coordinator/neri" in coordinator
+    assert "last refusal 11-01" in coordinator and "(cyber), coordinator/neri" in coordinator
+    assert "st aico create --work-role coordinator --project neri --tool T" in coordinator
     hunting = _route_options("hunting").output
     (claude,) = [line for line in hunting.splitlines() if line.startswith("claude-code")]
     assert claude == "claude-code  DENIED: Owner 2026-11-01: Claude never for active hunting or recon"

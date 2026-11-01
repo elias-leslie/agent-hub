@@ -185,7 +185,7 @@ def _launch_row(policy: dict, key: str, tool: str, *, work_role: str | None, mod
         "job": key, "label": job["label"], "tool": tool, "model": row.get("model"), "effort": row.get("effort"),
         "daybreak": row.get("daybreak"), "context": job["context"], "use": denied is None and row.get("use", True),
         "launchable": row.get("launchable", True), "alternates": row.get("alternates", []),
-        "subagent": job.get("subagent"), "work_roles": job.get("work_roles", []), "why": row.get("why"),
+        "subagent": job.get("subagent"), "work_roles": job.get("work_roles", []), "why": denied or row.get("why"),
         "note": launch["tools"][tool].get("note"), "allowed": denied is None, "deny_reason": denied,
     }
 

@@ -220,6 +220,7 @@ HUNT_DENY = "Owner 2026-11-01: Claude never for active hunting or recon"
 def test_deny_covers_every_tool_and_an_explicit_model(role: str, tool: str, model: str | None) -> None:
     row = _row(role, tool, model=model)
     assert (row["allowed"], row["deny_reason"], row["use"]) == (False, HUNT_DENY, False)
+    assert row["why"] == HUNT_DENY  # a denied row's why is the deny reason, never a contradicting table note
 
 
 def test_hunting_rows_without_claude_and_unknown_non_claude_ids_stay_allowed() -> None:
