@@ -304,7 +304,11 @@ describe('Changes page', () => {
   })
 
   it('Look into it takes a note and a model, starts one agent and shows its status', async () => {
-    const one = row({ key: 'memory:1', title: 'One' })
+    const one = row({
+      key: 'memory:1',
+      title: 'One',
+      lookinto_project: 'summitflow',
+    })
     const working = {
       state: 'working',
       text: 'Agent working: Look into: Context change: One',
@@ -337,6 +341,7 @@ describe('Changes page', () => {
         name: 'Table default (claude-opus-5-5)',
       }),
     ).toBeInTheDocument()
+    expect(fetchLookIntoModels).toHaveBeenCalledWith('summitflow')
     fireEvent.change(model, { target: { value: 'gpt-6.1-sol' } })
     fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
     expect(lookIntoChange).toHaveBeenCalledWith(
@@ -353,6 +358,39 @@ describe('Changes page', () => {
     )
     expect(screen.getByRole('button', { name: 'Look into One' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Keep One' })).toBeEnabled()
+  })
+
+  it('shows the look-in this page started only while Nightshift status is unknown', async () => {
+    const unknown = { state: 'unknown', text: '', link: '' }
+    vi.mocked(fetchChanges).mockResolvedValue(
+      queue([
+        row({ key: 'memory:1', title: 'One', lookinto: unknown }),
+        row({ key: 'memory:2', title: 'Two', sessions: ['b'], lookinto: null }),
+      ]),
+    )
+    vi.mocked(lookIntoChange).mockResolvedValue({
+      started: true,
+      lookinto: { state: 'queued', text: 'Queued for an agent', link: '' },
+    })
+    render(<ContextChangesPage />, { wrapper })
+    for (const name of ['One', 'Two']) {
+      fireEvent.click(
+        await screen.findByRole('button', { name: `Look into ${name}` }),
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
+      await waitFor(() =>
+        expect(screen.queryByText('Starting an agent…')).toBeNull(),
+      )
+    }
+    expect(lookIntoChange).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Look into One' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Look into Two' })).toBeEnabled()
+    const one = (await screen.findByText('One')).closest('li') as HTMLElement
+    const two = screen.getByText('Two').closest('li') as HTMLElement
+    expect(within(one).getByTestId('lookinto-status')).toHaveTextContent(
+      'Queued for an agent',
+    )
+    expect(within(two).queryByTestId('lookinto-status')).toBeNull()
   })
 
   it('says when no agent started and when the status is unknown', async () => {
@@ -409,7 +447,9 @@ describe('Changes page', () => {
     render(<DecidedList decision="keep" records={await fetchDecisions()} />, {
       wrapper,
     })
-    expect(screen.getByText(/by look-into agent/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/by look-into agent \(aico-widget-x\)/),
+    ).toBeInTheDocument()
     expect(screen.getByText('· “fine as written”')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open in Aico' })).toHaveAttribute(
       'href',

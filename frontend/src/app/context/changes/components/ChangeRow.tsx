@@ -363,6 +363,7 @@ export function ChangeRow({
 
       {asking && !gone && !agentOpen && !starting && (
         <LookIntoPanel
+          project={row.lookinto_project}
           busy={!!disabled}
           onCancel={() => setAsking(false)}
           onSubmit={(note, model) => {

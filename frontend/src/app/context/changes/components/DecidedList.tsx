@@ -118,7 +118,7 @@ export function DecidedList({
             <p className="mt-1 text-xs text-slate-400">
               by{' '}
               {r.by_lookinto
-                ? 'look-into agent'
+                ? `look-into agent (${r.by ?? 'session not recorded'})`
                 : r.by_kind === 'owner'
                   ? 'you'
                   : (r.by ?? '—')}

@@ -70,10 +70,13 @@ export function LookIntoStatus({
 
 /** The owner's words and an optional model, then one agent decides this row. */
 export function LookIntoPanel({
+  project,
   busy,
   onSubmit,
   onCancel,
 }: {
+  /** The row's look-in project: its launch table gives the model list. */
+  project?: string | null
   busy: boolean
   onSubmit: (note: string, model: string | null) => void
   onCancel: () => void
@@ -82,8 +85,8 @@ export function LookIntoPanel({
   const [note, setNote] = useState('')
   const [model, setModel] = useState('')
   const models = useQuery({
-    queryKey: ['context-changes-lookinto-models'],
-    queryFn: fetchLookIntoModels,
+    queryKey: ['context-changes-lookinto-models', project ?? null],
+    queryFn: () => fetchLookIntoModels(project),
     staleTime: 10 * 60_000,
     retry: false,
   })

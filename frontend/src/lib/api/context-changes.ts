@@ -119,6 +119,8 @@ export interface QueueRow {
   hint: ReviewHint | null
   /** null: no hand-off for the revision shown. */
   lookinto?: LookInto | null
+  /** The project a look-in on this row runs in; its launch table gives the model list. */
+  lookinto_project?: string | null
 }
 
 export interface AutomaticChange {
@@ -324,10 +326,17 @@ interface LaunchRow {
   alternates: { model?: string; effort?: string | null }[]
 }
 
-/** Models a Changes look-in can run, from the launch table's review rows (the first usable row is the default). */
-export async function fetchLookIntoModels(): Promise<LookIntoModels> {
+/**
+ * Models a Changes look-in can run: the launch table's review rows for the row's project, read the way Nightshift
+ * reads them (the first usable row is the default).
+ */
+export async function fetchLookIntoModels(
+  project?: string | null,
+): Promise<LookIntoModels> {
+  const params = new URLSearchParams({ role: 'review' })
+  if (project) params.set('project', project)
   const response = await fetchApi(
-    `${getApiBaseUrl()}/api/models/launch-defaults?role=review`,
+    `${getApiBaseUrl()}/api/models/launch-defaults?${params}`,
   )
   if (!response.ok)
     throw new ContextHttpError(response.status, 'Loading models')

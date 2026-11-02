@@ -415,6 +415,7 @@ class QueueRow(BaseModel):
     linked: list[str]  # keys of other unreviewed rows written by the same sessions
     hint: ReviewHint | None
     lookinto: LookInto | None = None  # set by the API from one Nightshift read; None: no hand-off for this revision
+    lookinto_project: str | None = None  # the project a look-in on this row runs in (set by the API)
 
 
 class QueueSummary(BaseModel):

@@ -205,11 +205,11 @@ export function useReview(
   return {
     busy,
     starting,
-    /** The row's look-in: Nightshift's status from the last load, else the one this page just started. */
+    /** The row's look-in: Nightshift's status from the last load; the one this page started only when that is unknown. */
     lookIntoOf: (row: QueueRow): LookInto | null =>
-      row.lookinto && row.lookinto.state !== 'unknown'
-        ? row.lookinto
-        : (started[row.key] ?? row.lookinto ?? null),
+      row.lookinto?.state === 'unknown'
+        ? (started[row.key] ?? row.lookinto)
+        : (row.lookinto ?? null),
     lookInto,
     problems,
     ghosts,

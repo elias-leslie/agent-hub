@@ -10,6 +10,7 @@ Sending never raises: a missing or failing nightshift is logged and the caller c
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import shutil
@@ -73,6 +74,10 @@ def _nightshift() -> str | None:
     return found or (str(fallback) if fallback.is_file() else None)
 
 
+def nightshift_installed() -> bool:
+    return _nightshift() is not None
+
+
 async def run_nightshift(args: list[str], stdin: bytes | None = None,
                          timeout: float = _TIMEOUT_SECONDS) -> tuple[int, str] | None:
     """Run one nightshift command: (exit code, stdout), or None when it is not installed or did not answer.
@@ -87,9 +92,19 @@ async def run_nightshift(args: list[str], stdin: bytes | None = None,
             stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
+    except OSError:
+        logger.warning("nightshift %s failed to run", args[0], exc_info=True)
+        return None
+    try:
         out, err = await asyncio.wait_for(proc.communicate(stdin), timeout=timeout)
     except (OSError, TimeoutError):
-        logger.warning("nightshift %s failed to run", args[0], exc_info=True)
+        logger.warning("nightshift %s did not finish within %ss; stopped it", args[0], timeout, exc_info=True)
+        if proc.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+            # A grandchild still holding the pipes would keep wait() pending; don't hang the caller on it.
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(proc.wait(), timeout=5)
         return None
     code = proc.returncode if proc.returncode is not None else -1
     if code == 2:
