@@ -67,6 +67,11 @@
       "target": ".pi/agent/extensions/agent-hub.ts"
     },
     {
+      "surface": "pi",
+      "source": "integrations/context-delivery/pi/model-guard.ts",
+      "target": ".pi/agent/extensions/model-guard.ts"
+    },
+    {
       "surface": "antigravity",
       "source": "integrations/context-delivery/antigravity/plugin.json",
       "target": ".gemini/config/plugins/agent-hub-context/plugin.json"
