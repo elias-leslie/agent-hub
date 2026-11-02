@@ -60,6 +60,111 @@ function configureDaybreak(pi: ExtensionAPI, ctx: ExtensionContext, enabled: boo
 	pi.registerProvider(daybreakProvider(provider, enabled));
 }
 
+// Agent Hub's launch rules (the deny rows `st aico create` and the host shim obey), asked per model.
+const LAUNCH_RULES_URL = `${(process.env.AGENT_HUB_URL || "http://127.0.0.1:8003").replace(/\/+$/, "")}/api/models/launch-defaults`;
+const LAUNCH_RULES_TIMEOUT_MS = 10_000;
+
+type LaunchVerdict = { allowed: true } | { allowed: false; reason: string };
+
+/** Agent Hub's answer for running `model` through Pi in this work role and project, or undefined
+ * when the rules can't be read. */
+async function launchVerdict(role: string, project: string | undefined, model: string): Promise<LaunchVerdict | undefined> {
+	const query = new URLSearchParams({ role, tool: "pi", model, ...(project ? { project } : {}) });
+	try {
+		const response = await fetch(`${LAUNCH_RULES_URL}?${query}`, {
+			headers: { Accept: "application/json" },
+			signal: AbortSignal.timeout(LAUNCH_RULES_TIMEOUT_MS),
+		});
+		if (!response.ok) return undefined;
+		const data = (await response.json()) as { rows?: unknown };
+		const row = Array.isArray(data.rows) && data.rows.length === 1 ? (data.rows[0] as Record<string, unknown>) : undefined;
+		if (typeof row?.allowed !== "boolean") return undefined;
+		if (row.allowed) return { allowed: true };
+		const reason = String(row.deny_reason || "Agent Hub's launch rules deny it").split(/\s+/).join(" ").slice(0, 300);
+		return { allowed: false, reason };
+	} catch {
+		return undefined;
+	}
+}
+
+function modelKey(model: { provider: string; id: string }): string {
+	return `${model.provider}/${model.id}`;
+}
+
+function say(ctx: ExtensionContext, message: string, level: "warning" | "error"): void {
+	if (ctx.hasUI) ctx.ui.notify(message, level);
+	else process.stderr.write(`${message}\n`);
+}
+
+/** Keeps a session on models its work role and project may use: refuses a denied /model pick and
+ * aborts any provider request on a denied model. Pi shares one login file, so without this a session
+ * whose role is denied Claude could still switch to it. Without a work role there is nothing to check;
+ * when the rules can't be read the session keeps its choice and is told once. */
+function installModelGuard(pi: ExtensionAPI): void {
+	const role = process.env.ST_WORK_ROLE?.trim();
+	if (!role) return;
+	const project = process.env.AICO_PROJECT_ID?.trim() || undefined;
+	const verdicts = new Map<string, LaunchVerdict>();
+	let unreadableSaid = false;
+
+	const denial = async (model: string, ctx: ExtensionContext): Promise<string | undefined> => {
+		let verdict = verdicts.get(model);
+		if (!verdict) {
+			verdict = await launchVerdict(role, project, model);
+			if (!verdict) {
+				if (!unreadableSaid) {
+					unreadableSaid = true;
+					say(ctx, `Agent Hub's launch rules could not be read, so models are not checked against ${role} work's deny rows in this session.`, "warning");
+				}
+				return undefined;
+			}
+			verdicts.set(model, verdict);
+		}
+		return verdict.allowed ? undefined : `${model} is not allowed for ${role} work: ${verdict.reason}`;
+	};
+
+	pi.on("session_start", async (_event, ctx) => {
+		if (!ctx.model) return;
+		const refused = await denial(modelKey(ctx.model), ctx);
+		if (refused) say(ctx, `${refused}. Its requests are blocked; pick another model with /model.`, "error");
+	});
+
+	pi.on("model_select", async (event, ctx) => {
+		const refused = await denial(modelKey(event.model), ctx);
+		if (!refused) return;
+		const previous = event.previousModel;
+		let restored = false;
+		if (previous && !(await denial(modelKey(previous), ctx))) {
+			try {
+				restored = await pi.setModel(previous);
+			} catch {
+				restored = false;
+			}
+		}
+		// Pi prints its own "Model: ..." line after this handler; say the refusal after it.
+		const message = restored && previous
+			? `${refused}. Staying on ${modelKey(previous)}.`
+			: `${refused}. Its requests are blocked; pick another model with /model.`;
+		setTimeout(() => say(ctx, message, "error"), 0);
+	});
+
+	// Backstop: a throw here is only reported, so a denied request is stopped by aborting the run.
+	pi.on("before_provider_request", async (event, ctx) => {
+		const models = ctx.model ? [modelKey(ctx.model)] : [];
+		const wire = (event.payload as { model?: unknown } | null)?.model;
+		if (typeof wire === "string" && wire !== ctx.model?.id) models.push(wire);
+		for (const model of models) {
+			const refused = await denial(model, ctx);
+			if (refused) {
+				ctx.abort();
+				say(ctx, `Request blocked: ${refused}. Pick another model with /model.`, "error");
+				return undefined;
+			}
+		}
+		return undefined;
+	});
+}
+
 type DeliveryContract = {
 	schema_version: string;
 	status: "ok" | "failed";
@@ -201,6 +306,7 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 	let lastStatus: "idle" | "ok" | "failed" = "idle";
 	let pendingContract: DeliveryContract | undefined;
 	let pendingFailure: string | undefined;
+	installModelGuard(pi);
 
 	const sync = async (ctx: ExtensionContext, phase: string) => {
 		const file = ctx.sessionManager.getSessionFile();

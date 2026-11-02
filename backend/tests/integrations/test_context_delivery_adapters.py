@@ -27,7 +27,8 @@ CODEX_LAUNCHER = CONFIG_ROOT / "codex-config/bin/codex"
 
 @pytest.fixture(autouse=True)
 def _isolate_aico_launcher_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("AICO_SESSION_ID", "AICO_PROJECT_ID", "AICO_WIDGET_ID", "AICO_ROOT_DAYBREAK", "AICO_ROOT_MODEL", "AICO_ROOT_AGENT_HUB_CONTEXT"):
+    for name in ("AICO_SESSION_ID", "AICO_PROJECT_ID", "AICO_WIDGET_ID", "AICO_ROOT_DAYBREAK", "AICO_ROOT_MODEL",
+                 "AICO_ROOT_AGENT_HUB_CONTEXT", "ST_WORK_ROLE", "AGENT_HUB_URL"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -1106,6 +1107,121 @@ await assert.rejects(handlers.get('session_start')({}, ctx), /Pi OpenAI provider
         "EXTENSION": extension.as_uri(), "AICO_ROOT_DAYBREAK": "true",
         "AICO_ROOT_MODEL": "openai/gpt-6-sol"})
     assert code == 0, stderr
+
+
+# A fake Agent Hub answers launch-defaults (Claude denied while RULES=deny, 500 while RULES=down) and a
+# fake Pi records what the extension's model guard does on select and before a provider request.
+_PI_GUARD_HARNESS = """
+import assert from 'node:assert/strict';
+import http from 'node:http';
+const queries = [];
+const server = http.createServer((request, response) => {
+  const url = new URL(request.url, 'http://hub');
+  queries.push(Object.fromEntries(url.searchParams));
+  if (url.pathname !== '/api/models/launch-defaults' || process.env.RULES === 'down') {
+    response.writeHead(500).end('{}');
+    return;
+  }
+  const denied = /claude|opus|sonnet|haiku/.test(url.searchParams.get('model') ?? '');
+  response.writeHead(200, {'content-type': 'application/json'}).end(JSON.stringify({rows: [{
+    allowed: !denied, deny_reason: denied ? 'Owner 2026-11-01: Claude never for active hunting or recon' : null}]}));
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+process.env.AGENT_HUB_URL = `http://127.0.0.1:${server.address().port}/`;
+const {default: install} = await import(process.env.EXTENSION);
+const handlers = new Map();
+const selected = [];
+const notices = [];
+await install({on: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
+  registerCommand: () => {}, getActiveTools: () => [],
+  setModel: async model => { selected.push(`${model.provider}/${model.id}`); return true; }});
+const emit = async (name, event, ctx) => { let last; for (const handler of handlers.get(name) ?? []) last = await handler(event, ctx); return last; };
+const deepseek = {provider: 'opencode-go', id: 'deepseek-v4.1-flash'};
+const claude = {provider: 'anthropic', id: 'claude-opus-5-5'};
+let aborts = 0;
+const context = model => ({hasUI: true, model, cwd: process.cwd(), abort: () => { aborts += 1; },
+  ui: {notify: (message, level) => notices.push([level, message]), setStatus: () => {}},
+  sessionManager: {getSessionId: () => 'guard-session', getSessionFile: () => null}});
+const tick = () => new Promise(resolve => setTimeout(resolve, 5));
+const result = {};
+if (process.env.ST_WORK_ROLE) {
+  await emit('model_select', {model: claude, previousModel: deepseek, source: 'set'}, context(claude));
+  await tick();
+  result.refused = {selected: [...selected], notices: [...notices]};
+  await emit('model_select', {model: deepseek, previousModel: claude, source: 'set'}, context(deepseek));
+  await emit('model_select', {model: claude, previousModel: undefined, source: 'restore'}, context(claude));
+  await tick();
+  result.noPrevious = {selected: [...selected], notice: notices.at(-1)};
+  const payload = {model: 'deepseek-v4.1-flash', messages: []};
+  result.allowedRequest = await emit('before_provider_request', {payload}, context(deepseek)) ?? null;
+  result.abortsAfterAllowed = aborts;
+  await emit('before_provider_request', {payload: {model: 'claude-opus-5-5'}}, context(claude));
+  result.abortsAfterDenied = aborts;
+  await emit('before_provider_request', {payload: {model: 'claude-haiku-5-5'}}, context(deepseek));
+  result.abortsAfterRoutedClaude = aborts;
+} else {
+  result.guardHandlers = ['model_select', 'before_provider_request'].filter(name => handlers.has(name));
+}
+result.notices = notices;
+result.queries = queries;
+server.close();
+console.log(JSON.stringify(result));
+"""
+
+
+async def _run_pi_guard(tmp_path: Path, env: dict[str, str]) -> dict[str, Any]:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node 24 required for the Pi adapter runtime check")
+    _, version, _ = await _run(node, "--version")
+    if int(version.lstrip("v").split(".")[0]) < 24:
+        pytest.skip("Node 24 required for built-in TypeScript execution")
+    harness = tmp_path / "pi-guard.mjs"
+    harness.write_text(_PI_GUARD_HARNESS)
+    extension = REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts"
+    code, stdout, stderr = await _run(node, str(harness), env={**os.environ, "EXTENSION": extension.as_uri(), **env})
+    assert code == 0, stderr
+    return cast(dict[str, Any], json.loads(stdout))
+
+
+@pytest.mark.asyncio
+async def test_pi_guard_refuses_denied_model_and_blocks_its_requests(tmp_path: Path) -> None:
+    result = await _run_pi_guard(tmp_path, {"ST_WORK_ROLE": "recon", "AICO_PROJECT_ID": "neri-hunters"})
+    reason = "anthropic/claude-opus-5-5 is not allowed for recon work: Owner 2026-11-01: Claude never for active hunting or recon"
+    # A denied pick goes back to the previous model, and the refusal names the deny row's reason.
+    assert result["refused"]["selected"] == ["opencode-go/deepseek-v4.1-flash"]
+    assert result["refused"]["notices"] == [["error", f"{reason}. Staying on opencode-go/deepseek-v4.1-flash."]]
+    # With nothing to go back to (a restored session), the model stays and its requests are blocked.
+    assert result["noPrevious"]["selected"] == ["opencode-go/deepseek-v4.1-flash"]
+    assert result["noPrevious"]["notice"] == ["error", f"{reason}. Its requests are blocked; pick another model with /model."]
+    # Allowed requests pass untouched; a denied session model, or a request routed to Claude, is aborted.
+    assert result["allowedRequest"] is None
+    assert result["abortsAfterAllowed"] == 0
+    assert result["abortsAfterDenied"] == 1
+    assert result["abortsAfterRoutedClaude"] == 2
+    # Agent Hub is asked once per model, for Pi in this work role and project.
+    asked = [query["model"] for query in result["queries"]]
+    assert sorted(asked) == sorted(set(asked)) == sorted(
+        ["anthropic/claude-opus-5-5", "opencode-go/deepseek-v4.1-flash", "claude-haiku-5-5"])
+    assert all(query["role"] == "recon" and query["tool"] == "pi" and query["project"] == "neri-hunters"
+               for query in result["queries"])
+
+
+@pytest.mark.asyncio
+async def test_pi_guard_keeps_choice_and_says_once_when_rules_unreadable(tmp_path: Path) -> None:
+    result = await _run_pi_guard(tmp_path, {"ST_WORK_ROLE": "recon", "RULES": "down"})
+    assert result["refused"]["selected"] == []
+    assert result["abortsAfterDenied"] == 0
+    assert result["abortsAfterRoutedClaude"] == 0
+    assert [level for level, _ in result["notices"]] == ["warning"]
+    assert "launch rules could not be read" in result["notices"][0][1]
+    assert all("project" not in query for query in result["queries"])
+
+
+@pytest.mark.asyncio
+async def test_pi_guard_is_off_without_a_work_role(tmp_path: Path) -> None:
+    result = await _run_pi_guard(tmp_path, {})
+    assert result == {"guardHandlers": [], "notices": [], "queries": []}
 
 
 @pytest.mark.asyncio
