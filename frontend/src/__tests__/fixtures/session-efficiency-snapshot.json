@@ -1041,6 +1041,10 @@
       "label": "Implementation"
     },
     {
+      "id": "design",
+      "label": "Design"
+    },
+    {
       "id": "research",
       "label": "Research"
     },
