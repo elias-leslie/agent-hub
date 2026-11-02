@@ -49,7 +49,8 @@ async def test_removed_agent_hub_schedule_is_deleted_with_its_profile_and_finish
     feedback = AutomationDefinition(workflow_key="agent-hub.feedback_cleanup", version=1, owner_project_id="agent-hub")
     db = _retirement_db([feedback], in_flight=0)
 
-    retired = await automations.retire_removed_agent_hub_schedules(db)
+    with patch.object(automations, "RETIRED_AGENT_HUB_SCHEDULES", ("agent-hub.feedback_cleanup",)):
+        retired = await automations.retire_removed_agent_hub_schedules(db)
 
     assert retired == ["agent-hub.feedback_cleanup"]
     lookup, *deletes = _statements(db)
@@ -68,7 +69,8 @@ async def test_removed_agent_hub_schedule_with_a_run_in_flight_is_kept() -> None
     feedback = AutomationDefinition(workflow_key="agent-hub.feedback_cleanup", version=1, owner_project_id="agent-hub")
     db = _retirement_db([feedback], in_flight=1)
 
-    assert await automations.retire_removed_agent_hub_schedules(db) == []
+    with patch.object(automations, "RETIRED_AGENT_HUB_SCHEDULES", ("agent-hub.feedback_cleanup",)):
+        assert await automations.retire_removed_agent_hub_schedules(db) == []
     assert db.execute.await_count == 1
 
 

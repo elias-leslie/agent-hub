@@ -4,7 +4,6 @@ import { Brain } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useMemo } from 'react'
 import { type MemoryTabId, MemoryTabs } from '@/components/memory/MemoryTabs'
-import { AnalyticsTab } from '@/components/memory/tabs/AnalyticsTab'
 import { CaptureTab } from '@/components/memory/tabs/CaptureTab'
 import { EpisodesTab } from '@/components/memory/tabs/EpisodesTab'
 import { SessionsTab } from '@/components/memory/tabs/SessionsTab'
@@ -38,7 +37,6 @@ function MemoryPageContent() {
       {activeTab === 'episodes' && <EpisodesTab />}
       {activeTab === 'sessions' && <SessionsTab />}
       {activeTab === 'capture' && <CaptureTab />}
-      {activeTab === 'analytics' && <AnalyticsTab />}
     </div>
   )
 }

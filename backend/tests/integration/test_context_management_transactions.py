@@ -204,8 +204,6 @@ async def test_delivery_no_longer_injects_maintenance_handoff(maintenance_db, mo
 
 @pytest.mark.integration
 async def test_retired_maintenance_execution_returns_410_without_mutation(maintenance_db):
-    from unittest.mock import patch
-
     from app.models.context_governance import ContextMaintenanceItem
     from app.services.context_maintenance import reconcile_maintenance
     from app.services.context_maintenance_actions import (
@@ -224,13 +222,10 @@ async def test_retired_maintenance_execution_returns_410_without_mutation(mainte
                 reason='Observed test evidence', evidence='Retained evidence', draft=draft), 'agent:test', operator=True)
         assert retired.value.status_code == 410, action
         assert 'retired' in retired.value.detail
-    reviewer = AsyncMock()
-    with patch('app.services.memory._review_agent_call._call_reviewer_agent', reviewer):
-        for retired_call in (recover_item(db, await db.get(ContextMaintenanceItem, item_id), context), reconcile_maintenance(db)):
-            with pytest.raises(HTTPException) as retired:
-                await retired_call
-            assert retired.value.status_code == 410
-    reviewer.assert_not_awaited()
+    for retired_call in (recover_item(db, await db.get(ContextMaintenanceItem, item_id), context), reconcile_maintenance(db)):
+        with pytest.raises(HTTPException) as retired:
+            await retired_call
+        assert retired.value.status_code == 410
     item = await db.get(ContextMaintenanceItem, item_id)
     assert item.state == 'pending' and item.version == 1 and item.claim_owner is None
     assert (await get_source(db, 'prompt', prompt.slug)).content == 'Use the existing canonical workflow.'

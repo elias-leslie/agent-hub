@@ -116,19 +116,13 @@ def _hatchet_task(target: str):
     from app.workflows.model_sync import model_enrichment_sync_task
     from app.workflows.scheduled import (
         data_retention_task,
-        memory_cleanup_task,
-        memory_governance_task,
         session_cleanup_task,
-        tier_optimizer_task,
     )
     from app.workflows.session_reaper import session_reaper_task
 
     tasks = {
         "session_cleanup": session_cleanup_task,
         "session_reaper": session_reaper_task,
-        "tier_optimizer": tier_optimizer_task,
-        "memory_cleanup": memory_cleanup_task,
-        "memory_governance": memory_governance_task,
         "data_retention": data_retention_task,
         "local_history": local_history_task,
         "model_enrichment_sync": model_enrichment_sync_task,

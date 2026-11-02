@@ -38,7 +38,6 @@ from .memory_schemas import (
     EpisodeDetailResponse,
     HealthResponse,
     MemoryRestoreRequest,
-    MemoryReviewInventoryResponse,
     MemoryReviewRunRequest,
     MemoryReviewRunResponse,
     MemoryRevisionListResponse,
@@ -217,14 +216,3 @@ async def run_memory_review(
     from app.services.curator_retirement import curator_unavailable
 
     curator_unavailable()
-
-
-@router.get("/review/inventory", response_model=MemoryReviewInventoryResponse)
-async def memory_review_inventory() -> MemoryReviewInventoryResponse:
-    """Return an auditable outcome row for every active memory."""
-    from app.db import async_session
-    from app.services.memory.review_inventory import collect_memory_review_inventory
-
-    async with async_session() as db:
-        inventory = await collect_memory_review_inventory(db)
-    return MemoryReviewInventoryResponse(**inventory)

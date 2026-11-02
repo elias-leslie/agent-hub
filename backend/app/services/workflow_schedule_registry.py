@@ -55,27 +55,6 @@ SCHEDULE_DEFINITIONS: tuple[WorkflowScheduleDefinition, ...] = (
         category="maintenance",
     ),
     WorkflowScheduleDefinition(
-        schedule_id="tier_optimizer",
-        label="Tier optimizer",
-        description="Rebalances memory tiers and lifecycle scores.",
-        cron="0 2 * * *",
-        category="memory",
-    ),
-    WorkflowScheduleDefinition(
-        schedule_id="memory_cleanup",
-        label="Memory cleanup",
-        description="Retires stale memories and consolidates redundant ones.",
-        cron="0 3 * * 0",
-        category="memory",
-    ),
-    WorkflowScheduleDefinition(
-        schedule_id="memory_governance",
-        label="Memory governance",
-        description="Collects memory-governance health and policy drift snapshots.",
-        cron="15 3 * * *",
-        category="memory",
-    ),
-    WorkflowScheduleDefinition(
         schedule_id="data_retention",
         label="Data retention",
         description="Deletes expired telemetry and request logs; archives old finished sessions' events.",

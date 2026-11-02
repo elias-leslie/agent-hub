@@ -1,11 +1,10 @@
 /**
- * Search and analytics API operations.
- * Handles search, analytics, and stats.
+ * Search API operations.
+ * Handles search and stats.
  */
 
 import { getApiBaseUrl } from '../api-config'
 import type {
-  MemoryAnalyticsDashboard,
   MemoryCategory,
   MemoryListResult,
   MemoryStats,
@@ -50,24 +49,4 @@ export async function searchMemories(
     { headers: buildHeaders(params?.groupId) },
     'Memory search failed',
   )
-}
-
-// Fetch memory analytics
-export async function fetchMemoryAnalytics(params?: {
-  groupId?: string
-  days?: number
-  lookback?: string
-  sortBy?: string
-}): Promise<MemoryAnalyticsDashboard> {
-  const searchParams = new URLSearchParams()
-  if (params?.groupId) searchParams.set('group_id', params.groupId)
-  if (params?.days) searchParams.set('days', params.days.toString())
-  if (params?.lookback) searchParams.set('lookback', params.lookback)
-  if (params?.sortBy) searchParams.set('sort_by', params.sortBy)
-
-  const url = searchParams.toString()
-    ? `${API_BASE}/memory/analytics?${searchParams}`
-    : `${API_BASE}/memory/analytics`
-
-  return apiFetch(url, {}, 'Memory analytics fetch failed')
 }

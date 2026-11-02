@@ -1,13 +1,12 @@
 'use client'
 
-import { BarChart3, List, MonitorDot, Radio } from 'lucide-react'
+import { List, MonitorDot, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TABS = [
   { id: 'episodes', label: 'Episodes', icon: List },
   { id: 'sessions', label: 'Sessions', icon: MonitorDot },
   { id: 'capture', label: 'Capture', icon: Radio },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ] as const
 
 export type MemoryTabId = (typeof TABS)[number]['id']

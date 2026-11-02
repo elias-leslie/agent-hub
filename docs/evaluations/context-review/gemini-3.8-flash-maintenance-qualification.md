@@ -86,10 +86,9 @@ The synthetic input packet and boundary rubric are in
 `gemini-3.8-flash-maintenance-qualification-fixture.json`. The compact ledger
 evidence is in `gemini-3.8-flash-maintenance-qualification-raw.json`, and the
 complete successful response bodies are preserved in
-`gemini-3.8-flash-maintenance-qualification-responses-full.md`. The narrow
-packet reconstruction is `reconstruct_qualification_packet.py`; it performs no
-provider calls. The original evaluation ran from an ephemeral inline script,
-so the reconstruction is not claimed byte-for-byte identical. The boundary
+`gemini-3.8-flash-maintenance-qualification-responses-full.md`. The original
+evaluation ran from an ephemeral inline script; the later reconstruction script
+was removed with the memory review agent it imported. The boundary
 requirements came from the owner/task instructions before calls, but the
 standalone `answer_key` field was materialized after the calls and is not an
 independently preregistered score.

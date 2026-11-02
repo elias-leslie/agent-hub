@@ -18,10 +18,7 @@ from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
 from app.workflows.scheduled import (
     data_retention_task,
-    memory_cleanup_task,
-    memory_governance_task,
     session_cleanup_task,
-    tier_optimizer_task,
 )
 from app.workflows.session_reaper import session_reaper_task
 from app.workflows.summary import session_summary_task
@@ -40,9 +37,6 @@ def test_ops_workflows_match_maintenance_runtime() -> None:
     assert (
         automation_clock_task,
         session_cleanup_task,
-        tier_optimizer_task,
-        memory_cleanup_task,
-        memory_governance_task,
         data_retention_task,
         local_history_task,
         session_summary_task,

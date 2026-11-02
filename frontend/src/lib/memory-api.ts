@@ -16,9 +16,8 @@ export {
   updateEpisodeProperties,
   updateEpisodeTier,
 } from './memory/episodes'
-// Re-export search & analytics operations
+// Re-export search & stats operations
 export {
-  fetchMemoryAnalytics,
   fetchMemoryStats,
   searchMemories,
 } from './memory/search'

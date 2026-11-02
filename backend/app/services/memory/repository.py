@@ -9,8 +9,8 @@ from ._repo_crud import CrudRepository
 from ._repo_helpers import TIER_MAP, TIER_REVERSE, to_dict
 from ._repo_query import QueryRepository
 from ._repo_search import SearchRepository
-from ._repo_tier import TierRepository
 from ._repo_tracking import TrackingRepository
+from ._repo_triggers import TriggerRepository
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class MemoryRepository(
     CrudRepository,
     QueryRepository,
     SearchRepository,
-    TierRepository,
+    TriggerRepository,
     TrackingRepository,
     AnalyticsRepository,
 ):
@@ -38,7 +38,7 @@ class MemoryRepository(
     - CrudRepository: create, get, update, delete
     - QueryRepository: list, count, paginate, text search, UUID resolution
     - SearchRepository: semantic vector search
-    - TierRepository: tier optimization and triggered references
+    - TriggerRepository: triggered references
     - TrackingRepository: usage counters and batch operations
     - AnalyticsRepository: stats and cleanup
     """

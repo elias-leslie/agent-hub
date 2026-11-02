@@ -14,7 +14,7 @@ import uuid
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -314,87 +314,6 @@ async def test_delete_waits_for_a_restore_holding_the_row_and_records_what_it_de
     assert (deleted.action, deleted.version, deleted.content, deleted.scope) == ("delete", 5, original.content, "project")
 
 
-async def test_retirement_skips_an_archive_promoted_while_it_waited_for_the_lock(
-    pg_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app.services.memory.retirement import retire_stale_archives
-
-    old = datetime.now(UTC) - timedelta(days=400)
-    async with AsyncSession(pg_engine, expire_on_commit=False) as setup:
-        stale = Memory(content="**Archive**: still wanted.", memory_type="reference", scope="global", tier=4,
-                       status="active", version=1, created_at=old, updated_at=old, metadata_={})
-        fresh = Memory(content="**Fresh**: keeps the system active.", memory_type="reference", scope="global", tier=3,
-                       status="active", version=1, metadata_={})
-        setup.add_all([stale, fresh])
-        await setup.commit()
-    monkeypatch.setattr("app.services.memory.retirement.async_session", lambda: AsyncSession(pg_engine))
-
-    repo = MemoryRepository()
-    async with AsyncSession(pg_engine) as owner:
-        await repo.update(stale.id, db=owner, tier=2)  # promoted, lock held
-        retire = await _behind_row_lock(pg_engine, retire_stale_archives())
-        await owner.commit()
-        result = await retire
-
-    assert result["retired"] == 0
-    async with AsyncSession(pg_engine) as check:
-        row = await check.get(Memory, stale.id)
-    assert row is not None
-    assert (row.status, row.tier, row.content, row.version) == ("active", 2, "**Archive**: still wanted.", 2)
-
-
-async def test_consolidation_archives_the_duplicate_with_a_revision(
-    pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app.services.memory import redundancy
-
-    survivor = Memory(content="**Rule**: one.", memory_type="reference", scope="global", tier=3, status="active",
-                      version=1, loaded_count=2, metadata_={})
-    duplicate = Memory(content="**Rule**: one!", memory_type="reference", scope="global", tier=3, status="active",
-                       version=3, loaded_count=5, metadata_={})
-    pg_db.add_all([survivor, duplicate])
-    await pg_db.flush()
-    _use_session(monkeypatch, "app.services.memory.redundancy", pg_db)
-
-    await redundancy._consolidate_pair(str(survivor.id), str(duplicate.id),
-                                       {"similarity": 0.99, "id_b": str(duplicate.id), "tier_b": "reference"})
-
-    assert (duplicate.status, duplicate.superseded_by, duplicate.version) == ("archived", survivor.id, 4)
-    assert survivor.loaded_count == 7
-    (revision,) = await _revisions(pg_db, duplicate.id)
-    assert (revision.action, revision.status, revision.version, revision.changed_by) == (
-        "consolidate", "archived", 4, "system:redundancy")
-
-
-async def test_retirement_keeps_the_text_in_history_and_restore_brings_it_back(
-    pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from app.services.memory.retirement import retire_stale_archives
-
-    old = datetime.now(UTC) - timedelta(days=400)
-    stale = Memory(content="**Archive**: old procedure text.", memory_type="reference", scope="global", tier=4,
-                   status="active", version=1, embedding=VECTOR, created_at=old, updated_at=old, metadata_={})
-    fresh = Memory(content="**Fresh**: keeps the system active.", memory_type="reference", scope="global", tier=3,
-                   status="active", version=1, metadata_={})
-    pg_db.add_all([stale, fresh])
-    await pg_db.flush()
-    _use_session(monkeypatch, "app.services.memory.retirement", pg_db)
-
-    assert (await retire_stale_archives())["retired"] == 1
-
-    await pg_db.refresh(stale)
-    assert (stale.status, stale.content, stale.embedding, stale.version) == ("retired", "[retired]", None, 2)
-    snapshot, retire = await _revisions(pg_db, stale.id)
-    assert (snapshot.action, snapshot.content, snapshot.version) == ("snapshot", "**Archive**: old procedure text.", 1)
-    assert (retire.action, retire.content, retire.changed_by, retire.writer_kind) == ("retire", "[retired]", "system:retirement", "system")
-
-    restored = await MemoryRepository().restore_revision(str(stale.id), snapshot.id, expected_version=2, db=pg_db)
-    assert restored is not None
-    assert (restored.memory.status, restored.memory.content, restored.memory.retired_at) == (
-        "active", "**Archive**: old procedure text.", None)
-    assert restored.memory.embedding is not None
-
-
 async def test_ttl_cleanup_deletes_with_revisions(pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     old = datetime.now(UTC) - timedelta(days=60)
     stale = Memory(content="**Stale reference**: unused.", memory_type="reference", scope="global", tier=3,
@@ -437,26 +356,6 @@ async def test_scope_normalization_writes_a_revision_per_row(pg_db: AsyncSession
     (revision,) = await _revisions(pg_db, legacy.id)
     assert (revision.action, revision.scope, revision.changed_by) == ("scope_normalize", "project", "system:scope-normalization")
     assert await _revisions(pg_db, clean.id) == []
-
-
-async def test_review_decision_lands_in_history(pg_db: AsyncSession) -> None:
-    from app.services.memory._review_agent_apply import apply_review_decision
-    from app.services.memory._review_agent_decisions import MemoryReviewDecision
-
-    memory = Memory(content="**Rule**: session-only advice.", memory_type="reference", scope="global", tier=3,
-                    status="active", version=1, metadata_={})
-    pg_db.add(memory)
-    await pg_db.flush()
-    checks = {key: "pass" for key in ("currency", "correctness", "conflict", "lifecycle", "appropriateness")}
-    decision = MemoryReviewDecision(
-        uuid=str(memory.id), decision="retarget", review_status="clean", confidence=0.95,
-        reason="project only", checks=checks, suggested_applicability={"scope": "project", "scope_id": "neri"},
-    )
-
-    revision = await apply_review_decision(pg_db, memory, decision, datetime.now(UTC))
-
-    assert (memory.scope, memory.scope_id, memory.version) == ("project", "neri", 2)
-    assert (revision.action, revision.scope, revision.version, revision.changed_by) == ("review", "project", 2, "agent:memory-reviewer")
 
 
 async def test_prompt_restore_recreates_a_deleted_prompt_and_checks_the_latest_revision(pg_db: AsyncSession) -> None:
@@ -524,24 +423,3 @@ async def test_revision_writer_resolves_through_the_context_delivery(pg_db: Asyn
         "agent", "aico-widget-lane", "claude_code", "implementation", "agent-hub", True)
     assert (coordinator.harness, coordinator.work_role, coordinator.coordinator) == ("claude_code", "coordinator", True)
     assert (owner.kind, owner.harness, owner.resolved) == ("owner", None, False)
-
-
-async def test_tier_changes_card_reads_optimizer_revisions(pg_db: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.services.memory import _analytics_top
-    from app.services.memory.tier_operations import TIER_ACTOR
-
-    repo = MemoryRepository()
-    memory = await repo.create(
-        content="**Tier card**: demoted by the optimizer.", memory_type="reference", scope="global",
-        source="human", tier=2, embedding=VECTOR, db=pg_db,
-    )
-    await repo.update(memory.id, db=pg_db, tier=3, changed_by=TIER_ACTOR, change_reason="lifecycle 0.1")
-    await repo.update(memory.id, db=pg_db, summary="owner edit, tier unchanged", changed_by="owner")
-    _use_session(monkeypatch, "app.services.memory._analytics_top", pg_db)
-
-    summary = cast(Any, await _analytics_top.get_tier_changes_summary(days=1))
-
-    assert summary["total"] == 1
-    assert summary["by_type"].keys() == {"demotion"}
-    (move,) = summary["recent"]
-    assert (move["episode_uuid"], move["old_tier"], move["new_tier"]) == (str(memory.id), "guardrail", "reference")

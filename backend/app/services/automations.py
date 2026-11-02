@@ -495,7 +495,12 @@ async def import_agent_hub_legacy(db: AsyncSession) -> None:
 
 # Schedules deleted from SCHEDULE_DEFINITIONS whose catalog rows are pruned. Listed
 # explicitly so a schedule that is only renamed or briefly missing keeps its history.
-RETIRED_AGENT_HUB_SCHEDULES = ("agent-hub.feedback_cleanup",)
+RETIRED_AGENT_HUB_SCHEDULES = (
+    "agent-hub.feedback_cleanup",
+    "agent-hub.tier_optimizer",
+    "agent-hub.memory_cleanup",
+    "agent-hub.memory_governance",
+)
 
 
 async def retire_removed_agent_hub_schedules(db: AsyncSession) -> list[str]:
