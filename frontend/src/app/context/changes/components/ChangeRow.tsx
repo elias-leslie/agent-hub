@@ -1,8 +1,13 @@
 'use client'
 
-import { AlertTriangle, Check, Pencil, Undo2, X } from 'lucide-react'
+import { AlertTriangle, Bot, Check, Pencil, Undo2, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Edit, Narrow, QueueRow } from '@/lib/api/context-changes'
+import type {
+  Edit,
+  LookInto,
+  Narrow,
+  QueueRow,
+} from '@/lib/api/context-changes'
 import { cn } from '@/lib/utils'
 import { ago, shortDateTime } from '../../format'
 import { rowDiff } from '../diff'
@@ -20,6 +25,7 @@ import {
   writersLabel,
 } from '../present'
 import { DiffView } from './DiffView'
+import { LookIntoPanel, LookIntoStatus, lookIntoOpen } from './LookInto'
 import { ReworkPanel } from './ReworkPanel'
 
 /** Why the last decision on a row did not go through. `gone`: the row is no longer waiting. */
@@ -33,6 +39,7 @@ export interface RowActions {
   keep: (row: QueueRow) => void
   refuse: (row: QueueRow) => void
   rework: (row: QueueRow, change: { narrow: Narrow } | { edit: Edit }) => void
+  lookInto: (row: QueueRow, note: string, model: string | null) => void
   dismiss: (key: string) => void
   filterSession: (session: string) => void
 }
@@ -101,10 +108,16 @@ export function ChangeRow({
   problem,
   gone,
   grouped,
+  lookinto = null,
+  starting = false,
   actions,
 }: {
   row: QueueRow
   busy: boolean
+  /** The row's hand-off to an agent, if any (see useReview.lookIntoOf). */
+  lookinto?: LookInto | null
+  /** A Look into it request is on its way. */
+  starting?: boolean
   problem?: Problem
   /** Kept in view after a conflict although the server no longer lists it as waiting. */
   gone?: boolean
@@ -113,12 +126,14 @@ export function ChangeRow({
   actions: RowActions
 }) {
   const [reworking, setReworking] = useState(false)
+  const [asking, setAsking] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const ref = useRef<HTMLLIElement>(null)
   const diff = useMemo(() => rowDiff(row), [row])
   const reach = reachLabel(row)
   const hint = row.hint
   const disabled = busy || gone
+  const agentOpen = lookIntoOpen(lookinto)
   const conflictAt =
     problem?.kind === 'conflict' || problem?.kind === 'gone' ? problem.at : null
 
@@ -324,8 +339,37 @@ export function ChangeRow({
             <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
             Refuse
           </button>
+          <button
+            type="button"
+            disabled={disabled || starting || agentOpen}
+            aria-expanded={asking}
+            onClick={() => setAsking((v) => !v)}
+            title={
+              agentOpen
+                ? 'An agent is already on this one'
+                : 'Hand this change to an agent that keeps, reworks or refuses it'
+            }
+            aria-label={`Look into ${row.title}`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 text-xs font-semibold text-sky-200 hover:bg-sky-500/20 focus-ring-amber disabled:opacity-40"
+          >
+            <Bot className="h-3.5 w-3.5" aria-hidden="true" />
+            Look into it
+          </button>
           {busy && <span className="text-xs text-slate-400">Saving…</span>}
         </div>
+      )}
+
+      {!gone && <LookIntoStatus lookinto={lookinto} starting={starting} />}
+
+      {asking && !gone && !agentOpen && !starting && (
+        <LookIntoPanel
+          busy={!!disabled}
+          onCancel={() => setAsking(false)}
+          onSubmit={(note, model) => {
+            setAsking(false)
+            actions.lookInto(row, note, model)
+          }}
+        />
       )}
 
       {!gone && row.also_undoes.length > 0 && (

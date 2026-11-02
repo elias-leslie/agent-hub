@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,9 +29,11 @@ from app.services.context_changes import (
     Touched,
     build_queue,
     keep,
+    lookinto,
     refuse,
     rework,
 )
+from app.services.context_changes.queue import LookInto, TargetKind
 
 router = APIRouter(prefix="/context-observability/changes", tags=["context-observability"])
 DB = Annotated[AsyncSession, Depends(get_db)]
@@ -49,6 +51,17 @@ class ReviewRecord(BaseModel):
     by: str | None
     by_kind: str | None
     created_at: datetime
+    by_lookinto: bool = False  # decided by a look-into agent (its note starts "look-into <id>:")
+    lookinto: LookInto | None = None  # that hand-off's status, while it is still the item's newest
+
+
+class LookIntoRequest(BaseModel):
+    target_kind: TargetKind
+    target_id: str = Field(min_length=1, max_length=200)
+    through_revision: str = Field(min_length=1, max_length=36, description="The revision the owner saw")
+    note: str | None = Field(None, max_length=2000, description="The owner's words for the agent")
+    model: str | None = Field(None, max_length=80, pattern=r"^[\w./:-]+$",
+                              description="Instead of the launch table's model for the review role")
 
 
 @router.get("", response_model=Queue)
@@ -58,8 +71,11 @@ async def list_changes(
     session: Annotated[str | None, Query(max_length=200, description="Only rows this writer session touched")] = None,
     kind: Annotated[Literal["memory", "prompt", "placement"] | None, Query()] = None,
 ) -> Queue:
-    """Unreviewed changes, newest first, with diff, reach, writers, linked rows and the review agent's hint."""
-    return await build_queue(db, session=session, kind=kind)
+    """Unreviewed changes, newest first, with diff, reach, writers, linked rows, the review agent's hint and any
+    look-in (one Nightshift read; when it fails each row's look-in is unknown, never an error)."""
+    queue = await build_queue(db, session=session, kind=kind)
+    await lookinto.attach_to_rows(queue.rows)
+    return queue
 
 
 @router.get("/decisions", response_model=list[ReviewRecord])
@@ -80,9 +96,31 @@ async def list_decisions(
     if target_id:
         statement = statement.where(ContextChangeReview.target_id == target_id)
     rows = (await db.execute(statement)).scalars().all()
-    return [ReviewRecord(id=str(r.id), target_kind=r.target_kind, target_id=r.target_id, decision=r.decision,
-                         through_revision=r.through_revision, result_revision=r.result_revision, note=r.note,
-                         by=r.by, by_kind=r.by_kind, created_at=r.created_at) for r in rows]
+    records = [ReviewRecord(id=str(r.id), target_kind=r.target_kind, target_id=r.target_id, decision=r.decision,
+                            through_revision=r.through_revision, result_revision=r.result_revision, note=r.note,
+                            by=r.by, by_kind=r.by_kind, created_at=r.created_at) for r in rows]
+    await lookinto.attach_to_records(records)
+    return records
+
+
+@router.post("/look-into", response_model=lookinto.LookIntoStarted)
+async def look_into_change(request: LookIntoRequest, db: DB, auth: Auth = None) -> lookinto.LookIntoStarted:
+    """Hand one waiting row to an agent through Nightshift; the agent decides it with st ctx. One open hand-off per
+    row: asking again returns the open one (started false). 409 when the row changed or left the queue since the
+    owner loaded it; 502 when no agent was started."""
+    key = f"{request.target_kind}:{request.target_id}"
+    row = next((r for r in (await build_queue(db, automatic=False)).rows if r.key == key), None)
+    if row is None:
+        raise HTTPException(409, {"message": "It is no longer waiting for review, so no agent was started. Reload.",
+                                  "key": key, "latest_revision": None})
+    if row.through_revision != request.through_revision:
+        raise HTTPException(409, {"message": "Changed since you loaded it, so no agent was started. Reload, check the"
+                                             " diff and look again.", "key": key,
+                                  "latest_revision": row.through_revision})
+    try:
+        return await lookinto.start(row, request.note, request.model)
+    except lookinto.LookIntoFailed as exc:
+        raise HTTPException(502, str(exc)) from exc
 
 
 _COLLISION_SQLSTATES = {"40P01", "40001"}  # deadlock_detected, serialization_failure

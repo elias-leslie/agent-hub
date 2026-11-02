@@ -353,6 +353,19 @@ class ReviewHint(BaseModel):
     reviewed_at: str | None = None
 
 
+class LookInto(BaseModel):
+    """Nightshift's hand-off of a row to an agent ("Look into it"): its state, one owner-facing line, the Aico window.
+
+    state: queued | working (open: asking again starts nothing) | fixed | nothing | needs-you | failed | ended, or
+    unknown when Nightshift did not answer (never an error for the page)."""
+
+    state: str
+    text: str = ""
+    link: str = ""
+    id: str | None = None
+    revision: str | None = None
+
+
 class LaterWrite(BaseModel):
     """An owner or system write after the first unreviewed change; refusing the row undoes it too."""
 
@@ -401,6 +414,7 @@ class QueueRow(BaseModel):
     sessions: list[str]
     linked: list[str]  # keys of other unreviewed rows written by the same sessions
     hint: ReviewHint | None
+    lookinto: LookInto | None = None  # set by the API from one Nightshift read; None: no hand-off for this revision
 
 
 class QueueSummary(BaseModel):

@@ -31,6 +31,12 @@ const EMPTY: Record<DecisionKind, string> = {
     'Nothing refused yet. Refuse undoes a change: a new memory or prompt is archived, an edit is put back; it is then listed here.',
 }
 
+/** The note as the owner reads it: a look-into agent's "look-into <id>: " start is shown as the decider instead. */
+const noteText = (r: ReviewRecord) =>
+  r.by_lookinto
+    ? (r.note ?? '').replace(/^look-into [0-9a-f]*:\s*/, '')
+    : r.note
+
 function placementTitle(id: string) {
   const [profile, project] = id.split('|')
   return `${profile} placements${project ? ` in ${project}` : ''}`
@@ -110,9 +116,27 @@ export function DecidedList({
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              by {r.by_kind === 'owner' ? 'you' : (r.by ?? '—')}
-              {r.note ? (
-                <span className="text-slate-300"> · “{r.note}”</span>
+              by{' '}
+              {r.by_lookinto
+                ? 'look-into agent'
+                : r.by_kind === 'owner'
+                  ? 'you'
+                  : (r.by ?? '—')}
+              {r.lookinto?.link && (
+                <>
+                  {' · '}
+                  <a
+                    href={r.lookinto.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-amber-300/90 underline underline-offset-2 focus-ring-amber"
+                  >
+                    Open in Aico
+                  </a>
+                </>
+              )}
+              {noteText(r) ? (
+                <span className="text-slate-300"> · “{noteText(r)}”</span>
               ) : null}
             </p>
           </li>

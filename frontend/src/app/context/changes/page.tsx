@@ -274,6 +274,7 @@ function Unreviewed({
     keep: (row) => review.keep(row.key, [row]),
     refuse: (row) => review.refuse(row.key, [row]),
     rework: (row, change) => review.rework(row, change),
+    lookInto: (row, note, model) => review.lookInto(row, note, model),
     dismiss: review.dismiss,
     filterSession: (session) => update({ session }),
   }
@@ -285,6 +286,8 @@ function Unreviewed({
       problem={review.problems[row.key]}
       gone={!rows.some((r) => r.key === row.key)}
       grouped={grouped}
+      lookinto={review.lookIntoOf(row)}
+      starting={review.starting.has(row.key)}
       actions={actions}
     />
   )

@@ -8,6 +8,8 @@ import {
   type Edit,
   itemOf,
   keepChanges,
+  type LookInto,
+  lookIntoChange,
   type Narrow,
   type Queue,
   type QueueRow,
@@ -76,6 +78,9 @@ export function useReview(
     Record<string, { row: QueueRow; index: number }>
   >({})
   const [notice, setNotice] = useState<string | null>(null)
+  // Look-ins this page just started, shown until a reload carries Nightshift's own status.
+  const [starting, setStarting] = useState<ReadonlySet<string>>(new Set())
+  const [started, setStarted] = useState<Record<string, LookInto>>({})
 
   const setProblem = (key: string, problem: Problem | null) =>
     setProblems((p) => {
@@ -162,8 +167,50 @@ export function useReview(
     [client, reload, rows],
   )
 
+  const lookInto = useCallback(
+    async (row: QueueRow, note: string, model: string | null) => {
+      setStarting((s) => new Set([...s, row.key]))
+      setProblem(row.key, null)
+      try {
+        const res = await lookIntoChange(row, note, model)
+        setStarted((s) => ({ ...s, [row.key]: res.lookinto }))
+        await reload().catch(() => undefined)
+      } catch (error) {
+        if (error instanceof ReviewError && error.kind === 'conflict') {
+          const fresh = await reload().catch(() => undefined)
+          const there = !fresh || fresh.rows.some((r) => r.key === row.key)
+          setProblem(row.key, {
+            kind: there ? 'conflict' : 'gone',
+            message: error.message,
+            at: Date.now(),
+          })
+        } else {
+          const why = error instanceof Error ? error.message : 'unknown error'
+          setProblem(row.key, {
+            kind: 'other',
+            message:
+              error instanceof ReviewError && error.status === 502
+                ? why
+                : `Couldn't confirm whether an agent started (${why}). Reload to see.`,
+            at: Date.now(),
+          })
+        }
+      } finally {
+        setStarting((s) => new Set([...s].filter((k) => k !== row.key)))
+      }
+    },
+    [reload],
+  )
+
   return {
     busy,
+    starting,
+    /** The row's look-in: Nightshift's status from the last load, else the one this page just started. */
+    lookIntoOf: (row: QueueRow): LookInto | null =>
+      row.lookinto && row.lookinto.state !== 'unknown'
+        ? row.lookinto
+        : (started[row.key] ?? row.lookinto ?? null),
+    lookInto,
     problems,
     ghosts,
     notice,

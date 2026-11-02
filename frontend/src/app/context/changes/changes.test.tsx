@@ -11,12 +11,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchChanges,
   fetchDecisions,
+  fetchLookIntoModels,
   keepChanges,
+  lookIntoChange,
   type Queue,
   type QueueRow,
   ReviewError,
   refuseChanges,
 } from '@/lib/api/context-changes'
+import { DecidedList } from './components/DecidedList'
 import { collapse } from './components/DiffView'
 import { lineDiff, rowDiff } from './diff'
 import ContextChangesPage from './page'
@@ -39,6 +42,8 @@ vi.mock('@/lib/api/context-changes', async (importOriginal) => ({
   keepChanges: vi.fn(),
   refuseChanges: vi.fn(),
   reworkChange: vi.fn(),
+  lookIntoChange: vi.fn(),
+  fetchLookIntoModels: vi.fn(),
   fetchMemoryTitles: vi.fn().mockResolvedValue({}),
 }))
 
@@ -105,6 +110,13 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(fetchDecisions).mockResolvedValue([])
+  vi.mocked(fetchLookIntoModels).mockResolvedValue({
+    standard: { model: 'claude-opus-5-5', tool: 'claude-code', effort: 'high' },
+    options: [
+      { model: 'claude-opus-5-5', tool: 'claude-code', effort: 'high' },
+      { model: 'gpt-6.1-sol', tool: 'codex', effort: 'xhigh' },
+    ],
+  })
 })
 
 describe('diff', () => {
@@ -289,5 +301,119 @@ describe('Changes page', () => {
       await screen.findByRole('alert', {}, { timeout: 4000 }),
     ).toHaveTextContent("Couldn't load the changes")
     expect(screen.queryByText(/Nothing waiting/)).not.toBeInTheDocument()
+  })
+
+  it('Look into it takes a note and a model, starts one agent and shows its status', async () => {
+    const one = row({ key: 'memory:1', title: 'One' })
+    const working = {
+      state: 'working',
+      text: 'Agent working: Look into: Context change: One',
+      link: 'https://aico.example/?session=w1',
+      id: 'h1',
+      revision: 'r1',
+    }
+    vi.mocked(fetchChanges)
+      .mockResolvedValueOnce(queue([one]))
+      .mockResolvedValue(queue([{ ...one, lookinto: working }]))
+    vi.mocked(lookIntoChange).mockResolvedValue({
+      started: true,
+      lookinto: { ...working, state: 'queued', text: 'Queued for an agent' },
+    })
+    render(<ContextChangesPage />, { wrapper })
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Look into One' }),
+    )
+    fireEvent.change(screen.getByLabelText('Note for the agent (optional)'), {
+      target: { value: 'Looks session-only to me' },
+    })
+    const model = screen.getByLabelText('Model')
+    expect(
+      await within(model).findByRole('option', {
+        name: 'gpt-6.1-sol (codex, xhigh)',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(model).getByRole('option', {
+        name: 'Table default (claude-opus-5-5)',
+      }),
+    ).toBeInTheDocument()
+    fireEvent.change(model, { target: { value: 'gpt-6.1-sol' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
+    expect(lookIntoChange).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'memory:1', through_revision: 'r1' }),
+      'Looks session-only to me',
+      'gpt-6.1-sol',
+    )
+    expect(await screen.findByTestId('lookinto-status')).toHaveTextContent(
+      'Agent working: Look into: Context change: One',
+    )
+    expect(screen.getByRole('link', { name: /Open in Aico/ })).toHaveAttribute(
+      'href',
+      'https://aico.example/?session=w1',
+    )
+    expect(screen.getByRole('button', { name: 'Look into One' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Keep One' })).toBeEnabled()
+  })
+
+  it('says when no agent started and when the status is unknown', async () => {
+    vi.mocked(fetchChanges).mockResolvedValue(
+      queue([
+        row({
+          key: 'memory:1',
+          title: 'One',
+          lookinto: { state: 'unknown', text: '', link: '' },
+        }),
+      ]),
+    )
+    vi.mocked(lookIntoChange).mockRejectedValue(
+      new ReviewError(
+        502,
+        'Nightshift did not answer, so no agent was started.',
+      ),
+    )
+    render(<ContextChangesPage />, { wrapper })
+    expect(await screen.findByTestId('lookinto-status')).toHaveTextContent(
+      'Agent status unknown',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Look into One' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start agent' }))
+    expect(
+      await screen.findByText(
+        'Nightshift did not answer, so no agent was started.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Look into One' })).toBeEnabled()
+  })
+
+  it('names a look-into agent as the decider on the decided tabs', async () => {
+    vi.mocked(fetchDecisions).mockResolvedValue([
+      {
+        id: 'd1',
+        target_kind: 'prompt',
+        target_id: 'p1',
+        decision: 'keep',
+        through_revision: 'r1',
+        result_revision: null,
+        note: 'look-into abc123def456: fine as written',
+        by: 'aico-widget-x',
+        by_kind: 'agent',
+        created_at: '2026-11-01T10:00:00Z',
+        by_lookinto: true,
+        lookinto: {
+          state: 'fixed',
+          text: 'Fixed: kept',
+          link: 'https://aico.example/?session=x',
+        },
+      },
+    ])
+    render(<DecidedList decision="keep" records={await fetchDecisions()} />, {
+      wrapper,
+    })
+    expect(screen.getByText(/by look-into agent/)).toBeInTheDocument()
+    expect(screen.getByText('· “fine as written”')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open in Aico' })).toHaveAttribute(
+      'href',
+      'https://aico.example/?session=x',
+    )
   })
 })

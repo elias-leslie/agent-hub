@@ -73,29 +73,36 @@ def _nightshift() -> str | None:
     return found or (str(fallback) if fallback.is_file() else None)
 
 
-async def _run(args: list[str], stdin: bytes | None = None) -> bool:
+async def run_nightshift(args: list[str], stdin: bytes | None = None,
+                         timeout: float = _TIMEOUT_SECONDS) -> tuple[int, str] | None:
+    """Run one nightshift command: (exit code, stdout), or None when it is not installed or did not answer.
+    A nonzero exit is logged here; callers that read JSON from stdout decide what it means."""
     binary = _nightshift()
     if binary is None:
-        logger.warning("Owner notice not sent: nightshift is not installed")
-        return False
+        logger.warning("nightshift %s not run: nightshift is not installed", args[0])
+        return None
     try:
         proc = await create_process(
             binary, *args,
             stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        out, err = await asyncio.wait_for(proc.communicate(stdin), timeout=_TIMEOUT_SECONDS)
+        out, err = await asyncio.wait_for(proc.communicate(stdin), timeout=timeout)
     except (OSError, TimeoutError):
-        logger.warning("Owner notice not sent: nightshift %s failed to run", args[0], exc_info=True)
-        return False
-    if proc.returncode == 2:
-        # Exit 2 = the notice breaks the contract: a bug in this module, not a runtime condition.
-        logger.error("nightshift %s refused the notice (contract bug): %s", args[0], (err or out).decode(errors="replace").strip())
-        return False
-    if proc.returncode != 0:
-        logger.warning("nightshift %s exited %s: %s", args[0], proc.returncode, (err or out).decode(errors="replace").strip())
-        return False
-    return True
+        logger.warning("nightshift %s failed to run", args[0], exc_info=True)
+        return None
+    code = proc.returncode if proc.returncode is not None else -1
+    if code == 2:
+        # Exit 2 = the input breaks the contract: a bug in the caller, not a runtime condition.
+        logger.error("nightshift %s refused the input (contract bug): %s", args[0], (err or out).decode(errors="replace").strip())
+    elif code != 0:
+        logger.warning("nightshift %s exited %s: %s", args[0], code, (err or out).decode(errors="replace").strip())
+    return code, out.decode(errors="replace")
+
+
+async def _run(args: list[str], stdin: bytes | None = None) -> bool:
+    result = await run_nightshift(args, stdin)
+    return result is not None and result[0] == 0
 
 
 async def send_notice(notice: dict[str, Any]) -> bool:

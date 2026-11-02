@@ -63,6 +63,31 @@ export interface LaterWrite {
   by: string | null
 }
 
+/**
+ * Nightshift's hand-off of a row to an agent ("Look into it"). queued and working are open: asking again starts
+ * nothing. unknown: Nightshift did not answer when the page loaded, which says nothing about whether one runs.
+ */
+export interface LookInto {
+  state:
+    | 'queued'
+    | 'working'
+    | 'fixed'
+    | 'nothing'
+    | 'needs-you'
+    | 'failed'
+    | 'ended'
+    | 'unknown'
+    | (string & {})
+  /** One owner-facing line from Nightshift, e.g. "Agent working: Look into: …". */
+  text: string
+  /** The agent's Aico window; empty until it has one. */
+  link: string
+  id?: string | null
+  revision?: string | null
+}
+
+export const LOOKINTO_OPEN = ['queued', 'working']
+
 /** What a memory, prompt or placement layer looked like; placements carry only the rule list. */
 export type TargetState = Record<string, unknown>
 
@@ -92,6 +117,8 @@ export interface QueueRow {
   sessions: string[]
   linked: string[]
   hint: ReviewHint | null
+  /** null: no hand-off for the revision shown. */
+  lookinto?: LookInto | null
 }
 
 export interface AutomaticChange {
@@ -129,6 +156,9 @@ export interface ReviewRecord {
   by: string | null
   by_kind: string | null
   created_at: string
+  /** Decided by a look-into agent (its note starts "look-into <id>:"). */
+  by_lookinto?: boolean
+  lookinto?: LookInto | null
 }
 
 export interface ReviewItem {
@@ -251,6 +281,74 @@ export const reworkChange = (
   item: ReviewItem,
   change: { edit: Edit } | { narrow: Narrow },
 ) => postJson<DecideResponse>('/rework', { ...item, ...change })
+
+export interface LookIntoStarted {
+  /** false: one was already open for this row, so nothing new started. */
+  started: boolean
+  lookinto: LookInto
+}
+
+/** Hand one row to an agent through Nightshift. 409: the row moved; 502: no agent was started. */
+export const lookIntoChange = (
+  row: QueueRow,
+  note: string,
+  model: string | null,
+) =>
+  postJson<LookIntoStarted>('/look-into', {
+    target_kind: row.target_kind,
+    target_id: row.target_id,
+    through_revision: row.through_revision,
+    note: note.trim() || null,
+    model: model || null,
+  })
+
+export interface LookIntoModel {
+  model: string
+  tool: string
+  effort: string | null
+}
+
+export interface LookIntoModels {
+  /** The launch table's pick for the review role; null when it names none. */
+  standard: LookIntoModel | null
+  options: LookIntoModel[]
+}
+
+interface LaunchRow {
+  tool: string
+  model: string | null
+  effort: string | null
+  allowed: boolean
+  launchable: boolean
+  use: boolean
+  alternates: { model?: string; effort?: string | null }[]
+}
+
+/** Models a Changes look-in can run, from the launch table's review rows (the first usable row is the default). */
+export async function fetchLookIntoModels(): Promise<LookIntoModels> {
+  const response = await fetchApi(
+    `${getApiBaseUrl()}/api/models/launch-defaults?role=review`,
+  )
+  if (!response.ok)
+    throw new ContextHttpError(response.status, 'Loading models')
+  const data: { rows: LaunchRow[] } = await response.json()
+  const options: LookIntoModel[] = []
+  for (const row of data.rows) {
+    if (!row.model || !row.launchable || !row.allowed || !row.use) continue
+    const models = [
+      { model: row.model, effort: row.effort },
+      ...row.alternates.map((a) => ({
+        model: a.model,
+        effort: a.effort ?? null,
+      })),
+    ]
+    // Nightshift runs a model on the first row that names it, so later rows add nothing.
+    for (const m of models)
+      if (m.model && !options.some((o) => o.model === m.model))
+        options.push({ model: m.model, tool: row.tool, effort: m.effort })
+  }
+  return { standard: options[0] ?? null, options }
+}
 
 /** Titles for memory decisions (decisions carry only the id). Missing ids are simply absent. */
 export async function fetchMemoryTitles(
