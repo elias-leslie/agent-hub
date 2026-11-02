@@ -210,7 +210,7 @@ Claude Code and Codex launchers, Antigravity retrieval). A native child hook
 none. The tag is separate from `aico-coordinator`, which still comes only from
 Tether's coordinator flag. Agent Hub drops a `work-role:*` tag whose ID is not in
 `backend/app/services/session_roles.json`, so a new role needs only a registry
-entry. Registered IDs: `coordinator`, `implementation`, `research`, `review`,
+entry. Registered IDs: `coordinator`, `implementation`, `design`, `research`, `review`,
 `recon`, `hunting`, `operations`, `selection`, `verification`, `reporting`,
 `mapping`, and `other`. Role tags never narrow untargeted legacy references.
 

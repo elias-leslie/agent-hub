@@ -18,6 +18,7 @@ from app.api.models_catalog_schemas import (
     ModelCostInfo,
     ModelEnrichmentInfo,
     ModelInfo,
+    ModelNote,
     ModelScoresInfo,
     ModelsResponse,
 )
@@ -27,7 +28,8 @@ from app.constants.models import PROVIDER_NAMES
 from app.core.request_actor import current_request_actor
 from app.db import get_db
 from app.middleware.access_control_auth import require_service_client
-from app.routing.model_selection import SelectionRequest
+from app.routing.launch_policy import model_notes
+from app.routing.model_selection import SelectionRequest, selection_policy
 from app.routing.registry import CREDENTIAL_ONLY_PROVIDERS, is_workload_provider
 from app.services._enrichment_normalizers import _bare_model_id
 
@@ -301,6 +303,13 @@ async def list_models() -> ModelsResponse:
     except Exception:
         logger.debug("Failed to query last model review timestamp", exc_info=True)
 
+    try:
+        policy = await selection_policy()
+        for info in models:
+            info.notes = [ModelNote(**note) for note in model_notes(policy, info.id)]
+    except Exception:  # notes are extra; the catalog must list without them
+        logger.warning("Failed to attach model notes", exc_info=True)
+
     present_providers = {e.provider for e in entries}
     providers = {p: PROVIDER_NAMES.get(p, p.capitalize()) for p in sorted(present_providers)}
 
@@ -485,7 +494,7 @@ async def model_launch_defaults(
     last refusal; when they cannot be read the rows still answer and ``facts_error`` says why. Launches
     (st aico create, the host shim) leave facts off: they need only allowed and the table defaults."""
     from app.routing.launch_facts import attach, load_facts
-    from app.routing.model_selection import UnknownLaunchKey, launch_defaults, selection_policy
+    from app.routing.model_selection import UnknownLaunchKey, launch_defaults
 
     policy = await selection_policy()
     try:
@@ -505,7 +514,5 @@ async def model_launch_defaults(
 @router.get("/models/selection-policy")
 async def model_selection_policy() -> dict:
     """List configured task categories for advisory callers."""
-    from app.routing.model_selection import selection_policy
-
     policy = await selection_policy()
     return {"version": policy["version"], "task_types": sorted(policy["policies"])}

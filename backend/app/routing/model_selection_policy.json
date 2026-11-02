@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "policies": {
     "coding": {
       "requires_tools": true,
@@ -94,6 +94,44 @@
         }
       ]
     }
+  },
+  "model_notes": {
+    "gemini-3.1-flash-lite": [
+      {
+        "date": "2026-09-04",
+        "fact": "With one configured key, gemini-3.8-flash and gemini-3.7-flash returned 503 on every observed attempt (about 25s lost before fallback); this model was the safer low-latency choice.",
+        "source": "Agent Hub Gemini free-tier incident 2026-09-04"
+      },
+      {
+        "date": "2026-09-20",
+        "fact": "Catalog marks it active and free-tier; a minimal prompt on the primary Gemini credential slot answered OK in about 2.0s. Prefer it for low-latency free-tier Gemini work unless a current route check supports another model.",
+        "source": "Agent Hub route check 2026-09-20"
+      }
+    ],
+    "gemini-3.8-flash": [
+      {
+        "date": "2026-09-04",
+        "fact": "Returned 503 on every observed attempt with one configured key (about 25s lost before fallback). Dated evidence, not proof it is unavailable now.",
+        "source": "Agent Hub Gemini free-tier incident 2026-09-04"
+      },
+      {
+        "date": "2026-09-20",
+        "fact": "Catalog marks it active and free-tier; a minimal prompt on the primary Gemini credential slot answered OK in about 7.1s.",
+        "source": "Agent Hub route check 2026-09-20"
+      }
+    ],
+    "gemini-3.7-flash": [
+      {
+        "date": "2026-09-04",
+        "fact": "Returned 503 on every observed attempt with one configured key (about 25s lost before fallback).",
+        "source": "Agent Hub Gemini free-tier incident 2026-09-04"
+      },
+      {
+        "date": "2026-09-20",
+        "fact": "No healthy route: a minimal thinking config returned 400; low reasoning with 64 output tokens returned 503 after about 19.8s. Do not rely on it without a fresh successful check.",
+        "source": "Agent Hub route check 2026-09-20"
+      }
+    ]
   },
   "launch": {
     "about": "Which model, effort, Daybreak and context each kind of agent gets, by job and tool, and the hard rules on top. st models route --role JOB --tool TOOL reads it; st aico create applies it when --model/--reasoning-effort are not given (explicit flags win). A job's work_roles are the Agent Hub work roles (session_roles.json) whose launches default to it; every registered work role belongs to exactly one job. context: full = Agent Hub delivery in the project; blank-slate = --blank-slate plus a specific brief (create uses it when neither --project nor --blank-slate is given). subagent names the lean Claude Code agent definition (claude-config/agents) to use for this job as a native subagent. deny rows are hard rules: a launch whose job, work role and project match every selector a row names is refused when its tool or model counts as the row's provider (providers says what counts), explicit --model included; Agent Hub agent sessions with a denied work role never fall back or escalate to that provider. Everything else (usage, credits, which tool to pick) is the coordinator's choice from live facts, not an order here. Owner decisions 2026-11-01: /srv/workspaces/handoffs/followups-2026-10-31/token-audit/BRIEF-launch-defaults.md.",
@@ -220,7 +258,14 @@
                 "when": "design, hard debugging, or security/root/delete code"
               }
             ],
-            "why": "Owner 2026-11-01: Sonnet 5.5 high for well-scoped builds and fixes; Opus 5.5 high for design, hard debugging and security/root/delete code."
+            "why": "Owner 2026-11-01: Sonnet 5.5 high for well-scoped builds and fixes; Opus 5.5 high for design, hard debugging and security/root/delete code.",
+            "projects": {
+              "neri": {
+                "model": "claude-opus-5-5",
+                "effort": "high",
+                "why": "Owner 2026-10-31: Neri implementation runs Opus 5.5 high."
+              }
+            }
           }
         }
       },
@@ -269,6 +314,39 @@
             "model": "opencode-go/deepseek-v4.1-flash",
             "effort": "max",
             "why": "Product-map route 3: DeepSeek 4.1 Flash max."
+          }
+        }
+      },
+      "design": {
+        "label": "UI/UX, product design and product copy, and their review",
+        "work_roles": [
+          "design"
+        ],
+        "context": "full",
+        "tools": {
+          "claude-code": {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+            "alternates": [
+              {
+                "model": "claude-sonnet-5-5",
+                "effort": "high",
+                "when": "small copy or styling tweaks"
+              }
+            ],
+            "why": "Owner 2026-11-01: Opus 5.5 high for design work; Sonnet 5.5 high for small copy or styling tweaks."
+          },
+          "codex": {
+            "model": "gpt-6.1-sol",
+            "effort": "xhigh",
+            "daybreak": false,
+            "when": "Claude is unavailable or out of usage",
+            "why": "when Claude is unavailable or out of usage (owner 2026-11-01: design work then runs gpt-6.1-sol xhigh)"
+          },
+          "pi": {
+            "model": "opencode-go/deepseek-v4.1-flash",
+            "effort": "high",
+            "why": "Pi is the last choice for design work."
           }
         }
       },

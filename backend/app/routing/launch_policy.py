@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+from collections.abc import Collection
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +25,9 @@ if TYPE_CHECKING:
 
 POLICY_PATH = Path(__file__).parent / "model_selection_policy.json"
 _DENY_KEYS = {"jobs", "work_roles", "projects", "provider", "reason", "source"}
+_PROJECT_KEYS = {"model", "effort", "why"}
+_NOTE_KEYS = {"date", "fact", "source"}
+_PROJECT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")  # the launch-defaults API's project pattern
 
 
 def load_policy() -> dict:
@@ -55,6 +61,20 @@ def is_claude(policy: dict, *, tool: str | None = None, model: str | None = None
     return counts_as(policy["launch"]["providers"]["claude"], tool=tool, model=model)
 
 
+def model_notes(policy: dict, model: str | None) -> list[dict]:
+    """The dated facts the policy holds for a model, matched by id or alias."""
+    if not model:
+        return []
+    names = {model, resolve_model(model)}
+    return [note for key, notes in (policy.get("model_notes") or {}).items()
+            if key in names or resolve_model(key) in names for note in notes]
+
+
+def notes_for_models(policy: dict, models: Collection[str | None]) -> dict[str, list[dict]]:
+    """``model_notes`` for each listed model that has any, keyed by the model as listed."""
+    return {model: notes for model in dict.fromkeys(models) if model and (notes := model_notes(policy, model))}
+
+
 def deny_rows(policy: dict, *, job: str | None, work_role: str | None, project: str | None) -> list[dict]:
     """The deny rows that apply to this job, work role and project (every selector a row names must match)."""
     return [
@@ -75,12 +95,64 @@ def deny_reason(policy: dict, *, job: str | None, work_role: str | None, project
     return None
 
 
-def launch_policy_problems(policy: dict) -> list[str]:
-    """Rows the launch table must not hold: malformed deny rows, the retired ``use`` switch, and a
-    tools row (or alternate) that a deny row refuses in every project."""
+def _project_row_problems(policy: dict, key: str, tool: str, entry: dict, known_projects: Collection[str] | None) -> list[str]:
+    """Problems in one tools row's per-project defaults: bad keys, unknown projects, and a default that a
+    deny row (project-scoped ones included) refuses for that project."""
+    launch = policy["launch"]
+    where = f"launch.jobs.{key}.tools.{tool}.projects"
+    problems: list[str] = []
+    roles = launch["jobs"][key].get("work_roles") or [None]
+    for project, row in (entry.get("projects") or {}).items():
+        if not _PROJECT_ID.fullmatch(str(project)):
+            problems.append(f"{where}: {project!r} is not a project id")
+        elif known_projects is not None and project not in known_projects:
+            problems.append(f"{where}: unknown project {project!r}")
+        if not isinstance(row, dict):
+            problems.append(f"{where}.{project}: must be an object with model, effort and why")
+            continue
+        if extra := set(row) - _PROJECT_KEYS:
+            problems.append(f"{where}.{project}: unknown keys {sorted(extra)}")
+        if not (row.get("model") and row.get("effort") and str(row.get("why") or "").strip()):
+            problems.append(f"{where}.{project}: model, effort and why are required")
+            continue
+        for role in roles:
+            if reason := deny_reason(policy, job=key, work_role=role, project=project, tool=tool, model=row["model"]):
+                problems.append(f"{where}.{project} ({row['model']}) contradicts deny row: {reason}")
+                break
+    return problems
+
+
+def _note_problems(policy: dict) -> list[str]:
+    notes = policy.get("model_notes") or {}
+    if not isinstance(notes, dict):
+        return ["model_notes: must map a model id to a list of notes"]
+    problems: list[str] = []
+    for model, items in notes.items():
+        where = f"model_notes[{model!r}]"
+        if not isinstance(items, list) or not items:
+            problems.append(f"{where}: needs a list of notes")
+            continue
+        for index, note in enumerate(items):
+            if not isinstance(note, dict) or set(note) != _NOTE_KEYS:
+                problems.append(f"{where}[{index}]: needs exactly date, fact and source")
+                continue
+            try:
+                date.fromisoformat(str(note["date"]))
+            except ValueError:
+                problems.append(f"{where}[{index}]: date must be YYYY-MM-DD")
+            if not str(note["fact"]).strip() or not str(note["source"]).strip():
+                problems.append(f"{where}[{index}]: fact and source are required")
+    return problems
+
+
+def launch_policy_problems(policy: dict, known_projects: Collection[str] | None = None) -> list[str]:
+    """Rows the launch table must not hold: malformed deny rows, the retired ``use`` switch, a tools row
+    (or alternate) that a deny row refuses in every project, a per-project default that is malformed, for
+    an unknown project (checked when ``known_projects`` is given) or refused by a deny row, and malformed
+    model notes."""
     launch = policy["launch"]
     providers = launch.get("providers") or {}
-    problems: list[str] = []
+    problems: list[str] = _note_problems(policy)
     for index, row in enumerate(launch.get("deny", [])):
         where = f"launch.deny[{index}]"
         if extra := set(row) - _DENY_KEYS:
@@ -110,6 +182,7 @@ def launch_policy_problems(policy: dict) -> list[str]:
                 for row in everywhere:
                     if counts_as(providers[row["provider"]], tool=tool, model=model):
                         problems.append(f"launch.jobs.{key}.tools.{tool} ({model}) contradicts deny row: {row['reason']}")
+            problems += _project_row_problems(policy, key, tool, entry, known_projects)
     return problems
 
 

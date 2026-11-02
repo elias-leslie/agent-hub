@@ -11,7 +11,7 @@ from app.constants.catalog import get_model_entry, resolve_model
 from app.llm.model_resolver import resolve_llm_model
 from app.llm.providers.google import _get_thinking_level
 from app.llm.simple_options import clamp_reasoning
-from app.routing.launch_policy import deny_reason, job_of
+from app.routing.launch_policy import deny_reason, job_of, notes_for_models
 from app.routing.launch_policy import load_policy as _load_policy
 from app.services.agent_routing_completion import route_preflight_error
 from app.services.session_roles import WORK_ROLES
@@ -157,6 +157,7 @@ async def select_model(request: SelectionRequest) -> dict:
         "automatic_eligible": qualified, "apply": request.mode == "automatic" and qualified,
         "automatic_reason": "Task benchmark and local route qualification are current." if qualified else "Current task benchmark and local route qualification are both required.",
         "qualification": qualification or None,
+        "model_notes": notes_for_models(policy_data, [item["model"] for item in attempts]),
         "shadow_comparison": (
             {"assigned_model": resolve_model(request.assigned_model), "same_model": resolve_model(request.assigned_model) == model}
             if request.mode == "shadow" and request.assigned_model else None
@@ -173,12 +174,25 @@ def _launch_job(launch: dict, role: str) -> str:
                            f"Other jobs: {', '.join(jobs)}.")
 
 
+def _with_project_default(row: dict, project: str | None) -> dict:
+    """The row with this project's own default laid over it, if the row names one. An alternate that
+    is now the default drops out."""
+    override = (row.get("projects") or {}).get(project) if project else None
+    if not override:
+        return row
+    merged = {**row, **override, "project_default": project}
+    merged["alternates"] = [alt for alt in row.get("alternates", [])
+                            if (alt.get("model"), alt.get("effort")) != (merged["model"], merged["effort"])]
+    return merged
+
+
 def _launch_row(policy: dict, key: str, tool: str, *, work_role: str | None, model: str | None,
                 project: str | None) -> dict:
     launch = policy["launch"]
     job = launch["jobs"][key]
     row = job["tools"].get(tool) or launch["tools"][tool].get("default") or {
         "model": None, "effort": None, "use": False, "why": f"No {tool} entry for this job."}
+    row = _with_project_default(row, project)
     denied = deny_reason(policy, job=key, work_role=work_role, project=project, tool=tool,
                          model=model or row.get("model"))
     return {
@@ -187,6 +201,7 @@ def _launch_row(policy: dict, key: str, tool: str, *, work_role: str | None, mod
         "launchable": row.get("launchable", True), "alternates": row.get("alternates", []),
         "subagent": job.get("subagent"), "work_roles": job.get("work_roles", []), "why": denied or row.get("why"),
         "note": launch["tools"][tool].get("note"), "allowed": denied is None, "deny_reason": denied,
+        "project_default": row.get("project_default"), "when": row.get("when"),
     }
 
 
@@ -201,9 +216,11 @@ def launch_defaults(policy: dict, *, role: str | None = None, tool: str | None =
     keys = [_launch_job(launch, role)] if role is not None else list(launch["jobs"])
     tools = [tool] if tool is not None else list(launch["tools"])
     work_role = role if role in WORK_ROLES else None
+    rows = [_launch_row(policy, key, name, work_role=work_role, model=model, project=project)
+            for key in keys for name in tools]
+    shown = [m for row in rows if row["allowed"] for m in (row["model"], *(alt.get("model") for alt in row["alternates"]))]
     return {
         "version": policy["version"], "role": role, "work_role": work_role,
-        "work_roles": list(WORK_ROLES), "about": launch["about"],
-        "rows": [_launch_row(policy, key, name, work_role=work_role, model=model, project=project)
-                 for key in keys for name in tools],
+        "work_roles": list(WORK_ROLES), "about": launch["about"], "rows": rows,
+        "model_notes": notes_for_models(policy, shown),
     }

@@ -102,6 +102,14 @@ class ModelEnrichmentInfo(BaseModel):
     synced_at: datetime | None = None
 
 
+class ModelNote(BaseModel):
+    """A dated fact about a model from the routing policy."""
+
+    date: str
+    fact: str
+    source: str
+
+
 class ModelInfo(BaseModel):
     """Full model information."""
 
@@ -126,6 +134,7 @@ class ModelInfo(BaseModel):
     family: str | None = None
     availability: str | None = None
     enrichment: ModelEnrichmentInfo | None = None
+    notes: list[ModelNote] = Field(default_factory=list, description="Dated facts from the routing policy (model_notes)")
 
 
 class ModelsResponse(BaseModel):

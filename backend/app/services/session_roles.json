@@ -1,6 +1,7 @@
 {
   "coordinator": "Coordinator",
   "implementation": "Implementation",
+  "design": "Design",
   "research": "Research",
   "review": "Review",
   "recon": "Recon",

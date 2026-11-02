@@ -120,7 +120,7 @@ def test_route_without_task_lists_task_types_and_the_launch_table() -> None:
         advice_json = runner.invoke(app, ["route", "--task", "coding", "--json"])
 
     assert listed.output.splitlines()[:2] == ["TASK_TYPES[2] policy=v2", "  coding  writing"]
-    assert "LAUNCH[55 rows]" in listed.output and "claude-haiku-5-5" in listed.output
+    assert "LAUNCH[60 rows]" in listed.output and "claude-haiku-5-5" in listed.output
     # Daybreak reads on, off (a Codex row that turns it off) or - (no Daybreak for that tool).
     daybreak = {tuple(line.split()[:2]): line.split()[4] for line in listed.output.splitlines()
                 if line.split()[:2] in (["hunting", "codex"], ["coordinator", "codex"], ["coordinator", "claude-code"])}
@@ -291,3 +291,40 @@ def test_options_view_names_the_unknown_window_beside_one_with_room() -> None:
         out = runner.invoke(app, ["route", "--role", "research"]).output
     assert "claude-code  claude-opus-5-5 high  has room in one window, 5h unknown" in out
     assert "5h unknown (its reset passed" in out
+
+
+def test_options_view_tags_a_project_default_and_shows_a_when_for_a_fallback_tool() -> None:
+    neri = _route_options("implementation", "--project", "neri", project="neri").output
+    (claude,) = [line for line in neri.splitlines() if line.startswith("claude-code")]
+    assert claude.startswith("claude-code  claude-opus-5-5 high (neri default)  has room")
+    assert "also:" not in claude  # Opus is now the default, so it drops out of the alternates
+    plain = _route_options("implementation").output
+    assert "claude-code  claude-sonnet-5-5 high  has room  | also: claude-opus-5-5 high (when design," in plain
+    assert "(neri default)" not in plain
+    design = _route_options("design").output
+    assert "claude-code  claude-opus-5-5 high  has room  | also: claude-sonnet-5-5 high (when small copy or styling tweaks)" in design
+    assert "codex  gpt-6.1-sol xhigh (when Claude is unavailable or out of usage)" in design
+    assert "pi  opencode-go/deepseek-v4.1-flash high" in design
+
+
+def test_pi_alternative_reads_as_when_deepseek_is_unavailable_or_stuck() -> None:
+    out = _route_options("implementation").output
+    assert "also: opencode-go/glm-5.3 high (when DeepSeek is unavailable or stuck)" in out
+
+
+def test_dated_model_notes_print_under_the_options_the_models_view_and_the_task_route() -> None:
+    note = {"date": "2026-09-04", "fact": "503 on every attempt", "source": "incident"}
+    payload = _options("design", READINGS)
+    payload["model_notes"] = {"claude-opus-5-5": [note]}
+    with patch("agent_hub_st.models._launch_api", return_value=payload):
+        out = runner.invoke(app, ["route", "--role", "design"]).output
+    assert out.splitlines()[-1] == "NOTE[claude-opus-5-5] 2026-09-04: 503 on every attempt (incident)"
+    advice = _advice() | {"model_notes": {"gemini-3.8-flash": [note]}}
+    with patch("agent_hub_st.models._select_api", return_value=advice):
+        assert "NOTE[gemini-3.8-flash] 2026-09-04" in runner.invoke(app, ["route", "--task", "coding"]).output
+    catalog = {"models": [{"id": "gemini-3.8-flash", "provider": "google", "notes": [note]},
+                          {"id": "claude-opus-5-5", "provider": "claude", "notes": []}]}
+    with patch("agent_hub_st.models._models_api", return_value=catalog):
+        listed = runner.invoke(app, ["--id", "gemini-3.8-flash"]).output
+    assert "NOTE[gemini-3.8-flash] 2026-09-04: 503 on every attempt (incident)" in listed
+    assert "NOTE[claude-opus-5-5]" not in listed

@@ -107,6 +107,7 @@ def _print_models(models: list[dict[str, Any]], total: int) -> None:
             str(model.get("availability") or "-"),
         ])
     print_table(["id", "provider", "C", "T", "R", "$/M in/out", "speed", "tools", "availability"], rows)
+    _print_notes({str(m.get("id")): m.get("notes") for m in models if m.get("notes")})
 
 
 def _list_models(
@@ -182,6 +183,16 @@ def list_models(
         limit=limit,
         as_json=as_json,
     )
+
+
+def _print_notes(notes: Any) -> None:
+    """Dated facts per model (policy model_notes), one line each; nothing when there are none."""
+    if not isinstance(notes, dict):
+        return
+    for model, items in notes.items():
+        for note in items if isinstance(items, list) else []:
+            if isinstance(note, dict):
+                print(f"NOTE[{model}] {note.get('date') or '-'}: {note.get('fact') or '-'} ({note.get('source') or '-'})")
 
 
 def _print_task_types(policy: dict[str, Any]) -> None:
@@ -291,6 +302,11 @@ def _refusal_line(refusal: Any) -> str:
     return f"last refusal {_when(refusal.get('at'))}{kind}, {who}{count}"
 
 
+def _project_tag(row: dict[str, Any]) -> str:
+    """' (neri default)' when the row is a project's own default rather than the job's."""
+    return f" ({row['project_default']} default)" if row.get("project_default") else ""
+
+
 def _option_lines(row: dict[str, Any]) -> list[str]:
     """One tool's lines in the options view: what it launches as, then its facts."""
     tool = str(row.get("tool"))
@@ -301,8 +317,9 @@ def _option_lines(row: dict[str, Any]) -> list[str]:
     if not row.get("model"):
         return [f"{tool}  {row.get('why') or 'no model set'}"]
     usage = row.get("usage") if isinstance(row.get("usage"), dict) else {}
-    head = f"{tool}  {_effort(row)}  {_status_text(usage)}"
-    alts = [f"{_effort(alt)} ({alt.get('when') or '-'})" for alt in row.get("alternates") or [] if isinstance(alt, dict)]
+    when = f" (when {row['when']})" if row.get("when") else ""
+    head = f"{tool}  {_effort(row)}{_project_tag(row)}{when}  {_status_text(usage)}"
+    alts = [f"{_effort(alt)} (when {alt.get('when') or '-'})" for alt in row.get("alternates") or [] if isinstance(alt, dict)]
     if alts:
         head += "  | also: " + "; ".join(alts)
     lines = [head]
@@ -321,6 +338,7 @@ def _print_options(payload: dict[str, Any], role: str, project: str | None) -> N
     for row in rows:
         for line in _option_lines(row):
             print(line)
+    _print_notes(payload.get("model_notes"))
 
 
 def _print_launch(payload: dict[str, Any]) -> None:
@@ -333,11 +351,13 @@ def _print_launch(payload: dict[str, Any]) -> None:
         state = "" if row.get("use") and row.get("launchable") else " (not used: no default applies)"
         print(f"  model={row.get('model') or '-'} effort={row.get('effort') or '-'} "
               f"daybreak={_daybreak(row)} "
-              f"context={row.get('context')}{state}")
+              f"context={row.get('context')}{state}{_project_tag(row)}")
         if row.get("allowed") is False:
             print(f"  DENIED: {row.get('deny_reason') or '-'}")
         if row.get("note"):
             print(f"  note={row['note']}")
+        if row.get("when"):
+            print(f"  when={row['when']}")
         for alt in row.get("alternates") or []:
             if isinstance(alt, dict):
                 print(f"  instead: {_effort(alt)} when {alt.get('when') or '-'}")
@@ -350,6 +370,7 @@ def _print_launch(payload: dict[str, Any]) -> None:
             for text in (_usage_line(usage), _credit_line(usage), _refusal_line(row.get("last_refusal"))):
                 if text:
                     print(f"    {text}")
+        _print_notes(payload.get("model_notes"))
         return
     print(f"LAUNCH[{len(rows)} rows] policy=v{payload.get('version', '-')} "
           "(st models route --role JOB --tool TOOL for one row with its reasons)")
@@ -399,6 +420,7 @@ def _print_route(advice: dict[str, Any]) -> None:
         ]
         for item in checked
     ])
+    _print_notes(advice.get("model_notes"))
 
 
 @app.command("route")

@@ -259,6 +259,98 @@ def test_shipped_launch_policy_is_consistent_and_refuses_a_tools_row_a_deny_row_
     assert not any("testing.tools.claude-code" in p for p in problems)
 
 
+def test_a_project_default_replaces_the_row_for_that_project_only_and_drops_the_matching_alternate() -> None:
+    plain = _row("implementation", "claude-code")
+    assert (plain["model"], plain["effort"], plain["project_default"]) == ("claude-sonnet-5-5", "high", None)
+    assert [alt["model"] for alt in plain["alternates"]] == ["claude-opus-5-5"]
+    neri = _row("implementation", "claude-code", project="neri")
+    assert (neri["model"], neri["effort"], neri["project_default"]) == ("claude-opus-5-5", "high", "neri")
+    assert neri["alternates"] == [] and neri["why"].startswith("Owner 2026-10-31") and neri["allowed"] is True
+    assert "projects" not in neri
+    other = _row("implementation", "claude-code", project="summitflow")
+    assert (other["model"], other["project_default"]) == ("claude-sonnet-5-5", None)
+    assert _row("implementation", "codex", project="neri")["project_default"] is None
+
+
+def test_project_default_that_differs_from_every_alternate_keeps_them() -> None:
+    policy = deepcopy(model_selection._load_policy())
+    policy["launch"]["jobs"]["implementation"]["tools"]["claude-code"]["projects"]["neri"]["model"] = "claude-haiku-5-5"
+    (row,) = model_selection.launch_defaults(policy, role="implementation", tool="claude-code", project="neri")["rows"]
+    assert (row["model"], [alt["model"] for alt in row["alternates"]]) == ("claude-haiku-5-5", ["claude-opus-5-5"])
+
+
+def test_project_defaults_are_validated_against_projects_and_deny_rows() -> None:
+    from app.routing.launch_policy import launch_policy_problems
+
+    policy = model_selection._load_policy()
+    assert launch_policy_problems(policy, known_projects={"neri", "summitflow"}) == []
+    assert any("unknown project 'neri'" in p for p in launch_policy_problems(policy, known_projects={"summitflow"}))
+    bad = deepcopy(policy)
+    jobs = bad["launch"]["jobs"]
+    jobs["implementation"]["tools"]["claude-code"]["projects"]["bad key"] = {"model": "claude-opus-5-5", "effort": "high", "why": "x"}
+    jobs["implementation"]["tools"]["claude-code"]["projects"]["neri"] = {"model": "claude-opus-5-5", "effort": "high"}
+    jobs["implementation"]["tools"]["claude-code"]["projects"]["extra"] = {"model": "m", "effort": "high", "why": "x", "use": True}
+    # A deny row scoped to one project still refuses a default set for that project.
+    jobs["testing"]["tools"]["claude-code"]["projects"] = {
+        "neri-hunters": {"model": "claude-haiku-5-5", "effort": "high", "why": "x"}}
+    problems = launch_policy_problems(bad)
+    assert any("'bad key' is not a project id" in p for p in problems)
+    assert any("projects.neri: model, effort and why are required" in p for p in problems)
+    assert any("projects.extra: unknown keys ['use']" in p for p in problems)
+    assert any("testing.tools.claude-code.projects.neri-hunters" in p and "contradicts deny row" in p for p in problems)
+
+
+def test_design_is_a_registered_work_role_with_owners_three_routes() -> None:
+    from app.services.session_roles import WORK_ROLES
+
+    assert "design" in WORK_ROLES
+    claude = _row("design", "claude-code")
+    assert (claude["job"], claude["model"], claude["effort"], claude["context"]) == ("design", "claude-opus-5-5", "high", "full")
+    assert [(alt["model"], alt["effort"], alt["when"]) for alt in claude["alternates"]] == [
+        ("claude-sonnet-5-5", "high", "small copy or styling tweaks")]
+    codex = _row("design", "codex")
+    assert (codex["model"], codex["effort"], codex["daybreak"], codex["when"]) == (
+        "gpt-6.1-sol", "xhigh", False, "Claude is unavailable or out of usage")
+    assert codex["why"].startswith("when Claude is unavailable or out of usage")
+    assert _row("design", "pi")["model"] == "opencode-go/deepseek-v4.1-flash"
+    assert model_selection.launch_defaults(model_selection._load_policy(), role="design")["work_role"] == "design"
+    assert _row("implementation", "claude-code")["when"] is None
+
+
+def test_model_notes_are_shown_for_models_in_the_rows_and_validated() -> None:
+    from app.routing.launch_policy import launch_policy_problems, model_notes
+
+    policy = model_selection._load_policy()
+    assert {note["date"] for note in model_notes(policy, "gemini-3.7-flash")} == {"2026-09-04", "2026-09-20"}
+    assert model_notes(policy, "claude-opus-5-5") == [] and model_notes(policy, None) == []
+    payload = model_selection.launch_defaults(policy, role="research")
+    assert payload["model_notes"] == {}
+    bad = deepcopy(policy)
+    bad["launch"]["jobs"]["research"]["tools"]["claude-code"]["model"] = "gemini-3.8-flash"
+    shown = model_selection.launch_defaults(bad, role="research", tool="claude-code")["model_notes"]
+    assert list(shown) == ["gemini-3.8-flash"] and len(shown["gemini-3.8-flash"]) == 2
+    bad["model_notes"]["gemini-3.8-flash"] = [{"date": "yesterday", "fact": "", "source": "s"}, {"date": "2026-09-04"}]
+    bad["model_notes"]["empty"] = []
+    problems = launch_policy_problems(bad)
+    assert any("date must be YYYY-MM-DD" in p for p in problems) and any("fact and source are required" in p for p in problems)
+    assert any("exactly date, fact and source" in p for p in problems) and any("'empty'" in p for p in problems)
+
+
+@pytest.mark.asyncio
+async def test_models_list_carries_policy_notes_and_the_task_route_names_them() -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"}) as client:
+        listed = (await client.get("/api/models")).json()["models"]
+    notes = {m["id"]: m["notes"] for m in listed if m.get("notes")}
+    assert notes and all({"date", "fact", "source"} == set(n) for items in notes.values() for n in items)
+    assert set(notes) <= {"gemini-3.1-flash-lite", "gemini-3.7-flash", "gemini-3.8-flash"}
+    with patch("app.routing.model_selection._unavailable", AsyncMock(return_value=[])):
+        advice = await select_model(SelectionRequest(task_type="coding"))
+    assert advice["model"].endswith("gpt-6.1-sol") and advice["model_notes"] == {}  # the first candidate has no notes
+    with patch("app.routing.model_selection._unavailable", AsyncMock(side_effect=[["down"], []])):
+        advice = await select_model(SelectionRequest(task_type="coding"))
+    assert list(advice["model_notes"]) == ["gemini-3.8-flash"]
+
+
 @pytest.mark.asyncio
 async def test_launch_defaults_api_checks_an_explicit_model_and_project() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"}) as client:
