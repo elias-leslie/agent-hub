@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .memory_models import MemoryCategory, MemoryEpisode, MemoryScope
+from .memory_models import MemoryCategory, MemoryEpisode, MemoryScope, MemorySource
 from .memory_utils import build_group_id
 from .repository import MemoryRepository, get_memory_repository
 from .search_helpers import map_tier_to_category
@@ -47,7 +47,7 @@ def _memory_to_episode(mem_dict: dict[str, Any], scope: MemoryScope, scope_id: s
         uuid=mem_dict.get("uuid", ""),
         name=mem_dict.get("name", ""),
         content=mem_dict.get("content", ""),
-        source="text",
+        source=MemorySource.SYSTEM,
         category=cat,
         scope=scope,
         scope_id=scope_id,
