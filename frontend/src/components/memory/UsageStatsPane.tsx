@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  Activity,
   Eye,
   MessageCircle,
   Sparkles,
@@ -17,7 +16,6 @@ interface UsageStatsPaneProps {
   helpfulCount?: number
   harmfulCount?: number
   utilityScore?: number
-  lifecycleScore?: number
 }
 
 interface StatItemProps {
@@ -53,7 +51,6 @@ export function UsageStatsPane({
   helpfulCount,
   harmfulCount,
   utilityScore,
-  lifecycleScore,
 }: UsageStatsPaneProps) {
   const hasStats =
     loadedCount !== undefined ||
@@ -112,21 +109,6 @@ export function UsageStatsPane({
                 : 'border-slate-700/50 text-slate-400',
           )}
           tooltip={`Utility score: referenced / (loaded + 1) = ${(utilityScore * 100).toFixed(0)}%`}
-        />
-      )}
-      {lifecycleScore !== undefined && (
-        <StatItem
-          icon={<Activity className="h-3 w-3" />}
-          label="lifecycle"
-          value={Math.round(lifecycleScore * 100)}
-          color={cn(
-            lifecycleScore >= 0.7
-              ? 'border-emerald-800/50 text-emerald-400'
-              : lifecycleScore >= 0.4
-                ? 'border-amber-800/50 text-amber-400'
-                : 'border-slate-700/50 text-slate-400',
-          )}
-          tooltip={`Lifecycle score (continuous health metric) = ${(lifecycleScore * 100).toFixed(0)}%`}
         />
       )}
     </div>

@@ -48,7 +48,6 @@ export interface MemoryEpisode {
   harmful_count?: number
   utility_score?: number
   // Lifecycle scoring
-  lifecycle_score?: number
   // Context-aware injection
   trigger_task_types?: string[]
   pinned?: boolean

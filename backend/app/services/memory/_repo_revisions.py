@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # Bookkeeping columns a revision records but restore leaves alone on a live memory;
 # a hard-deleted memory is recreated with them (``memory_created_at`` -> ``created_at``).
 _ROW_STATE = ("sensitivity_tier", "review_status", "loaded_count", "referenced_count",
-              "helpful_count", "harmful_count", "lifecycle_score")
+              "helpful_count", "harmful_count")
 
 
 class RevisionRepository:
@@ -237,7 +237,7 @@ class RevisionRepository:
         ``expected_version`` is the ``memories.version`` the caller saw (for a deleted
         memory, the version its delete revision recorded) and a mismatch raises
         ``RevisionConflictError`` without changing anything. A recreated memory gets
-        sensitivity, review status, counters, lifecycle score and created_at from its
+        sensitivity, review status, counters and created_at from its
         latest revision. Returns None when the revision does not exist.
         """
         uid = _uuid.UUID(str(memory_uuid))

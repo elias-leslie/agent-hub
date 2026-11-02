@@ -113,12 +113,6 @@ class Memory(Base):
     demoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     demotion_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    # Lifecycle scoring (continuous tier management)
-    lifecycle_score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    lifecycle_score_updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-
     # Graduated retirement
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     superseded_by: Mapped[_uuid.UUID | None] = mapped_column(
@@ -282,28 +276,3 @@ def _redact_memory(_mapper, _connection, target: Memory) -> None:
 def _redact_memory_revision(_mapper, _connection, target: MemoryRevision) -> None:
     if _redact_fields(target):
         target.content_hash = hashlib.sha256(target.content.encode("utf-8")).hexdigest()
-
-
-class MemoryReviewRun(Base):
-    """Audit row for scheduled memory quality review batches."""
-
-    __tablename__ = "memory_review_runs"
-
-    id: Mapped[_uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=_uuid.uuid4
-    )
-    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="running")
-    reviewer_agent_slug: Mapped[str] = mapped_column(String(100), nullable=False)
-    reviewer_model_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    batch_limit: Mapped[int] = mapped_column(Integer, nullable=False)
-    reviewed_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    needs_action_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    dry_run: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    metadata_: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False, server_default="{}")
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-    __table_args__ = ()

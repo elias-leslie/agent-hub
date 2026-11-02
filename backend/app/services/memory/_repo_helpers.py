@@ -59,8 +59,6 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "review_status": getattr(mem, "review_status", "pending"),
         "sensitivity_tier": getattr(mem, "sensitivity_tier", "normal"),
         "token_count": mem.token_count,
-        "lifecycle_score": mem.lifecycle_score,
-        "lifecycle_score_updated_at": mem.lifecycle_score_updated_at,
         "retired_at": mem.retired_at,
         "superseded_by": str(mem.superseded_by) if mem.superseded_by else None,
         "metadata": metadata,

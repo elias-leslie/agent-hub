@@ -37,7 +37,6 @@ def record_to_get_dict(record: dict[str, Any]) -> dict[str, Any]:
         "helpful_count": record.get("helpful_count", 0),
         "harmful_count": record.get("harmful_count", 0),
         "utility_score": record.get("utility_score"),
-        "lifecycle_score": record.get("lifecycle_score"),
     }
 
 

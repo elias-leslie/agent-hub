@@ -24,12 +24,10 @@ def test_record_to_get_dict_normalizes_nullable_fields() -> None:
             "helpful_count": 3,
             "harmful_count": 4,
             "utility_score": 0.5,
-            "lifecycle_score": 0.8,
         }
     )
 
     assert result["name"] == ""
     assert result["source_description"] == ""
     assert result["trigger_task_types"] == []
-    assert result["lifecycle_score"] == 0.8
 

@@ -239,7 +239,7 @@ async def test_recreated_memory_keeps_sensitivity_review_counters_and_created_at
     memory, original = await _memory_with_history(pg_db, repo)
     memory_id, created_at = memory.id, memory.created_at
     await repo.update(memory_id, db=pg_db, sensitivity_tier="confidential", review_status="clean", loaded_count=7,
-                      referenced_count=3, helpful_count=2, harmful_count=1, lifecycle_score=0.75)
+                      referenced_count=3, helpful_count=2, harmful_count=1)
     assert await repo.delete(memory_id, db=pg_db)
     await pg_db.flush()
     pg_db.expunge_all()
@@ -248,7 +248,7 @@ async def test_recreated_memory_keeps_sensitivity_review_counters_and_created_at
 
     assert restored is not None
     row = restored.memory
-    assert (row.sensitivity_tier, row.review_status, row.lifecycle_score) == ("confidential", "clean", 0.75)
+    assert (row.sensitivity_tier, row.review_status) == ("confidential", "clean")
     assert (row.loaded_count, row.referenced_count, row.helpful_count, row.harmful_count) == (7, 3, 2, 1)
     assert row.created_at == created_at
 

@@ -21,7 +21,6 @@ from app.models.context_governance import (
     ContextMaintenanceItem,
     ContextRecord,
 )
-from app.models.memory_unified import MemoryReviewRun
 from app.services.context_policy import ContextPolicy, policy_match, semantic_hash
 
 ACTIVE_STATES = ("pending", "claimed", "waiting_owner", "deferred")
@@ -140,14 +139,10 @@ async def maintenance_health(db: AsyncSession) -> dict[str, Any]:
     last_success = await db.scalar(select(func.max(ContextRecord.created_at)).where(
         ContextRecord.kind == "context_review", ContextRecord.payload["failure"].as_string().is_(None),
         ContextRecord.payload["reviewer"].as_string().is_not(None)))
-    last_memory = (await db.execute(select(MemoryReviewRun).where(MemoryReviewRun.dry_run.is_(False))
-        .order_by(MemoryReviewRun.started_at.desc()).limit(1))).scalar_one_or_none()
     return {"state": "retired", "scope": "system", "active_counts": counts,
         "unresolved_failures": failures, "technical_work": len(technical), "technical_blocked": blocked,
         "last_successful_review_at": last_success.isoformat() if last_success else None,
-        "last_memory_run": {"id": str(last_memory.id), "status": last_memory.status,
-            "reviewed": last_memory.reviewed_count, "failed": last_memory.failed_count,
-            "completed_at": last_memory.completed_at.isoformat() if last_memory.completed_at else None} if last_memory else None,
+        "last_memory_run": None,
         "schedule_enabled": False, "next_run_at": None,
         "verification": "retained historical findings and review outcomes; automatic maintenance retired"}
 

@@ -55,8 +55,6 @@ def _mem(
         utility_score=0.0,
         status="active",
         token_count=10,
-        lifecycle_score=None,
-        lifecycle_score_updated_at=None,
         retired_at=None,
         superseded_by=None,
         metadata_={},

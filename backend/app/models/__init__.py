@@ -32,7 +32,7 @@ from .context_governance import (
 )
 from .context_observability import ContextBudget, ContextDelivery, ContextKnob
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
-from .memory_unified import Memory, MemoryReviewRun, MemoryRevision
+from .memory_unified import Memory, MemoryRevision
 from .model_catalog import ModelAlias, ModelCatalogEntry
 from .model_catalog_sync_state import ModelCatalogSyncState
 from .model_enrichment import ModelEnrichment
@@ -102,7 +102,6 @@ __all__ = [
     "CreditLot",
     "Memory",
     "MemoryInjectionMetric",
-    "MemoryReviewRun",
     "MemoryRevision",
     "MemorySettings",
     "ModelAlias",

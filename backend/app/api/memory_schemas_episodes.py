@@ -82,7 +82,6 @@ class EpisodeDetailResponse(BaseModel):
     helpful_count: int = 0
     harmful_count: int = 0
     utility_score: float | None = None
-    lifecycle_score: float | None = None
 
 
 class DeleteEpisodeResponse(BaseModel):
