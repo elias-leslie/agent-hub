@@ -220,8 +220,8 @@ done
 
 tether_changed=0
 unit_dir=$HOME/.config/systemd/user
-if ! cmp -s "$projects/aico/tether/systemd/tether@.service" "$unit_dir/tether@.service"; then
-    install -D -m 0644 "$projects/aico/tether/systemd/tether@.service" "$unit_dir/tether@.service"
+if ! cmp -s "$projects/aico/packages/tether/deploy/tether@.service" "$unit_dir/tether@.service"; then
+    install -D -m 0644 "$projects/aico/packages/tether/deploy/tether@.service" "$unit_dir/tether@.service"
     tether_changed=1
     say "installed tether@.service from the aico checkout"
 fi
