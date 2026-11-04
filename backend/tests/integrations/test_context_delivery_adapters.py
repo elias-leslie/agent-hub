@@ -513,9 +513,74 @@ async def test_binding_is_quiet_when_aico_delivered_the_context(tmp_path: Path) 
     assert not (tmp_path / "artifacts").exists()
 
 
+@pytest.mark.asyncio
+async def test_claude_launcher_stands_down_only_for_the_process_aico_launched(
+    tmp_path: Path,
+) -> None:
+    native = _executable(tmp_path / "native", "#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+    client = _executable(tmp_path / "context-client", f"#!/bin/sh\ntouch {tmp_path / 'called'}\nexit 1\n")
+    env = {
+        **os.environ,
+        "CLAUDE_REAL": str(native),
+        "AGENT_HUB_CONTEXT_CLIENT": str(client),
+        "AICO_CONTEXT_DELIVERED": "abc",
+    }
+    env.pop("AGENT_HUB_CONTEXT_BYPASS", None)
+
+    # Tether's launch: the shell exports its own pid and becomes the launcher.
+    code, stdout, stderr = await _run(
+        "/bin/sh", "-c", 'export AICO_CONTEXT_PID=$$; exec "$@"', "sh", str(CLAUDE_LAUNCHER), "hello", env=env
+    )
+    assert code == 0, stderr
+    assert stdout.split() == ["hello"]
+    assert not (tmp_path / "called").exists()
+
+    # A session the launched agent starts inherits the variables, not the pid.
+    code, _stdout, _stderr = await _run(
+        str(CLAUDE_LAUNCHER), "hello", env={**env, "AICO_CONTEXT_PID": "2"}
+    )
+    assert (tmp_path / "called").exists()
+
+
+@pytest.mark.asyncio
+async def test_binding_is_quiet_only_below_the_process_aico_launched(tmp_path: Path) -> None:
+    base = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("AGENT_HUB_CONTEXT_")
+    }
+    hook = json.dumps(
+        {"hook_event_name": "SessionStart", "session_id": "aico-pid", "cwd": str(REPO_ROOT)}
+    )
+
+    async def bind(pid: int, name: str) -> tuple[int, str]:
+        code, stdout, _ = await _run(
+            str(CLIENT),
+            "bind",
+            "--surface",
+            "claude_code",
+            "--artifact-root",
+            str(tmp_path / name),
+            env={**base, "AICO_CONTEXT_DELIVERED": "abc", "AICO_CONTEXT_PID": str(pid)},
+            stdin=hook,
+        )
+        return code, stdout
+
+    # This test process started the client: it is the launched agent, one parent up.
+    code, stdout = await bind(os.getpid(), "mine")
+    assert code == 0
+    assert json.loads(stdout) == {}
+    assert not (tmp_path / "mine").exists()
+
+    # Another process's marker (a session the agent started in turn) does not count.
+    await bind(2, "other")
+    assert (tmp_path / "other").exists()
+
+
 def test_pi_extension_adds_no_context_when_aico_delivered_it() -> None:
     source = (REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts").read_text()
-    assert 'const bypass = process.env.AGENT_HUB_CONTEXT_BYPASS === "1";' in source
+    assert 'process.env.AGENT_HUB_CONTEXT_BYPASS === "1"' in source
+    assert "process.env.AICO_CONTEXT_PID === String(process.pid)" in source
     assert "if (bypass) return { systemPrompt: event.systemPrompt };" in source
     assert "if (bypass || event.streamingBehavior)" in source
 

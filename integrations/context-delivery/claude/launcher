@@ -73,6 +73,32 @@ async def _real_claude() -> str:
     raise SystemExit("agent-hub-claude: real Claude Code binary not found (set CLAUDE_REAL)")
 
 
+def _aico_delivered_here(hops: int = 0) -> bool:
+    """Aico delivered this process's context at launch.
+
+    AICO_CONTEXT_PID is the pid of the agent Tether launched. A session that agent
+    starts (`codex exec` from a Claude session) inherits the variables but not the
+    pid, so it still gets Agent Hub's delivery. A launcher is that process (hops=0);
+    a hook is up to `hops` parents below it.
+    """
+    if not os.environ.get("AICO_CONTEXT_DELIVERED"):
+        return False
+    try:
+        agent = int(os.environ.get("AICO_CONTEXT_PID", ""))
+    except ValueError:
+        return False
+    pid = os.getpid()
+    for _ in range(hops + 1):
+        if pid == agent:
+            return True
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text()
+            pid = int(stat[stat.rindex(")") + 2 :].split()[1])
+        except (OSError, ValueError, IndexError):
+            return False
+    return False
+
+
 def _option_value(argv: list[str], option: str) -> str | None:
     prefix = f"{option}="
     for index, value in enumerate(argv):
@@ -306,7 +332,11 @@ async def _main(argv: list[str]) -> None:
     real = await _real_claude()
     # Agent Hub's own Claude provider builds the full system prompt itself; adding
     # the global delivery there would duplicate context and cost a delivery per spawn.
-    if _is_passthrough(argv) or os.environ.get("AGENT_HUB_CONTEXT_BYPASS") == "1":
+    if (
+        _is_passthrough(argv)
+        or os.environ.get("AGENT_HUB_CONTEXT_BYPASS") == "1"
+        or _aico_delivered_here()
+    ):
         os.execve(real, [real, *argv], os.environ.copy())
 
     try:

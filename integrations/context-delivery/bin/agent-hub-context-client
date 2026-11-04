@@ -48,6 +48,32 @@ class ContractError(RuntimeError):
     """Raised when the canonical CLI does not return its declared contract."""
 
 
+def _aico_delivered_here(hops: int = 0) -> bool:
+    """Aico delivered this process's context at launch.
+
+    AICO_CONTEXT_PID is the pid of the agent Tether launched. A session that agent
+    starts (`codex exec` from a Claude session) inherits the variables but not the
+    pid, so it still gets Agent Hub's delivery. A launcher is that process (hops=0);
+    a hook is up to `hops` parents below it.
+    """
+    if not os.environ.get("AICO_CONTEXT_DELIVERED"):
+        return False
+    try:
+        agent = int(os.environ.get("AICO_CONTEXT_PID", ""))
+    except ValueError:
+        return False
+    pid = os.getpid()
+    for _ in range(hops + 1):
+        if pid == agent:
+            return True
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text()
+            pid = int(stat[stat.rindex(")") + 2 :].split()[1])
+        except (OSError, ValueError, IndexError):
+            return False
+    return False
+
+
 def _common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--surface", required=True, choices=SURFACES)
     parser.add_argument("--cwd")
@@ -880,7 +906,7 @@ async def _main(args: argparse.Namespace) -> int:
                 await _bind_native_work_role(args, hook)
             except Exception:
                 sys.stderr.write("Native session work role registration unavailable\n")
-            if os.getenv("AGENT_HUB_CONTEXT_BYPASS") == "1":
+            if os.getenv("AGENT_HUB_CONTEXT_BYPASS") == "1" or _aico_delivered_here(3):
                 # Aico delivered this session's context at launch; nothing to bind.
                 print("{}")
                 return 0

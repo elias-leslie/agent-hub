@@ -196,7 +196,12 @@ async function deliver(
 export default async function agentHubContext(pi: ExtensionAPI) {
 	// Aico delivered this session's context at launch, as the Claude and Codex
 	// launchers honor too: Agent Hub adds none (session sync still runs).
-	const bypass = process.env.AGENT_HUB_CONTEXT_BYPASS === "1";
+	// Tether's marker (AICO_CONTEXT_PID is the agent it launched, this process) does not
+	// reach a Pi session this agent starts in turn, which inherits the variables only.
+	const bypass =
+		process.env.AGENT_HUB_CONTEXT_BYPASS === "1" ||
+		(Boolean(process.env.AICO_CONTEXT_DELIVERED) &&
+			process.env.AICO_CONTEXT_PID === String(process.pid));
 	const daybreakEnabled = daybreakSelection();
 	let daybreakConfigured = false;
 	let currentSessionId = "";
