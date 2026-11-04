@@ -880,6 +880,10 @@ async def _main(args: argparse.Namespace) -> int:
                 await _bind_native_work_role(args, hook)
             except Exception:
                 sys.stderr.write("Native session work role registration unavailable\n")
+            if os.getenv("AGENT_HUB_CONTEXT_BYPASS") == "1":
+                # Aico delivered this session's context at launch; nothing to bind.
+                print("{}")
+                return 0
             await _bind_preinjected(args, hook)
         except Exception as exc:
             metadata = await _resolve_metadata(args, hook)

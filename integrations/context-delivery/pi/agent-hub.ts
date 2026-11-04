@@ -194,6 +194,9 @@ async function deliver(
 }
 
 export default async function agentHubContext(pi: ExtensionAPI) {
+	// Aico delivered this session's context at launch, as the Claude and Codex
+	// launchers honor too: Agent Hub adds none (session sync still runs).
+	const bypass = process.env.AGENT_HUB_CONTEXT_BYPASS === "1";
 	const daybreakEnabled = daybreakSelection();
 	let daybreakConfigured = false;
 	let currentSessionId = "";
@@ -233,7 +236,7 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 		lastStatus = "idle";
 		pendingContract = undefined;
 		pendingFailure = undefined;
-		if (ctx.hasUI) ctx.ui.setStatus("agent-hub", "AH: ready");
+		if (ctx.hasUI && !bypass) ctx.ui.setStatus("agent-hub", "AH: ready");
 		await sync(ctx, "idle");
 	});
 
@@ -248,7 +251,7 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 		// Steering/follow-up input belongs to an agent turn whose exact canonical
 		// prompt was already assembled. A new idle prompt gets a best-effort
 		// preflight; delivery failure never consumes or blocks the native prompt.
-		if (event.streamingBehavior) return { action: "continue" };
+		if (bypass || event.streamingBehavior) return { action: "continue" };
 		currentSessionId ||= sessionId(ctx);
 		pendingContract = undefined;
 		pendingFailure = undefined;
@@ -274,6 +277,7 @@ export default async function agentHubContext(pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
+		if (bypass) return { systemPrompt: event.systemPrompt };
 		currentSessionId ||= sessionId(ctx);
 		if (pendingFailure) {
 			pendingFailure = undefined;

@@ -482,6 +482,45 @@ async def test_codex_binding_warns_but_does_not_block_direct_binary_without_cont
 
 
 @pytest.mark.asyncio
+async def test_binding_is_quiet_when_aico_delivered_the_context(tmp_path: Path) -> None:
+    env = {
+        **{
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("AGENT_HUB_CONTEXT_PREINJECTED_")
+        },
+        "AGENT_HUB_CONTEXT_BYPASS": "1",
+    }
+    code, stdout, _ = await _run(
+        str(CLIENT),
+        "bind",
+        "--surface",
+        "claude_code",
+        "--artifact-root",
+        str(tmp_path / "artifacts"),
+        env=env,
+        stdin=json.dumps(
+            {
+                "hook_event_name": "SessionStart",
+                "session_id": "aico-delivered-session",
+                "cwd": str(REPO_ROOT),
+            }
+        ),
+    )
+
+    assert code == 0
+    assert json.loads(stdout) == {}
+    assert not (tmp_path / "artifacts").exists()
+
+
+def test_pi_extension_adds_no_context_when_aico_delivered_it() -> None:
+    source = (REPO_ROOT / "integrations/context-delivery/pi/agent-hub.ts").read_text()
+    assert 'const bypass = process.env.AGENT_HUB_CONTEXT_BYPASS === "1";' in source
+    assert "if (bypass) return { systemPrompt: event.systemPrompt };" in source
+    assert "if (bypass || event.streamingBehavior)" in source
+
+
+@pytest.mark.asyncio
 async def test_invalid_contract_fails_closed_with_a_persisted_notice(
     tmp_path: Path, fake_context_cli: Path
 ) -> None:
