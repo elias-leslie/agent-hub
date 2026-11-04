@@ -149,7 +149,7 @@ def test_route_role_and_tool_prints_one_launch_row_with_reasons() -> None:
     lines = result.output.splitlines()
     assert lines[0].startswith("LAUNCH[verification claude-code] job=testing (Testing)")
     assert lines[1] == "  model=claude-haiku-5-5 effort=high daybreak=- context=blank-slate"
-    assert "instead: claude-sonnet-5-5 high when Haiku can't do the job" in result.output
+    assert "instead: claude-sonnet-5-5 high when the task truly needs it after the help, prompts or system were fixed" in result.output
     assert "native subagent: user-tester" in result.output and "why=Owner 2026-11-01" in result.output
 
 
