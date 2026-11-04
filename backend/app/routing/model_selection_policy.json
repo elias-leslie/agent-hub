@@ -194,7 +194,7 @@
       },
       "pi": {
         "label": "Pi",
-        "note": "Owner 2026-11-01: Pi hunts; outside hunting it is the last choice.",
+        "note": "Owner 2026-11-01: Pi hunts; outside hunting it is the last choice for builds (never hook, fleet, coordination, root, secrets or deletion code, or design calls). Owner 2026-11-04: it runs testers and read-only sweeps.",
         "default": {
           "model": "opencode-go/deepseek-v4.1-flash",
           "effort": "high",
@@ -380,7 +380,7 @@
               {
                 "model": "claude-sonnet-5-5",
                 "effort": "high",
-                "when": "Haiku can't do the job"
+                "when": "the task truly needs it after the help, prompts or system were fixed (a smaller model failing is a usability finding first)"
               },
               {
                 "model": "claude-opus-5-5",
@@ -388,7 +388,19 @@
                 "when": "truly necessary; say why"
               }
             ],
-            "why": "Owner 2026-11-01: testing runs Haiku 5.5, Sonnet 5.5 if Haiku can't, Opus only if truly necessary."
+            "why": "Owner 2026-11-01: testing runs Haiku 5.5; owner 2026-11-04: a stronger tester only after fixing what confused the smaller one."
+          },
+          "pi": {
+            "model": "opencode-go/deepseek-v4.1-flash",
+            "effort": "xhigh",
+            "alternates": [
+              {
+                "model": "opencode-go/glm-5.3",
+                "effort": "xhigh",
+                "when": "DeepSeek is unavailable or stuck"
+              }
+            ],
+            "why": "Owner 2026-11-04: real-user tests may run on DeepSeek 4.1 Flash at max effort; more usage there, and it shows whether lower-level agents can use the system."
           }
         }
       },
@@ -405,7 +417,7 @@
           "pi": {
             "model": "opencode-go/deepseek-v4.1-flash",
             "effort": "low",
-            "why": "Pi is the last choice; low effort for mechanical sweeps and lookups."
+            "why": "Owner 2026-11-04: DeepSeek for read-only sweeps and lookups to save Claude usage; the caller checks its conclusions."
           }
         }
       },
