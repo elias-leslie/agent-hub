@@ -176,7 +176,8 @@ def test_owner_table_rows() -> None:
     assert (builder["model"], builder["effort"], builder["daybreak"]) == ("gpt-6.1-sol", "xhigh", False)
     pi = _row("hunting", "pi")
     assert (pi["model"], pi["effort"], pi["allowed"]) == ("opencode-go/deepseek-v4.1-flash", "high", True)
-    assert [alt["model"] for alt in pi["alternates"]] == ["opencode-go/glm-5.3", "opencode-go/glm-5.3-flash"]
+    assert [(alt["model"], alt["effort"]) for alt in pi["alternates"]] == [
+        ("opencode-go/glm-5.3-flash", "max"), ("opencode-go/glm-5.3", "max")]
     assert "last choice" in _row("implementation", "pi")["note"] and "rank" not in pi and "prefer" not in pi
     assert _row("lookup", "claude-code")["model"] == "claude-haiku-5-5" and _row("lookup", "claude-code")["work_roles"] == []
     assert not _row("other", "antigravity")["launchable"] and _row("other", "agent-hub")["model"] is None

@@ -473,17 +473,17 @@
             "effort": "high",
             "alternates": [
               {
-                "model": "opencode-go/glm-5.3",
-                "effort": "high",
-                "when": "a second hunter model"
+                "model": "opencode-go/glm-5.3-flash",
+                "effort": "max",
+                "when": "a cheaper second hunter model"
               },
               {
-                "model": "opencode-go/glm-5.3-flash",
-                "effort": "high",
-                "when": "a cheaper second hunter model"
+                "model": "opencode-go/glm-5.3",
+                "effort": "max",
+                "when": "a second hunter model"
               }
             ],
-            "why": "Owner 2026-11-01: Pi hunters run DeepSeek 4.1 Flash high; GLM 5.3 and GLM 5.3 Flash are good hunters too. Neri's hunts.tools picks per hunt."
+            "why": "Owner approved 2026-11-05 (Aico ask 3d3ec396a1ac): Pi hunters run DeepSeek 4.1 Flash high; alternates in order are GLM 5.3 Flash max, then GLM 5.3 max. Neri's hunts.tools picks per hunt."
           }
         }
       },
