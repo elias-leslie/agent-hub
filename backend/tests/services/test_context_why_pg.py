@@ -433,7 +433,14 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient]:
         yield http
 
 
-async def test_the_api_serves_why_and_edits_budgets_as_rows(db: AsyncSession, client: AsyncClient, tmp_path: Path) -> None:
+async def test_the_api_serves_why_and_edits_budgets_as_rows(db: AsyncSession, client: AsyncClient, tmp_path: Path,
+                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    steps_with_markers = why_service.steps_with_markers
+
+    async def fixture_steps(*args: Any, **kwargs: Any) -> Any:
+        return await steps_with_markers(*args, **kwargs, now=NOW)
+
+    monkeypatch.setattr(why_service, "steps_with_markers", fixture_steps)
     repo = _git_repo(tmp_path / "aico", datetime(2026, 11, 1, 14, 53, 24, tzinfo=UTC))
     await _replay_1101(db, repo)
 
