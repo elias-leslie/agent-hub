@@ -126,7 +126,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "summitflow-st-sdk", path = "../docker/workspace-packages/summitflow_st_sdk-0.1.5-py3-none-any.whl" },
+    { name = "summitflow-st-sdk", path = "../docker/workspace-packages/summitflow_st_sdk-0.2.1-py3-none-any.whl" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "tiktoken", specifier = ">=0.7.0" },
     { name = "trafilatura", specifier = ">=2.0.0" },
@@ -172,7 +172,7 @@ dependencies = [
     { name = "typer" },
 ]
 wheels = [
-    { filename = "agent_hub_st-0.5.0-py3-none-any.whl", hash = "sha256:28da3ce9358ec8493cd496352649ed8e8aab3b4c719110f005717b4f371f3d04" },
+    { filename = "agent_hub_st-0.5.0-py3-none-any.whl", hash = "sha256:b5c972c6f2e37b1ddd15ac7f6dc9e657929ba387a9abaf796749b7fe96f76e43" },
 ]
 
 [package.metadata]
@@ -180,7 +180,7 @@ requires-dist = [
     { name = "agent-hub-client", specifier = "==0.8.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "summitflow-st-sdk", specifier = ">=0.1.0,<0.2" },
+    { name = "summitflow-st-sdk", specifier = ">=0.2.1,<0.3" },
     { name = "typer", specifier = ">=0.15.0" },
 ]
 
@@ -2918,15 +2918,15 @@ wheels = [
 
 [[package]]
 name = "summitflow-st-sdk"
-version = "0.1.5"
-source = { path = "../docker/workspace-packages/summitflow_st_sdk-0.1.5-py3-none-any.whl" }
+version = "0.2.1"
+source = { path = "../docker/workspace-packages/summitflow_st_sdk-0.2.1-py3-none-any.whl" }
 dependencies = [
     { name = "httpx" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
 wheels = [
-    { filename = "summitflow_st_sdk-0.1.5-py3-none-any.whl", hash = "sha256:6d986d90f35f1c84e5b65e85b6150851246a1f286dedd29f3bf1475831789731" },
+    { filename = "summitflow_st_sdk-0.2.1-py3-none-any.whl", hash = "sha256:fbb646b8047b34224538e9825f5161973a743a50653eadb469713aeec8d84140" },
 ]
 
 [package.metadata]

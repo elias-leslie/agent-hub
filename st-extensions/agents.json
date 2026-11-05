@@ -1,7 +1,7 @@
 {
   "id": "agent-hub.agents",
   "owner": "agent-hub",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "st_contract_versions": [
     1
   ],
@@ -16,7 +16,8 @@
   ],
   "namespace": "agents",
   "help": {
-    "": "Usage: agents [OPTIONS] COMMAND [ARGS]...\n\n  Agent management (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  list         List agents.\n  get          Get one agent by slug.\n  versions     Show compact agent version history.\n  activity     Show recent agent sessions and request logs.\n  create       Create an agent using the Agent Hub API.\n  preview      Show the effective runtime prompt/context preview for an...\n  update       Update an agent using the Agent Hub API.\n  credentials  Authorized local lab enrollment, refresh, refs and trusted...\n  hosts        Remote hosts: register, revoke, grant tools, and the...",
+    "": "Usage: agents [OPTIONS] COMMAND [ARGS]...\n\n  Agent management (Agent Hub)\n\nOptions:\n  --install-completion  Install completion for the current shell.\n  --show-completion     Show completion for the current shell, to copy it or\n                        customize the installation.\n  --help                Show this message and exit.\n\nCommands:\n  context-export  Print one context export page as JSON.\n  list            List agents.\n  get             Get one agent by slug.\n  versions        Show compact agent version history.\n  activity        Show recent agent sessions and request logs.\n  create          Create an agent using the Agent Hub API.\n  preview         Show the effective runtime prompt/context preview for...\n  update          Update an agent using the Agent Hub API.\n  credentials     Authorized local lab enrollment, refresh, refs and...\n  hosts           Remote hosts: register, revoke, grant tools, and the...",
+    "context-export": "Usage: agents context-export [OPTIONS] {collection}:<memories|memory_settings|\n                             prompts|agents|budgets|project_rows|project_hash>\n\n  Print one context export page as JSON.\n\nArguments:\n  collection:<memories|memory_settings|prompts|agents|budgets|project_rows|project_hash>\n                                  Context collection.  [required]\n\nOptions:\n  --offset <int range>  [default: 0; x>=0]\n  --limit <int range>   [default: 1000; 1<=x<=1000]\n  --agent-role <str>    Agent role slug; repeat for each role.\n  --help                Show this message and exit.",
     "list": "Usage: agents list [OPTIONS]\n\n  List agents.\n\nOptions:\n  --active-only / --all         [default: active-only]\n  --coding-only / --non-coding\n  --limit <int range>           [default: 100; 1<=x<=500]\n  --offset <int range>          [default: 0; x>=0]\n  --json                        Print full API payload.\n  --scores                      Show compact assignment rows with all score\n                                dimensions.\n  --by-model                    Group active agents by primary model.\n  --help                        Show this message and exit.",
     "get": "Usage: agents get [OPTIONS] {slug}\n\n  Get one agent by slug.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --json  Print full API payload.\n  --help  Show this message and exit.",
     "versions": "Usage: agents versions [OPTIONS] {slug}\n\n  Show compact agent version history.\n\nArguments:\n  slug  Agent slug  [required]\n\nOptions:\n  --limit <int range>  [default: 20; 1<=x<=100]\n  --json               Print full API payload.\n  --help               Show this message and exit.",
@@ -41,6 +42,13 @@
     "hosts credential-set": "Usage: agents hosts credential-set [OPTIONS] {tool} {name}\n\n  Save (or replace) the value granted hosts fetch for TOOL/NAME. Hosts push\n  theirs with `agent-hub credential push`.\n\nArguments:\n  tool  [required]\n  name  [required]\n\nOptions:\n  --input <str>       Your private (0600) file, or - for piped stdin\n                      [required]\n  --expires-at <str>  ISO time with timezone\n  --help              Show this message and exit."
   },
   "usage": [
+    {
+      "surface": "st.agents.context-export",
+      "tier": "reference",
+      "cmd": "st agents context-export COLLECTION --offset N --limit N [--agent-role ROLE]",
+      "when": "read one bounded context import page as JSON; repeat --agent-role for the agents collection",
+      "on_demand": "agent administration"
+    },
     {
       "surface": "st.agents.get",
       "tier": "reference",

@@ -21,6 +21,7 @@ from .agents_formatters import (
 )
 from .agents_memory import collect_memory_flags, resolve_memory_config
 from .agents_payload import build_agent_payload
+from .context_export import context_export
 from .lab_credentials import app as lab_credentials_app
 from .preview_formatters import print_preview_detail, print_preview_summary
 from .remote_hosts import app as remote_hosts_app
@@ -28,6 +29,7 @@ from .remote_hosts import app as remote_hosts_app
 app = typer.Typer(help="Agent management (Agent Hub)")
 app.add_typer(lab_credentials_app, name="credentials")
 app.add_typer(remote_hosts_app, name="hosts")
+app.command("context-export")(context_export)
 
 
 def _load_json_file(path: Path, label: str) -> dict[str, Any]:
