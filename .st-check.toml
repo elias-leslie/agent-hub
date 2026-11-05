@@ -1,7 +1,20 @@
 [pytest]
 workers = 4
 
-# Unit tests import Settings without contacting this synthetic test database.
-# Integration tests require their separately prepared fixture.
+# The local gate owns its disposable database and tools; Actions supplies none.
 [acceptance.env]
 AGENT_HUB_DB_URL = "postgresql://agent_hub_app:test@127.0.0.1:5432/agent_hub_test"
+TEST_AGENT_HUB_DB_URL = "postgresql://agent_hub_app:test@127.0.0.1:5432/agent_hub_test"
+
+[acceptance.pytest]
+working_directory = "backend"
+argv = [".venv/bin/python", "-m", "pytest", "--run-integration", "-m", "not private_context"]
+setup = [[".venv/bin/python", "-m", "alembic", "upgrade", "head"]]
+tools = ["uv", "node", "npm", "pnpm"]
+
+[acceptance.pytest.services.postgres]
+image = "mirror.gcr.io/pgvector/pgvector:pg16"
+[acceptance.pytest.services.postgres.env]
+POSTGRES_USER = "agent_hub_app"
+POSTGRES_PASSWORD = "test"
+POSTGRES_DB = "agent_hub_test"
